@@ -79,6 +79,13 @@ export interface AgentRef {
 	sessionFile: string | null;
 	createdAt: number;
 	lastActivity: number;
+	/**
+	 * Last time the agent was CONFIRMED ALIVE while running (a real heartbeat
+	 * from live tool/loop activity). Distinct from `lastActivity`, which also
+	 * bumps on status changes and session attaches — a status transition is
+	 * not liveness. Undefined until the first running heartbeat.
+	 */
+	lastHeartbeat?: number;
 	/** Short gist of what the agent is currently doing (latest intent or tool), for the work-aware roster. Display-only. */
 	activity?: string;
 	/** Persisted identity and telemetry restored after the live observer is gone. */
@@ -214,7 +221,12 @@ export class AgentRegistry {
 		if (!ref) return;
 		if (ref.status !== "running") return;
 		const gist = oneLineLabel(activity);
-		ref.lastActivity = Date.now();
+		const now = Date.now();
+		ref.lastActivity = now;
+		// THIS is the real heartbeat: confirmed-alive-while-running. Status
+		// changes and session attaches bump lastActivity but must NOT count as
+		// liveness — a ref that went idle then had a status flip is not alive.
+		ref.lastHeartbeat = now;
 		if (ref.activity === gist) return;
 		ref.activity = gist;
 	}

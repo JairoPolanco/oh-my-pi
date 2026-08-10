@@ -88,6 +88,7 @@
         "@oh-my-pi/pi-agent-core": "catalog:",
         "@oh-my-pi/pi-ai": "catalog:",
         "@oh-my-pi/pi-catalog": "catalog:",
+        "@oh-my-pi/pi-kernel": "catalog:",
         "@oh-my-pi/pi-mnemopi": "catalog:",
         "@oh-my-pi/pi-natives": "catalog:",
         "@oh-my-pi/pi-tui": "catalog:",
@@ -143,6 +144,13 @@
         "@types/bun": "catalog:",
       },
     },
+    "packages/kernel": {
+      "name": "@oh-my-pi/pi-kernel",
+      "version": "17.2.12",
+      "devDependencies": {
+        "@types/bun": "catalog:",
+      },
+    },
     "packages/metaharness": {
       "name": "@oh-my-pi/pi-metaharness",
       "version": "0.0.1",
@@ -155,6 +163,7 @@
         "@oh-my-pi/pi-ai": "catalog:",
         "@oh-my-pi/pi-catalog": "catalog:",
         "@oh-my-pi/pi-coding-agent": "catalog:",
+        "@oh-my-pi/pi-kernel": "catalog:",
         "@oh-my-pi/pi-natives": "catalog:",
         "@oh-my-pi/pi-utils": "catalog:",
         "@oh-my-pi/typescript-edit-benchmark": "workspace:*",
@@ -354,6 +363,7 @@
     "@oh-my-pi/pi-ai": "17.2.12",
     "@oh-my-pi/pi-catalog": "17.2.12",
     "@oh-my-pi/pi-coding-agent": "17.2.12",
+    "@oh-my-pi/pi-kernel": "17.2.12",
     "@oh-my-pi/pi-mnemopi": "17.2.12",
     "@oh-my-pi/pi-natives": "17.2.12",
     "@oh-my-pi/pi-tui": "17.2.12",
@@ -739,6 +749,8 @@
     "@oh-my-pi/pi-catalog": ["@oh-my-pi/pi-catalog@workspace:packages/catalog"],
 
     "@oh-my-pi/pi-coding-agent": ["@oh-my-pi/pi-coding-agent@workspace:packages/coding-agent"],
+
+    "@oh-my-pi/pi-kernel": ["@oh-my-pi/pi-kernel@workspace:packages/kernel"],
 
     "@oh-my-pi/pi-metaharness": ["@oh-my-pi/pi-metaharness@workspace:packages/metaharness"],
 

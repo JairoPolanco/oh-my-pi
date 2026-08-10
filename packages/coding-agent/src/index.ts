@@ -36,6 +36,9 @@ export * from "./modes";
 export * from "./modes/components";
 // Theme utilities for custom tools
 export * from "./modes/theme/theme";
+// Kernel runtime adapters: OMP behind the kernel's AgentRuntime / ContextEngine seams
+export { OmpAgentRuntime, translateAgentEvent } from "./runtime/omp-agent-runtime";
+export { OmpContextEngine } from "./runtime/omp-context-engine";
 // SDK for programmatic usage
 export * from "./sdk";
 export * from "./session/agent-session";

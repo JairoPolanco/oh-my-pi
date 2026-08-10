@@ -361,4 +361,37 @@ describe("learn tool (local backend)", () => {
 		await expect(new LearnTool(localSession()).execute("2", { memory: "   " })).rejects.toThrow(/empty/i);
 		expect(await Bun.file(learnedFile).exists()).toBe(false);
 	});
+
+	it("emits skill.proposed BEFORE the write and skill.promoted AFTER (audit #11)", async () => {
+		// The audit found the learn tool wrote the managed skill (live surface)
+		// and THEN emitted "skill.proposed" — a post-hoc event claiming the
+		// skill was still a candidate. The lifecycle must be: proposed →
+		// write (the promotion decision) → promoted.
+		const { kernelHostFor } = await import("@oh-my-pi/pi-coding-agent/eval/kernel-bridge");
+		const { getAgentDir, setAgentDir } = await import("@oh-my-pi/pi-utils/dirs");
+		const originalAgentDir = getAgentDir();
+		setAgentDir(agentDir);
+		try {
+			const session = localSession();
+			const host = await kernelHostFor(session);
+			const order: string[] = [];
+			const append = host.events.append.bind(host.events);
+			spyOn(host.events, "append").mockImplementation((...args: Parameters<typeof append>) => {
+				const event = args[0] as { kind: string };
+				if (event.kind === "skill.proposed" || event.kind === "skill.promoted") order.push(event.kind);
+				return append(...args);
+			});
+
+			await new LearnTool(session).execute("3", {
+				memory: "lesson",
+				skill: { action: "create", name: "my-skill", description: "A test skill", body: "do the thing" },
+			});
+
+			expect(order).toEqual(["skill.proposed", "skill.promoted"]);
+			// And the skill actually landed on disk (the promotion succeeded).
+			expect(await Bun.file(path.join(agentDir, "managed-skills", "my-skill", "SKILL.md")).exists()).toBe(true);
+		} finally {
+			setAgentDir(originalAgentDir);
+		}
+	});
 });

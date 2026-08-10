@@ -1,0 +1,103 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import * as fs from "node:fs/promises";
+import type { AgentEvent as OmpAgentEvent } from "@oh-my-pi/pi-agent-core";
+import { KernelHost } from "@oh-my-pi/pi-kernel";
+import { KernelTrajectoryTap } from "../../src/runtime/trajectory-tap";
+
+const testDir = `${import.meta.dir}/tmp-trajectory-tap`;
+
+class FakeAgent {
+	#listeners = new Set<(event: OmpAgentEvent) => void>();
+	#modelHooks = new Set<() => void>();
+	#state = { model: { id: "claude-4" } };
+
+	subscribe(fn: (event: OmpAgentEvent) => void): () => void {
+		this.#listeners.add(fn);
+		return () => this.#listeners.delete(fn);
+	}
+
+	addBeforeModelCallHook(hook: () => void): () => void {
+		this.#modelHooks.add(hook);
+		return () => this.#modelHooks.delete(hook);
+	}
+
+	get state() {
+		return this.#state;
+	}
+
+	emit(event: OmpAgentEvent): void {
+		for (const listener of this.#listeners) listener(event);
+	}
+
+	fireModelHook(): void {
+		for (const hook of this.#modelHooks) hook();
+	}
+}
+
+function makeSession() {
+	const agent = new FakeAgent();
+	return {
+		agent,
+		sessionId: "tap-test",
+	} as never;
+}
+
+describe("KernelTrajectoryTap", () => {
+	let host: KernelHost;
+
+	afterEach(async () => {
+		await host?.close();
+		await fs.rm(testDir, { recursive: true, force: true });
+	});
+
+	test("tool and user-message events land in the kernel event log with the session id", async () => {
+		host = new KernelHost(testDir);
+		await host.warm();
+		const session = makeSession();
+		const agent = (session as { agent: FakeAgent }).agent;
+
+		const tap = new KernelTrajectoryTap(session, host);
+		const detach = tap.attach();
+		expect(tap.attached).toBe(true);
+
+		// Ordinary OMP trajectory: a user turn, a tool call, a model call.
+		agent.emit({ type: "message_start", message: { role: "user", content: "fix the bug", timestamp: 0 } });
+		agent.emit({ type: "tool_execution_start", toolCallId: "t1", toolName: "read", args: { path: "a.ts" } });
+		agent.emit({ type: "tool_execution_end", toolCallId: "t1", toolName: "read", result: "ok", isError: false });
+		agent.fireModelHook();
+
+		const events = host.events.query(
+			e =>
+				e.payload.kind === "tool.called" || e.payload.kind === "user.message" || e.payload.kind === "model.request",
+		);
+		const kinds = events.map(e => e.payload.kind).sort();
+		expect(kinds).toEqual(["model.request", "tool.called", "user.message"]);
+		for (const event of events) {
+			expect(event.sessionId).toBe("tap-test");
+		}
+
+		detach();
+		expect(tap.attached).toBe(false);
+		// After detach nothing new is appended.
+		agent.emit({ type: "tool_execution_start", toolCallId: "t2", toolName: "bash", args: {} });
+		const after = host.events.query(e => e.payload.kind === "tool.called");
+		expect(after).toHaveLength(1);
+	});
+
+	test("tool.completed carries the error flag from the OMP event", async () => {
+		host = new KernelHost(testDir);
+		await host.warm();
+		const session = makeSession();
+		const agent = (session as { agent: FakeAgent }).agent;
+
+		const tap = new KernelTrajectoryTap(session, host);
+		const detach = tap.attach();
+		agent.emit({ type: "tool_execution_start", toolCallId: "t1", toolName: "bash", args: {} });
+		agent.emit({ type: "tool_execution_end", toolCallId: "t1", toolName: "bash", result: "boom", isError: true });
+		detach();
+
+		const events = host.events.query(e => e.payload.kind === "tool.completed");
+		expect(events).toHaveLength(1);
+		expect((events[0]!.payload as { ok: boolean }).ok).toBe(false);
+	});
+});

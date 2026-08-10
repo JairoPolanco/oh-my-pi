@@ -6,6 +6,7 @@ import { EVAL_AGENT_BRIDGE_NAME, runEvalAgent } from "../agent-bridge";
 import { EVAL_BUDGET_BRIDGE_NAME, type EvalBudgetResult, runEvalBudget } from "../budget-bridge";
 import { EVAL_COMPLETION_BRIDGE_NAME, runEvalCompletion } from "../completion-bridge";
 import { EVAL_CONCURRENCY_BRIDGE_NAME, type EvalConcurrencyResult, runEvalConcurrency } from "../concurrency-bridge";
+import { EVAL_KERNEL_BRIDGE_NAME, runKernelBridge } from "../kernel-bridge";
 import type { JsStatusEvent } from "./shared/types";
 
 export type { JsStatusEvent } from "./shared/types";
@@ -119,6 +120,12 @@ export async function callSessionTool(name: string, args: unknown, options: Tool
 	}
 	if (name === EVAL_CONCURRENCY_BRIDGE_NAME) {
 		return runEvalConcurrency(args, options);
+	}
+	if (name === EVAL_KERNEL_BRIDGE_NAME) {
+		// Kernel bridge results are raw JSON values (artifact records, task
+		// objects, context views), not tool-result envelopes — the eval runtimes
+		// pass them through structured clone untouched.
+		return (await runKernelBridge(args as never, options)) as ToolValue;
 	}
 	const tool = getTool(options.session, name);
 	const normalizedArgs = normalizeArgs(args);

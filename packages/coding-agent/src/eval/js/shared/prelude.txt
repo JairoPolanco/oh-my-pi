@@ -75,6 +75,32 @@ if (!globalThis.__omp_js_prelude_loaded__) {
 		},
 	);
 
+	// RLM host bridge (blueprint §16, §84): programmatic kernel access.
+	const kernelNamespace = ns =>
+		new Proxy(
+			{},
+			{
+				get(_target, prop) {
+					if (typeof prop !== "string" || prop.startsWith("_")) return undefined;
+					return async args =>
+						globalThis.__omp_call_tool__("__kernel__", { ...(args ?? {}), op: `${ns}.${prop}` });
+				},
+			},
+		);
+	const ctx = kernelNamespace("ctx");
+	const artifacts = kernelNamespace("artifacts");
+	const tasks = kernelNamespace("tasks");
+	const events = kernelNamespace("events");
+	const memory = kernelNamespace("memory");
+	const actors = kernelNamespace("actors");
+	const capabilities = kernelNamespace("capabilities");
+	const contract = kernelNamespace("contract");
+	const routing = kernelNamespace("routing");
+	const policy = kernelNamespace("policy");
+	const security = kernelNamespace("security");
+	const harness = kernelNamespace("harness");
+	const gateway = kernelNamespace("gateway");
+
 	const output = async (...args) => {
 		let opts = {};
 		let ids = args;
@@ -279,6 +305,19 @@ if (!globalThis.__omp_js_prelude_loaded__) {
 	globalThis.print = consoleBridge.log;
 	globalThis.display = display;
 	globalThis.tool = tool;
+	globalThis.ctx = ctx;
+	globalThis.artifacts = artifacts;
+	globalThis.tasks = tasks;
+	globalThis.events = events;
+	globalThis.memory = memory;
+	globalThis.actors = actors;
+	globalThis.capabilities = capabilities;
+	globalThis.contract = contract;
+	globalThis.routing = routing;
+	globalThis.policy = policy;
+	globalThis.security = security;
+	globalThis.harness = harness;
+	globalThis.gateway = gateway;
 	globalThis.completion = completion;
 	globalThis.output = output;
 	globalThis.agent = agent;

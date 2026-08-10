@@ -122,6 +122,7 @@ import mcpXdevGuidanceTemplate from "./prompts/system/mcp-xdev-guidance.md" with
 import lateDiagnosticTemplate from "./prompts/tools/lsp-late-diagnostic.md" with { type: "text" };
 import { AgentLifecycleManager } from "./registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "./registry/agent-registry";
+import { kernelContextGovernanceEnabled, ProviderContextGovernor } from "./runtime/provider-context-governor";
 import {
 	buildSecretObfuscator,
 	deobfuscateSessionContext,
@@ -3087,6 +3088,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// Per-request provider-context transforms. Obfuscate FIRST so secrets are
 		// redacted from text before snapcompact rasterizes it into PNG frames, then
 		// clamp images to the active provider budget before the request is sent.
+		// Kernel context governance (audit item 6) sits after obfuscation and
+		// BEFORE snapcompact so dropped low-value messages are never rasterized.
+		// It is gate-closed by default (byte-identical pass-through) and only
+		// engages when the benchmark gate `OMP_KERNEL_CONTEXT_GOVERNANCE=1` is set.
+		const contextGovernor = new ProviderContextGovernor();
 		const snapcompactSystemPromptMode = settings.get("snapcompact.systemPrompt");
 		const snapcompactInline =
 			snapcompactSystemPromptMode !== "none" || settings.get("snapcompact.toolResults")
@@ -3103,6 +3109,8 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				: undefined;
 		const transformProviderContext = async (context: Context, transformModel: Model): Promise<Context> => {
 			let transformed = obfuscator ? obfuscateProviderContext(obfuscator, context) : context;
+			if (kernelContextGovernanceEnabled())
+				transformed = await contextGovernor.transform(transformed, transformModel);
 			if (snapcompactInline) transformed = await snapcompactInline.transform(transformed, transformModel);
 			return clampProviderContextImages(transformed, transformModel);
 		};

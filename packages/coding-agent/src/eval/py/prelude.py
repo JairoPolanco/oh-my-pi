@@ -467,6 +467,60 @@ if "__omp_prelude_loaded__" not in globals():
 
     tool = _ToolProxy()
 
+    class _KernelCallable:
+        """Invokes one kernel-bridge op (`ctx.materialize`, `tasks.create`, …)."""
+
+        __slots__ = ("_op",)
+
+        def __init__(self, op: str):
+            self._op = op
+
+        def __repr__(self) -> str:
+            return f"<kernel.{self._op}>"
+
+        def __call__(self, args=None, /, **kwargs):
+            merged: dict = {}
+            if args is not None:
+                if not isinstance(args, dict):
+                    raise TypeError(
+                        f"kernel.{self._op}(...) expects a dict of arguments (got {type(args).__name__})"
+                    )
+                merged = dict(args)
+            merged.update(kwargs)
+            merged["op"] = self._op
+            return _bridge_call("__kernel__", merged)
+
+    class _KernelNamespace:
+        """Namespaced access to the kernel host: `ctx.materialize(...)`, `tasks.create(...)`."""
+
+        __slots__ = ("_ns",)
+
+        def __init__(self, ns: str):
+            self._ns = ns
+
+        def __getattr__(self, name: str) -> _KernelCallable:
+            if name.startswith("_"):
+                raise AttributeError(name)
+            return _KernelCallable(f"{self._ns}.{name}")
+
+        def __repr__(self) -> str:
+            return f"<kernel {self._ns}>"
+
+    # RLM host bridge (blueprint §16, §84): programmatic kernel access.
+    ctx = _KernelNamespace("ctx")
+    artifacts = _KernelNamespace("artifacts")
+    tasks = _KernelNamespace("tasks")
+    events = _KernelNamespace("events")
+    memory = _KernelNamespace("memory")
+    actors = _KernelNamespace("actors")
+    capabilities = _KernelNamespace("capabilities")
+    contract = _KernelNamespace("contract")
+    routing = _KernelNamespace("routing")
+    policy = _KernelNamespace("policy")
+    security = _KernelNamespace("security")
+    harness = _KernelNamespace("harness")
+    gateway = _KernelNamespace("gateway")
+
     def completion(prompt, *, model="default", system=None, schema=None):
         """Oneshot, stateless completion against a model tier.
 

@@ -1,6 +1,8 @@
 import { type } from "@oh-my-pi/omptype";
 import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
+import { logger } from "@oh-my-pi/pi-utils";
 import { sanitizeSkillName, writeManagedSkill } from "../autolearn/managed-skills";
+import { kernelHostFor } from "../eval/kernel-bridge";
 import { isNameClaimedByAuthoredSkill } from "../extensibility/skills";
 import { localBackend } from "../memory-backend/local-backend";
 import learnDescription from "../prompts/tools/learn.md" with { type: "text" };
@@ -120,16 +122,41 @@ export class LearnTool implements AgentTool<typeof learnSchema> {
 					details: { skill: null, shadowed: true },
 				};
 			}
+			// Kernel skill lifecycle (blueprint §39, audit #11): `skill.proposed`
+			// MUST fire BEFORE the candidate enters the live behavior surface —
+			// the event log is the audit trail, and a "proposed" event emitted
+			// after the write would claim the skill was still a candidate when
+			// it was already live. The write itself is the promotion decision;
+			// `skill.promoted` closes the lifecycle. Both are fire-and-forget:
+			// observability must never fail the learn call.
+			const skill = params.skill;
+			const sessionId = this.session.getSessionId?.() ?? "default";
+			void kernelHostFor(this.session)
+				.then(host => {
+					host.events.append(
+						{ kind: "skill.proposed", skillId: skill.name, title: skill.description ?? skill.name },
+						{ sessionId },
+					);
+				})
+				.catch(error => logger.warn("kernel skill event failed", { error: String(error) }));
 			try {
 				await writeManagedSkill(params.skill);
 			} catch (err) {
 				const reason = err instanceof Error ? err.message : String(err);
 				throw new Error(`${memoryMessage}, but the managed skill could not be written: ${reason}`);
 			}
-			const verb = params.skill.action === "create" ? "Created" : "Updated";
+			void kernelHostFor(this.session)
+				.then(host => {
+					host.events.append(
+						{ kind: "skill.promoted", skillId: skill.name, title: skill.description ?? skill.name },
+						{ sessionId },
+					);
+				})
+				.catch(error => logger.warn("kernel skill event failed", { error: String(error) }));
+			const verb = skill.action === "create" ? "Created" : "Updated";
 			return {
-				content: [{ type: "text", text: `${memoryMessage}. ${verb} managed skill "${params.skill.name}".` }],
-				details: { skill: params.skill.name },
+				content: [{ type: "text", text: `${memoryMessage}. ${verb} managed skill "${skill.name}".` }],
+				details: { skill: skill.name },
 			};
 		}
 

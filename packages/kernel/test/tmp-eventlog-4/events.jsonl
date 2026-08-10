@@ -1,0 +1,3 @@
+{"id":"fc599471-fc25-49a7-8a58-5b8260eb56ed","parentIds":[],"sessionId":"s1","actorId":"kernel","timestamp":1786401865873,"payload":{"kind":"session.started","sessionId":"s1","cwd":"/tmp"},"provenance":{"harnessVersion":"17.2.12-kernel.0"}}
+{"id":"8c35baa8-a6f0-4cad-bf33-fdad9d0d1441","parentIds":[],"sessionId":"default","actorId":"kernel","timestamp":1786401865873,"payload":{"kind":"tool.completed","tool":"read","ok":true},"provenance":{"harnessVersion":"17.2.12-kernel.0"}}
+{"id":"d040bae6-35d3-4869-96da-0901d9c9102f","parentIds":[],"sessionId":"default","actorId":"kernel","timestamp":1786401865874,"payload":{"kind":"user.message","text":"hi"},"provenance":{"harnessVersion":"17.2.12-kernel.0"}}

@@ -104,6 +104,67 @@ describe("python prelude", () => {
 		expect(PYTHON_PRELUDE).toContain('("isolationSummary", "isolation_summary")');
 	});
 
+	it("routes kernel namespaces (ctx/artifacts/tasks/events) to the __kernel__ bridge", async () => {
+		const requests: { name: string; args: Record<string, unknown> }[] = [];
+		const server = Bun.serve({
+			hostname: "127.0.0.1",
+			port: 0,
+			fetch: async request => {
+				const body = (await request.json()) as { name: string; args: Record<string, unknown> };
+				requests.push(body);
+				return Response.json({ ok: true, value: { seen: `${body.name}.${body.args.op}` } });
+			},
+		});
+
+		try {
+			const result = await runPrelude(
+				[
+					'print(ctx.materialize({"tokenBudget": 1000}))',
+					'print(artifacts.put({"text": "x"}))',
+					'print(tasks.create({"id": "t1", "objective": "o"}))',
+					'print(events.query({"kind": "task.state"}))',
+					'print(memory.propose({"fact": "f"}))',
+					'print(actors.status({"id": "Main"}))',
+					"print(capabilities.effective({}))",
+					'print(contract.create({"id": "c", "objective": "o"}))',
+					'print(routing.resolve({"role": "main", "taskComplexity": 0.5}))',
+					'print(policy.authorize({"id": "fs.read", "effect": "read", "resource": "repo/x.ts"}))',
+					"print(security.profile({}))",
+					'print(harness.hypothesis({"component": "tool-default", "observation": "o", "hypothesis": "h"}))',
+					"print(gateway.status({}))",
+				].join("\n"),
+				{
+					PI_TOOL_BRIDGE_URL: server.url.toString(),
+					PI_TOOL_BRIDGE_TOKEN: "test-token",
+					PI_TOOL_BRIDGE_SESSION: "test-session",
+				},
+			);
+
+			expect(result).toEqual({
+				stdout: `${[
+					"{'seen': '__kernel__.ctx.materialize'}",
+					"{'seen': '__kernel__.artifacts.put'}",
+					"{'seen': '__kernel__.tasks.create'}",
+					"{'seen': '__kernel__.events.query'}",
+					"{'seen': '__kernel__.memory.propose'}",
+					"{'seen': '__kernel__.actors.status'}",
+					"{'seen': '__kernel__.capabilities.effective'}",
+					"{'seen': '__kernel__.contract.create'}",
+					"{'seen': '__kernel__.routing.resolve'}",
+					"{'seen': '__kernel__.policy.authorize'}",
+					"{'seen': '__kernel__.security.profile'}",
+					"{'seen': '__kernel__.harness.hypothesis'}",
+					"{'seen': '__kernel__.gateway.status'}",
+				].join("\n")}\n`,
+				stderr: "",
+				exitCode: 0,
+			});
+			expect(requests.every(req => req.name === "__kernel__")).toBe(true);
+		} finally {
+			server.stop(true);
+		}
+	});
+
 	it("bypasses discovered proxies for parallel loopback bridge calls", async () => {
 		let proxyRequests = 0;
 		const bridge = Bun.serve({

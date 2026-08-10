@@ -7,8 +7,10 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import path from "node:path";
+import { capabilityCovers, renderCapability } from "@oh-my-pi/pi-kernel";
 import { $env, prompt, Snowflake } from "@oh-my-pi/pi-utils";
 import { resolveAgentModelPatterns, resolveAgentModelSource, resolveExplicitModelRole } from "../config/model-resolver";
+import { kernelHostFor } from "../eval/kernel-bridge";
 import type { LocalProtocolOptions } from "../internal-urls";
 import { registerArtifactsDir } from "../internal-urls/registry-helpers";
 import { MCPManager } from "../mcp/manager";
@@ -147,9 +149,9 @@ export interface StructuredSubagentResult {
 
 /** Machine-readable failure category so adapters can retain their native errors. */
 export class StructuredSubagentError extends Error {
-	readonly kind: "preflight" | "isolation" | "execution";
+	readonly kind: "preflight" | "isolation" | "execution" | "capability";
 
-	constructor(kind: "preflight" | "isolation" | "execution", message: string, options?: ErrorOptions) {
+	constructor(kind: "preflight" | "isolation" | "execution" | "capability", message: string, options?: ErrorOptions) {
 		super(message, options);
 		this.name = "StructuredSubagentError";
 		this.kind = kind;
@@ -557,6 +559,37 @@ export async function runStructuredSubagent(request: StructuredSubagentRequest):
 			...request.identity,
 			label: request.identity?.label ?? (request.invocationKind === "eval" ? "EvalAgent" : undefined),
 		});
+		// Kernel actor security (blueprint §85, §54): capability ancestry must
+		// be established BEFORE child execution starts — a fire-and-forget
+		// promise would leave a window where the child exists before the
+		// registry knows its parent, and a grant could slip through. Sequence:
+		// allocate child identity → await kernel host → set capability parent →
+		// derive effective capabilities → verify child ⊆ parent → launch.
+		{
+			const parentAgentId = request.session.getAgentId?.() ?? null;
+			const host = await kernelHostFor(request.session);
+			host.capabilities.setParent(id, parentAgentId ?? undefined);
+			// Child's ACTUAL authority = its direct grants (least privilege,
+			// §54). The parent's UPPER BOUND (direct + inherited chain) is the
+			// ceiling the child may not exceed.
+			const parentBound = host.capabilities.upperBound(parentAgentId ?? id);
+			const childEffective = host.capabilities.effective(id);
+			// Invariant: every capability the child can already see (from its own
+			// grants — none at spawn) must be covered by the parent's upper
+			// bound. With no grants this is trivially true; the check documents
+			// the invariant and catches any future derivation that breaks it.
+			const uncovered = childEffective.filter(cap => !parentBound.some(p => capabilityCovers(p, cap)));
+			if (uncovered.length > 0) {
+				throw new StructuredSubagentError(
+					"capability",
+					`child ${id} effective capabilities exceed parent: ${uncovered.map(renderCapability).join(", ")}`,
+				);
+			}
+			host.events.append(
+				{ kind: "agent.spawned", actorId: id, parentId: parentAgentId ?? undefined, semantics: "spawn" },
+				{ sessionId: request.session.getSessionId?.() ?? "default" },
+			);
+		}
 		const baseOptions = buildExecutorOptions(request, policy, lease, id);
 		baseOptions.onCleanupDeferred = completion => {
 			deferredCleanup = completion;

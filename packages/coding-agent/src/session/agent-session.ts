@@ -3237,6 +3237,43 @@ export class AgentSession {
 	 * execution still emit there).
 	 */
 	async #beforeToolCall(ctx: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> {
+		// Kernel EffectBroker interposition (audit #7, blueprint §7/§75): when
+		// the gate is on, EVERY tool effect traverses the kernel broker before
+		// OMP's own approval machinery. Default deny — the actor's capabilities
+		// must cover the effect. Gate off by default: OMP's existing
+		// permissions/approvals are byte-for-byte unchanged. The lazy import
+		// breaks the module cycle (tools/learn → kernel-bridge → session).
+		if (Bun.env.OMP_KERNEL_EFFECT_GATE === "1") {
+			const { authorizeToolEffect, kernelHostFor } = await import("../eval/kernel-bridge");
+			try {
+				// Minimal ToolSession-shaped adapter: the kernel dir resolves
+				// from the session file/cwd; everything else the broker needs
+				// is the tool name + args passed directly below.
+				const adapter = {
+					cwd: this.sessionManager.getCwd(),
+					hasUI: false,
+					getSessionFile: () => this.sessionManager.getSessionFile() ?? null,
+					getSessionId: () => this.sessionId,
+					getAgentId: () => this.getAgentId(),
+				} as never;
+				const host = await kernelHostFor(adapter);
+				const gate = await authorizeToolEffect({
+					host,
+					actor: this.getAgentId?.() ?? "main",
+					tool: ctx.tool.name,
+					args: ctx.args as Record<string, unknown>,
+				});
+				if (gate.blocked) {
+					return {
+						block: true,
+						reason: gate.reason ?? `kernel policy denied ${ctx.tool.name}`,
+					};
+				}
+			} catch {
+				// No kernel session (bare eval, tests): the effect gate is a
+				// no-op, never a crash. OMP's own machinery still applies.
+			}
+		}
 		const runner = this.#extensionRunner;
 		if (!runner?.hasHandlers("tool_call")) return undefined;
 		const metadata = ctx.toolCall.providerMetadata;
