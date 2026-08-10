@@ -3270,8 +3270,14 @@ export class AgentSession {
 					};
 				}
 			} catch {
-				// No kernel session (bare eval, tests): the effect gate is a
-				// no-op, never a crash. OMP's own machinery still applies.
+				// FAIL CLOSED (paste-4 P0 #3): a constitutional security gate
+				// that cannot determine authorization must DENY, not proceed.
+				// A broker/host failure under an open gate is an incident, not
+				// a pass-through.
+				return {
+					block: true,
+					reason: `kernel effect gate failed closed: ${ctx.tool.name}`,
+				};
 			}
 		}
 		const runner = this.#extensionRunner;

@@ -7,7 +7,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import path from "node:path";
-import { capabilityCovers, renderCapability } from "@oh-my-pi/pi-kernel";
+import type { Capability } from "@oh-my-pi/pi-kernel";
 import { $env, prompt, Snowflake } from "@oh-my-pi/pi-utils";
 import { resolveAgentModelPatterns, resolveAgentModelSource, resolveExplicitModelRole } from "../config/model-resolver";
 import { kernelHostFor } from "../eval/kernel-bridge";
@@ -108,6 +108,13 @@ export interface StructuredSubagentRequest {
 	keepAlive?: boolean;
 	/** Task subagents share their parent's eval kernel; eval bridge children must not. */
 	shareEvalSession?: boolean;
+	/**
+	 * Capabilities the child ASKS for (least privilege bootstrap, §54,
+	 * paste-4 P0 #4). At spawn the kernel derives C_child = requested ∩
+	 * parent-upper-bound and grants exactly that — never the parent's whole
+	 * set. Omitted = the child starts with zero direct authority.
+	 */
+	requestedCapabilities?: Capability[];
 	/** Task frontends may inherit LSP; eval frontends normally set this false. */
 	enableLsp?: boolean;
 	/** Explicitly pass false for plan mode or invocation kinds that must not use IRC. */
@@ -569,22 +576,12 @@ export async function runStructuredSubagent(request: StructuredSubagentRequest):
 			const parentAgentId = request.session.getAgentId?.() ?? null;
 			const host = await kernelHostFor(request.session);
 			host.capabilities.setParent(id, parentAgentId ?? undefined);
-			// Child's ACTUAL authority = its direct grants (least privilege,
-			// §54). The parent's UPPER BOUND (direct + inherited chain) is the
-			// ceiling the child may not exceed.
-			const parentBound = host.capabilities.upperBound(parentAgentId ?? id);
-			const childEffective = host.capabilities.effective(id);
-			// Invariant: every capability the child can already see (from its own
-			// grants — none at spawn) must be covered by the parent's upper
-			// bound. With no grants this is trivially true; the check documents
-			// the invariant and catches any future derivation that breaks it.
-			const uncovered = childEffective.filter(cap => !parentBound.some(p => capabilityCovers(p, cap)));
-			if (uncovered.length > 0) {
-				throw new StructuredSubagentError(
-					"capability",
-					`child ${id} effective capabilities exceed parent: ${uncovered.map(renderCapability).join(", ")}`,
-				);
-			}
+			// Least-privilege bootstrap (paste-4 P0 #4): C_child = requested ∩
+			// parent-upper-bound. The child starts with ZERO direct authority
+			// and receives exactly the requested capabilities its parent can
+			// cover — never the parent's whole set. This is what makes the
+			// EffectBroker gate usable: governed operations have real grants.
+			host.capabilities.deriveChildCapabilities(id, request.requestedCapabilities ?? []);
 			host.events.append(
 				{ kind: "agent.spawned", actorId: id, parentId: parentAgentId ?? undefined, semantics: "spawn" },
 				{ sessionId: request.session.getSessionId?.() ?? "default" },

@@ -9,16 +9,23 @@
  */
 
 import { logger, ptree } from "@oh-my-pi/pi-utils";
-import { createDaemonBrokerClient, daemonClientForProject } from "../launch/client";
+import { createDaemonBrokerClient, daemonClientForProject, readOrCreateToken } from "../launch/client";
 import { describeQuietly, stopQuietly, waitReady } from "../launch/ensure";
 import { resolveWorkerSpawnCmd, SMOKE_TEST_TIMEOUT_MS, workerEnvFromParent } from "../subprocess/worker-client";
 import {
+	KERNEL_GATEWAY_AUTH_TOKEN_ENV,
 	KERNEL_GATEWAY_DAEMON_NAME,
 	KERNEL_GATEWAY_PROJECT_DIR_ENV,
 	KERNEL_GATEWAY_READY_PATTERN,
 	KERNEL_GATEWAY_WORKER_ARG,
 	kernelGatewayEndpointOf,
 } from "./protocol";
+
+/** Resolve the broker runtime dir for a project (production path). */
+async function daemonRuntimeDirFor(projectDir: string): Promise<string> {
+	const { daemonRuntimeDir } = await import("../launch/paths");
+	return daemonRuntimeDir(projectDir);
+}
 
 const READY_TIMEOUT_MS = 30_000;
 /** describe→start rounds; bounds cross-process start races and wedged-gateway replacement. */
@@ -67,6 +74,10 @@ export async function ensureKernelGateway(opts: {
 			continue;
 		}
 		const spawn = resolveWorkerSpawnCmd(KERNEL_GATEWAY_WORKER_ARG);
+		// The daemon and its session clients share the project's broker token
+		// (paste-4 P1): the daemon requires it on inbound event frames, so the
+		// event log is not a public write surface.
+		const authToken = await readOrCreateToken(opts.runtimeDir ?? (await daemonRuntimeDirFor(client.projectDir)));
 		try {
 			const started = await client.request(
 				{
@@ -77,6 +88,7 @@ export async function ensureKernelGateway(opts: {
 						args: spawn.cmd.slice(1),
 						env: {
 							[KERNEL_GATEWAY_PROJECT_DIR_ENV]: client.projectDir,
+							[KERNEL_GATEWAY_AUTH_TOKEN_ENV]: authToken,
 						},
 						cwd: spawn.cwd ?? client.projectDir,
 						pty: false,
@@ -159,6 +171,9 @@ export async function connectSessionToGateway(opts: {
 		runtimeDir: opts.runtimeDir,
 	});
 	if (!endpoint) return () => undefined;
+	// The daemon requires the project's broker token on inbound frames
+	// (paste-4 P1) — the event log is not a public write surface.
+	const token = await readOrCreateToken(opts.runtimeDir ?? (await daemonRuntimeDirFor(opts.projectDir)));
 
 	// Register the runtime over HTTP RPC first (identity is authoritative).
 	try {
@@ -194,7 +209,7 @@ export async function connectSessionToGateway(opts: {
 	const unsubscribe = opts.events.subscribe(envelope => {
 		try {
 			if (ws.readyState === WebSocket.OPEN) {
-				ws.send(JSON.stringify({ kind: "event.append", payload: envelope }));
+				ws.send(JSON.stringify({ kind: "event.append", token, payload: envelope }));
 			}
 		} catch {
 			// Socket died mid-stream; the session keeps running process-local.

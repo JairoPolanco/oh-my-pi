@@ -25,12 +25,16 @@ import {
 	ContextMaterializer,
 	type ContextRequest,
 	DefaultContextEngine,
+	EffectBroker,
 	type HarnessComponent,
 	type Hypothesis,
 	isEditable,
 	KernelHost,
+	mapToolEffectToOperation,
+	PURE_EFFECT,
 	type TaskId,
 	type TaskState,
+	type ToolEffectMapper,
 } from "@oh-my-pi/pi-kernel";
 import { actorStatusFromRef, encodeAgentMessage, makeAgentMessage } from "../actors/kernel-actors";
 import { IrcBus } from "../irc/bus";
@@ -58,6 +62,26 @@ function kernelDirFor(session: ToolSession): string {
 }
 
 const HOSTS = new Map<string, KernelHost>();
+
+/**
+ * Which backend owns a proposed memory fact id, per session (paste-4 P1).
+ * When `memory.propose` routes through the live backend (mnemopi), the id
+ * lives THERE — the kernel in-memory store must not silently receive
+ * `commit/reject/stale` for a fact it never saw. This closes the
+ * split-lifecycle: an id created by propose is routed to the same backend
+ * for its lifecycle ops.
+ */
+const MEMORY_OWNERSHIP = new Map<string, Map<string, "kernel" | "mnemopi">>();
+
+function memoryOwner(session: ToolSession): Map<string, "kernel" | "mnemopi"> {
+	const key = session.getSessionId?.() ?? session.cwd;
+	let owners = MEMORY_OWNERSHIP.get(key);
+	if (!owners) {
+		owners = new Map();
+		MEMORY_OWNERSHIP.set(key, owners);
+	}
+	return owners;
+}
 
 /**
  * Live memory adapter over the session's configured backend (mnemopi).
@@ -416,6 +440,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			if (live) {
 				const id = live.remember(fact, typeof args.confidence === "number" ? args.confidence : 0.8);
 				if (id) {
+					memoryOwner(options.session).set(id, "mnemopi");
 					host.events.append(
 						{
 							kind: "memory.proposed",
@@ -437,6 +462,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 				expires: typeof args.expires === "number" ? args.expires : null,
 				decay: typeof args.decay === "string" ? (args.decay as never) : "architecture",
 			});
+			memoryOwner(options.session).set(proposed.id, "kernel");
 			host.events.append(
 				{ kind: "memory.proposed", factId: proposed.id, text: proposed.fact, scope: proposed.scope },
 				{ sessionId: options.session.getSessionId?.() ?? "default" },
@@ -446,6 +472,13 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 		case "memory.commit": {
 			const id = requireArg(args, "id");
 			if (typeof id !== "string") throw new Error("__kernel__.memory.commit requires string 'id'");
+			// Lifecycle routes to the OWNING backend (paste-4 P1). A mnemopi
+			// fact was committed at propose time (mnemopi has no staged
+			// lifecycle) — commit is an idempotent success there, never a
+			// kernel-store call for a fact the kernel never saw.
+			if (memoryOwner(options.session).get(id) === "mnemopi") {
+				return { committed: id, backend: "mnemopi" };
+			}
 			await host.memory.commit(id);
 			host.events.append({ kind: "memory.committed", factId: id });
 			return { committed: id };
@@ -453,8 +486,22 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 		case "memory.reject": {
 			const id = requireArg(args, "id");
 			if (typeof id !== "string") throw new Error("__kernel__.memory.reject requires string 'id'");
+			// Mnemopi has no staged lifecycle to reject — surfacing that is
+			// honest, silently touching the kernel store for a foreign id is not.
+			if (memoryOwner(options.session).get(id) === "mnemopi") {
+				throw new Error(`memory.reject unsupported: fact ${id} lives in mnemopi, which has no staged lifecycle`);
+			}
 			await host.memory.reject(id);
 			return { rejected: id };
+		}
+		case "memory.stale": {
+			const id = requireArg(args, "id");
+			if (typeof id !== "string") throw new Error("__kernel__.memory.stale requires string 'id'");
+			if (memoryOwner(options.session).get(id) === "mnemopi") {
+				throw new Error(`memory.stale unsupported: fact ${id} lives in mnemopi, which has no staged lifecycle`);
+			}
+			await host.memory.markStale(id);
+			return { stale: id };
 		}
 		case "memory.recall": {
 			// Prefer the session's live memory backend so RLM recall sees the
@@ -483,12 +530,6 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 				observedAt: fact.observedAt,
 				state: fact.state,
 			}));
-		}
-		case "memory.stale": {
-			const id = requireArg(args, "id");
-			if (typeof id !== "string") throw new Error("__kernel__.memory.stale requires string 'id'");
-			await host.memory.markStale(id);
-			return { stale: id };
 		}
 		case "contract.create": {
 			// Phase 8 (§40, §76): register a completion contract for later
@@ -539,12 +580,13 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 				actor: options.session.getAgentId?.() ?? "eval",
 				artifacts,
 			});
-			// V3/V4 (§41, audit #17): the kernel decides the level, OMP executes
-			// the review. When the contract demands an independent reviewer and
-			// the caller requests one, spawn OMP's reviewer agent over the same
-			// workspace and merge the verdict — the report's pass becomes the
-			// AND of the deterministic checks and the independent review.
-			if (report.pass && contract.verificationLevel >= 3 && args.review === true) {
+			// V3/V4 (§41, audit #17, paste-4 P1): the CONTRACT's verification
+			// level determines verification — the caller cannot opt out of the
+			// independent reviewer a level-3+ contract mandates (a caller
+			// preference must never downgrade the contract). `reviewerModel`
+			// remains a caller affordance for §42's independent-model-family
+			// requirement; `review: false` is ignored for level ≥3.
+			if (report.pass && contract.verificationLevel >= 3) {
 				// Lazy import: the reviewer pulls in the task/structured-subagent
 				// graph, which re-enters tools/index — importing at module top
 				// level would cycle (tools/learn → kernel-bridge → reviewer).
@@ -556,6 +598,16 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 				if (review) {
 					report.review = review;
 					report.pass = review.pass;
+				} else {
+					// A level-3+ contract whose independent review could not run
+					// is NOT verified — no verdict means failure, not a silent
+					// downgrade to deterministic-only (paste-4 P1).
+					report.pass = false;
+					report.review = {
+						reviewerModel: "unavailable",
+						pass: false,
+						note: "independent reviewer could not run",
+					};
 				}
 			}
 			host.events.append(
@@ -780,10 +832,15 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 }
 
 /**
- * EffectBroker gate for one tool call (audit #7). The session's
+ * EffectBroker gate for one tool call (audit #7, paste-4 P0 #3). The session's
  * `beforeToolCall` hook consults this BEFORE OMP's own approval machinery:
  * default deny — the actor's capabilities must cover the effect. Returns the
  * block decision; the caller turns it into a `{ block: true, reason }` result.
+ *
+ * Constitutional mode: the gate uses the OMP-exhaustive effect mapper with
+ * `denyUnknown` — every effectful tool must be explicitly mapped or pure, and
+ * an unmapped tool is DENIED. Fail-closed: any authorization failure is a
+ * deny, never a pass-through.
  */
 export async function authorizeToolEffect(opts: {
 	host: KernelHost;
@@ -791,7 +848,35 @@ export async function authorizeToolEffect(opts: {
 	tool: string;
 	args: Record<string, unknown>;
 }): Promise<{ blocked: boolean; reason?: string }> {
-	const decision = opts.host.effects.authorize(opts.actor, { tool: opts.tool, args: opts.args });
+	const broker = new EffectBroker(opts.host.policy, OMP_TOOL_EFFECT_MAPPER, { denyUnknown: true });
+	const decision = broker.authorize(opts.actor, { tool: opts.tool, args: opts.args });
 	if (decision.allow) return { blocked: false };
 	return { blocked: true, reason: decision.reason };
 }
+
+/** Tool names with NO external side effect — explicitly classified as pure
+ *  so constitutional mode can allow them without a capability grant. */
+export const PURE_TOOL_NAMES: ReadonlySet<string> = new Set([
+	"todo", // plan bookkeeping, no external effect
+	"yield", // turn control
+	"ask", // request user input
+	"board", // durable work-graph reads/writes are governed by task events, not fs/network
+	"goal",
+	"vibe_list", // read-only roster
+	"vibe_wait", // wait for a peer
+	"recall", // read-only memory
+	"reflect", // read-only memory analysis
+]);
+
+/**
+ * OMP's exhaustive tool effect classification (paste-4 P0 #3). Every builtin
+ * with an external side effect is mapped to a kernel operation; pure tools
+ * are explicitly listed in {@link PURE_TOOL_NAMES}; anything else is denied
+ * in constitutional mode. Extend this list when new tools ship — the broker
+ * must never silently pass an unknown effectful tool.
+ */
+export const OMP_TOOL_EFFECT_MAPPER: ToolEffectMapper = effect => {
+	const { tool } = effect;
+	if (PURE_TOOL_NAMES.has(tool)) return PURE_EFFECT; // explicitly pure → allow, op: null
+	return mapToolEffectToOperation(effect);
+};

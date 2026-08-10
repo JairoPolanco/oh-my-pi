@@ -126,4 +126,36 @@ describe("gateway server", () => {
 			true,
 		);
 	});
+
+	test("inbound event.append requires the auth token (paste-4 P1)", async () => {
+		const gateway = new Gateway();
+		gateways.push(gateway);
+		const received: unknown[] = [];
+		handle = await startGatewayServer(gateway, {
+			operator: { id: "daemon", scopes: [] },
+			authToken: "secret-token",
+			onEvent: payload => received.push(payload),
+		});
+		const wsUrl = `ws://127.0.0.1:${handle.server.port}/ws`;
+
+		await new Promise<void>((resolve, reject) => {
+			const ws = new WebSocket(wsUrl);
+			ws.onopen = () => {
+				// Wrong token: dropped.
+				ws.send(JSON.stringify({ kind: "event.append", token: "wrong", payload: { kind: "x" } }));
+				// Missing token: dropped.
+				ws.send(JSON.stringify({ kind: "event.append", payload: { kind: "y" } }));
+				// Correct token: accepted.
+				ws.send(JSON.stringify({ kind: "event.append", token: "secret-token", payload: { kind: "z" } }));
+				setTimeout(() => {
+					ws.close();
+					resolve();
+				}, 300);
+			};
+			ws.onerror = () => reject(new Error("websocket failed to connect/upgrade"));
+			setTimeout(() => reject(new Error("timeout")), 5000);
+		});
+
+		expect(received).toEqual([{ kind: "z" }]);
+	});
 });

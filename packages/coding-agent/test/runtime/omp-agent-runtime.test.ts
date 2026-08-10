@@ -191,14 +191,20 @@ describe("OmpAgentRuntime.run", () => {
 		expect(events).toEqual([{ kind: "tool.called", tool: "read", args: {} }]);
 	});
 
-	test("abort closes the queue and stops iteration", async () => {
+	test("abort closes the queue, stops iteration, and cancels underlying execution", async () => {
 		const sendUserMessage = async () => {
 			queueMicrotask(() => {
 				agent.emit({ type: "tool_execution_start", toolCallId: "t1", toolName: "read", args: {} });
 			});
 		};
+		const aborted: string[] = [];
 		const agent = new FakeAgent();
-		const session = makeSession({ sendUserMessage });
+		const session = makeSession({
+			sendUserMessage,
+			abort: async (options?: { reason?: string }) => {
+				aborted.push(options?.reason ?? "");
+			},
+		});
 		(session as { agent: FakeAgent }).agent = agent;
 
 		const controller = new AbortController();
@@ -212,6 +218,9 @@ describe("OmpAgentRuntime.run", () => {
 		const rest = await iterator.next();
 		expect(rest.done).toBe(true);
 		expect(events).toEqual([{ kind: "tool.called", tool: "read", args: {} }]);
+		// paste-4 P1: "caller stops listening" is NOT "computation stops" —
+		// the underlying session abort was invoked.
+		expect(aborted).toHaveLength(1);
 	});
 
 	test("verifies the objective contract on completion and yields the report (audit #16)", async () => {
@@ -290,8 +299,11 @@ describe("OmpAgentRuntime.run", () => {
 		expect(switched).toEqual(["prepared-model"]);
 	});
 
-	test("filters tools to the prepared capability view", async () => {
+	test("filters tools to the prepared capability view and RESTORES them after (paste-4 P1)", async () => {
 		const sendUserMessage = async () => {
+			// During the run the capability view is enforced: only fs.read
+			// tools are exposed to the loop.
+			expect(agent.state.tools.map(t => t.name)).toEqual(["read"]);
 			agent.emit({ type: "agent_end", messages: [] });
 		};
 		const agent = new FakeAgent();
@@ -307,6 +319,8 @@ describe("OmpAgentRuntime.run", () => {
 		)) {
 			// drain
 		}
-		expect(agent.state.tools.map(t => t.name)).toEqual(["read"]);
+		// Turn-scoped restriction restored in `finally`: a reused session does
+		// not leak this turn's tool filter into later turns.
+		expect(agent.state.tools.map(t => t.name)).toEqual(["read", "bash"]);
 	});
 });

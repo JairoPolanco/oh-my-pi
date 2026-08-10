@@ -19,7 +19,12 @@
  */
 
 import type { AgentEvent as OmpAgentEvent } from "@oh-my-pi/pi-agent-core";
-import type { AgentRuntime, AgentEvent as KernelAgentEvent, PreparedTurn } from "@oh-my-pi/pi-kernel";
+import type {
+	AgentRuntime,
+	AgentEvent as KernelAgentEvent,
+	PreparedTurn,
+	VerificationLevel,
+} from "@oh-my-pi/pi-kernel";
 import type { AgentSession } from "../session/agent-session";
 import { attachKernelTrajectoryTap } from "./trajectory-tap";
 
@@ -122,6 +127,12 @@ export class OmpAgentRuntime implements AgentRuntime {
 	constructor(private readonly session: AgentSession) {}
 
 	async *run(request: PreparedTurn, signal: AbortSignal): AsyncIterable<KernelAgentEvent> {
+		// Turn-scoped environment: capture the PRE-TURN tool surface so
+		// per-turn restrictions can be restored in `finally` (paste-4 P1) —
+		// a reused session must not leak this turn's tool filter into later
+		// turns.
+		const preTurnTools = this.session.agent.state.tools;
+
 		// Honor the prepared model (blueprint §73): switch the session to the
 		// turn's model when it differs and is available. Keep the session's
 		// current model when the prepared one is not resolvable (authless
@@ -140,8 +151,7 @@ export class OmpAgentRuntime implements AgentRuntime {
 		// to tools the capability view names. Empty view = unrestricted.
 		const allowed = allowedToolNames(request.tools);
 		if (allowed) {
-			const current = this.session.agent.state.tools;
-			this.session.agent.setTools(current.filter(tool => allowed.has(tool.name)));
+			this.session.agent.setTools(preTurnTools.filter(tool => allowed.has(tool.name)));
 		}
 
 		// Subscribe BEFORE sending: no early event may be lost. The queue
@@ -164,7 +174,14 @@ export class OmpAgentRuntime implements AgentRuntime {
 			if (event.type === "agent_end") queue.close();
 		});
 
-		const signalAbort = (): void => queue.close();
+		const abortExecution = (): void => {
+			queue.close();
+			// Cancel the UNDERLYING agent/tool execution, not just the caller's
+			// iterator (paste-4 P1): "caller stops listening" is not "computation
+			// stops". Best-effort — a session mid-disposal may already be gone.
+			void this.session.abort({ reason: "Kernel runtime budget/abort" }).catch(() => {});
+		};
+		const signalAbort = (): void => abortExecution();
 		signal.addEventListener("abort", signalAbort, { once: true });
 
 		// Instrument the trajectory into the kernel event log (audit item 15):
@@ -187,7 +204,10 @@ export class OmpAgentRuntime implements AgentRuntime {
 			const deadline = request.budget.maxLatencyMs > 0 ? Date.now() + request.budget.maxLatencyMs : null;
 			for (;;) {
 				if (signal.aborted) break;
-				if (deadline !== null && Date.now() > deadline) break;
+				if (deadline !== null && Date.now() > deadline) {
+					abortExecution();
+					break;
+				}
 				const event = await queue.next();
 				if (event === undefined) break; // closed (agent_end / budget / abort)
 				yield event;
@@ -214,16 +234,43 @@ export class OmpAgentRuntime implements AgentRuntime {
 						});
 						host.events.append({ kind: "verification.completed", report }, { sessionId: this.session.sessionId });
 						yield { kind: "verification.completed", report };
+					} else {
+						// The contract vanished: a contract-attached objective with
+						// no verifiable contract is a verification FAILURE, not a
+						// success-by-absence (paste-4 P1).
+						const failure = {
+							contractId,
+							pass: false,
+							checkResults: [],
+							evidence: [],
+							verificationLevel: 0 as VerificationLevel,
+							startedAt: Date.now(),
+							finishedAt: Date.now(),
+						};
+						yield { kind: "verification.completed", report: failure };
 					}
 				} catch {
-					// A missing contract or kernel dir must never crash the turn;
-					// the run yields what it has and the caller sees no verdict.
+					// Verification infrastructure failed: for a contract-attached
+					// objective, no verdict is a FAILURE — never success-by-absence.
+					const failure = {
+						contractId,
+						pass: false,
+						checkResults: [],
+						evidence: [],
+						verificationLevel: 0 as VerificationLevel,
+						startedAt: Date.now(),
+						finishedAt: Date.now(),
+					};
+					yield { kind: "verification.completed", report: failure };
 				}
 			}
 		} finally {
 			signal.removeEventListener("abort", signalAbort);
 			detachTap?.();
 			unsubscribe();
+			// Restore the pre-turn tool surface (paste-4 P1): per-turn
+			// restrictions must not leak into later turns of a reused session.
+			if (allowed) this.session.agent.setTools(preTurnTools);
 		}
 	}
 }

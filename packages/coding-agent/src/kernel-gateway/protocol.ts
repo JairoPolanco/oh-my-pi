@@ -18,6 +18,13 @@ export const KERNEL_GATEWAY_WORKER_ARG = "__omp_worker_kernel_gateway";
 /** Environment key carrying the canonical project directory the gateway serves. */
 export const KERNEL_GATEWAY_PROJECT_DIR_ENV = "OMP_KERNEL_GATEWAY_PROJECT_DIR";
 
+/**
+ * Environment key carrying the project's broker auth token. The daemon
+ * requires it on inbound `event.append` frames (paste-4 P1) so the event log
+ * is not a public write surface.
+ */
+export const KERNEL_GATEWAY_AUTH_TOKEN_ENV = "OMP_KERNEL_GATEWAY_AUTH_TOKEN";
+
 /** Stable broker daemon name for the shared kernel gateway. */
 export const KERNEL_GATEWAY_DAEMON_NAME = "omp.kernel.gateway";
 

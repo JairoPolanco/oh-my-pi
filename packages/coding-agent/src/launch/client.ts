@@ -74,7 +74,7 @@ async function canonicalProjectDir(projectDir: string): Promise<string> {
 	}
 }
 
-async function readOrCreateToken(runtimeDir: string): Promise<string> {
+export async function readOrCreateToken(runtimeDir: string): Promise<string> {
 	await fs.mkdir(runtimeDir, { recursive: true, mode: 0o700 });
 	const tokenPath = path.join(runtimeDir, TOKEN_FILE);
 	const tokenFile = Bun.file(tokenPath);

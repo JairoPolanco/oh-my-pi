@@ -1,31 +1,37 @@
 /**
  * ProviderContextGovernor — the kernel ContextEngine on OMP's MAIN provider
- * path (blueprint §74, audit item 6).
+ * path (blueprint §74, audit item 6, paste-4 P0 #1/#2).
  *
  * OMP's own assembly (append-only context sync + provider-prefix caching)
  * happens upstream in the agent loop's `prepareProviderCall`; this governor
  * sits in `transformProviderContext`, AFTER that assembly, so those
- * optimizations are preserved byte-for-byte. What the governor adds is
- * budget-governed SELECTION: the fully assembled message list is scored and
- * trimmed under the model's context window by the kernel materializer.
+ * optimizations are preserved byte-for-byte.
+ *
+ * Budget architecture (paste-4 P0 #2):
+ *
+ *     B_history = B_model − B_output − B_system − B_tools − B_overhead
+ *
+ * Mandatory provider structure (developer messages, the current/last turn,
+ * whole tool-call/result spans) is costed FIRST and reserved out of
+ * B_history. ONLY the optional history/evidence is materialized into what
+ * remains — mandatory spans are never a post-budget fixup.
+ *
+ * Truthfulness (paste-4 P0 #1): the messages actually handed to the provider
+ * ARE the materialized representations. The governor does not reduce the VM
+ * output to a set of surviving indices and then re-send the full originals —
+ * it rebuilds each selected message from the item the materializer produced
+ * (truncated content included), so
+ *
+ *     estimateTokens(what the provider receives) == what was accounted
  *
  * Interposition is gated by `OMP_KERNEL_CONTEXT_GOVERNANCE=1` (the benchmark
- * gate: the metaharness runner forwards `--env` into containers, so an
- * experiment arm can flip it per variant). When the gate is closed the
- * transform returns the input context unchanged — zero behavior change.
- *
- * Structure integrity is enforced on the rebuilt message list:
- *   - developer (instruction) messages always survive;
- *   - the LAST message (the current turn) always survives;
- *   - an assistant tool-call block and its consecutive toolResult messages
- *     are one span — if any member survives, the whole span survives.
- *   - survivors are re-emitted in ORIGINAL order (the materializer's output
- *     is kind-sorted; message order is a provider invariant).
+ * gate). When the gate is closed the transform returns the input context
+ * unchanged — zero behavior change.
  */
 
-import type { Context, Message } from "@oh-my-pi/pi-ai";
+import type { Context, Message, TextContent } from "@oh-my-pi/pi-ai";
 import type { Model } from "@oh-my-pi/pi-catalog/types";
-import { ContextMaterializer, type ContextRequest } from "@oh-my-pi/pi-kernel";
+import { ContextMaterializer, type ContextRequest, estimateTokens } from "@oh-my-pi/pi-kernel";
 import { messageToCandidate } from "./omp-context-engine";
 
 /** Benchmark gate env var; metaharness flips it per experiment arm. */
@@ -33,6 +39,11 @@ export const KERNEL_CONTEXT_GOVERNANCE_ENV = "OMP_KERNEL_CONTEXT_GOVERNANCE";
 
 /** Default budget when the model reports no context window. */
 const DEFAULT_CONTEXT_WINDOW = 128_000;
+
+/** Token fractions of the model window reserved OUTSIDE optional history. */
+const OUTPUT_RESERVE_FRACTION = 0.1;
+const SYSTEM_TOOLS_OVERHEAD_FRACTION = 0.1;
+const PROVIDER_OVERHEAD_FRACTION = 0.05;
 
 /** True when the benchmark gate is open (env `1`/`true`). */
 export function kernelContextGovernanceEnabled(): boolean {
@@ -44,6 +55,12 @@ export function kernelContextGovernanceEnabled(): boolean {
 function hasToolCalls(message: Message): boolean {
 	if (message.role !== "assistant") return false;
 	return message.content.some(block => block.type === "toolCall");
+}
+
+/** True when the message carries image blocks (vision cost outside text). */
+function hasImages(message: Message): boolean {
+	if (typeof message.content === "string") return false;
+	return message.content.some(block => block.type === "image");
 }
 
 /**
@@ -67,6 +84,38 @@ function toolSpans(messages: Message[]): Array<{ start: number; end: number }> {
 	return spans;
 }
 
+/** Text blocks of a message, joined (what the estimator counts). */
+function messageText(message: Message): string {
+	if (typeof message.content === "string") return message.content;
+	const parts: string[] = [];
+	for (const part of message.content) {
+		if (part.type === "text" && "text" in part && typeof part.text === "string") parts.push(part.text);
+	}
+	return parts.join("\n");
+}
+
+/**
+ * Real token cost of a message as it will be SENT: text content plus an
+ * image allowance (the estimator's text-only count undercounts vision), plus
+ * tool-call argument JSON for assistant tool blocks.
+ */
+function messageTokenCost(message: Message): number {
+	let cost = estimateTokens(messageText(message));
+	if (hasImages(message)) cost += 256; // conservative per-image allowance
+	if (message.role === "assistant") {
+		for (const block of message.content) {
+			if (block.type === "toolCall") {
+				try {
+					cost += estimateTokens(JSON.stringify(block.arguments ?? {}));
+				} catch {
+					// Non-serializable args: charged nothing extra (best effort).
+				}
+			}
+		}
+	}
+	return cost;
+}
+
 /**
  * Kernel-governed provider context transform. Implements the
  * `transformProviderContext` signature: `(context, model) => Context`.
@@ -82,45 +131,113 @@ export class ProviderContextGovernor {
 		if (!kernelContextGovernanceEnabled()) return context;
 		if (context.messages.length === 0) return context;
 
-		const candidates = context.messages.map((message, index) => messageToCandidate(message, index));
-		const request: ContextRequest = {
-			tokenBudget: model.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
-			objective: lastUserText(context.messages) ?? undefined,
-			instructions: context.systemPrompt?.join("\n") ?? undefined,
-			candidates,
-		};
-		const view = this.#materializer.materialize(request);
+		// B_history = B_model − output − system/tools − provider overhead.
+		const window = model.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+		const reserved =
+			Math.floor(window * OUTPUT_RESERVE_FRACTION) +
+			Math.floor(window * SYSTEM_TOOLS_OVERHEAD_FRACTION) +
+			Math.floor(window * PROVIDER_OVERHEAD_FRACTION);
+		const historyBudget = Math.max(1, window - reserved);
 
-		// Map surviving (inline-materialized) items back to message indices.
-		const keep = new Set<number>();
-		for (const item of view.items) {
-			if (item.handleOnly) continue;
-			const match = /^(\d+):/.exec(item.id);
-			if (match) keep.add(Number(match[1]));
-		}
-
-		// Structure integrity.
-		context.messages.forEach((message, index) => {
-			if (message.role === "developer") keep.add(index);
+		// Mandatory structure FIRST (paste-4 P0 #2): developer messages, the
+		// current turn, and whole tool spans are costed and reserved before any
+		// optional selection. Mandatory never rides on a post-budget fixup.
+		const messages = context.messages;
+		const spans = toolSpans(messages);
+		const spanOf = new Map<number, number>();
+		spans.forEach((span, spanIndex) => {
+			for (let i = span.start; i <= span.end; i++) spanOf.set(i, spanIndex);
 		});
-		if (context.messages.length > 0) keep.add(context.messages.length - 1);
-		for (const span of toolSpans(context.messages)) {
-			let memberSurvives = false;
-			for (let index = span.start; index <= span.end; index++) {
-				if (keep.has(index)) {
-					memberSurvives = true;
-					break;
-				}
-			}
-			if (memberSurvives) {
-				for (let index = span.start; index <= span.end; index++) keep.add(index);
-			}
+		const isMandatory = (index: number): boolean =>
+			index === messages.length - 1 || messages[index]!.role === "developer" || spanOf.has(index);
+		const mandatoryIndexes = new Set<number>();
+		let mandatoryCost = 0;
+		for (let index = 0; index < messages.length; index++) {
+			if (!isMandatory(index)) continue;
+			mandatoryIndexes.add(index);
+			mandatoryCost += messageTokenCost(messages[index]!);
 		}
+		// If the mandatory structure alone exceeds the history budget, keep it
+		// whole anyway (structure integrity wins) but report the truth in the
+		// budget; optional history is then empty.
+		const optionalBudget = Math.max(0, historyBudget - mandatoryCost);
 
-		// Rebuild in ORIGINAL order.
-		const messages = context.messages.filter((_, index) => keep.has(index));
-		return { ...context, messages };
+		// Materialize ONLY the optional (non-mandatory) history under the
+		// remaining budget.
+		const candidates: ContextRequest["candidates"] = [];
+		const candidateIndexOf = new Map<string, number>();
+		for (let index = 0; index < messages.length; index++) {
+			if (mandatoryIndexes.has(index)) continue;
+			const candidate = messageToCandidate(messages[index]!, index);
+			candidates.push(candidate);
+			candidateIndexOf.set(candidate.id, index);
+		}
+		const view =
+			optionalBudget > 0
+				? this.#materializer.materialize({
+						tokenBudget: optionalBudget,
+						objective: lastUserText(messages) ?? undefined,
+						instructions: context.systemPrompt?.join("\n") ?? undefined,
+						candidates,
+					})
+				: {
+						items: [],
+						budget: 0,
+						usedTokens: 0,
+						allocation: {},
+						materializedAt: Date.now(),
+						rendered: { content: "", codec: "raw", tokenCount: 0 },
+					};
+
+		// Truthful rebuild (paste-4 P0 #1): the provider receives the
+		// MATERIALIZED content — truncated text included — not the full
+		// original. Mandatory messages pass through whole (their cost was
+		// already accounted); optional survivors are rebuilt from the item the
+		// materializer produced.
+		const itemContentByIndex = new Map<number, string>();
+		for (const item of view.items) {
+			if (item.handleOnly || item.content === undefined) continue;
+			const index = candidateIndexOf.get(item.id);
+			if (index === undefined) continue;
+			itemContentByIndex.set(index, item.content);
+		}
+		const rebuilt: Message[] = [];
+		for (let index = 0; index < messages.length; index++) {
+			const original = messages[index]!;
+			if (mandatoryIndexes.has(index)) {
+				rebuilt.push(original);
+				continue;
+			}
+			const materialized = itemContentByIndex.get(index);
+			if (materialized === undefined) continue; // dropped by the VM
+			rebuilt.push(applyMaterializedContent(original, materialized));
+		}
+		return { ...context, messages: rebuilt };
 	}
+}
+
+/**
+ * Rebuild a message from its materialized representation. The provider must
+ * receive exactly what was token-accounted: if the VM truncated the content,
+ * the truncated text is what goes on the wire. Tool-call blocks and images
+ * are preserved structurally (they were charged separately in
+ * {@link messageTokenCost}).
+ */
+function applyMaterializedContent(original: Message, materialized: string): Message {
+	if (typeof original.content === "string") {
+		// String-content messages are user/developer; the cast preserves the
+		// original role and metadata, replacing only the text.
+		return { ...original, content: materialized } as Message;
+	}
+	// Block content: replace the text blocks with the materialized text,
+	// keeping tool-call / image blocks untouched.
+	const rebuilt = original.content.filter(
+		(part): part is Exclude<(typeof original.content)[number], TextContent> => part.type !== "text",
+	);
+	const textBlock: TextContent = { type: "text", text: materialized };
+	// The Message union has per-role content shapes; rebuilding preserves the
+	// original role and its non-text blocks, so the result is a valid member.
+	return { ...original, content: [textBlock, ...rebuilt] } as Message;
 }
 
 /** Text of the last user message, for the objective band. */
@@ -131,9 +248,7 @@ function lastUserText(messages: Message[]): string | null {
 		const content = message.content;
 		if (typeof content === "string") return content;
 		const parts = content
-			.filter(
-				(part): part is { type: "text"; text: string } => part.type === "text" && typeof part.text === "string",
-			)
+			.filter((part): part is TextContent => part.type === "text" && typeof part.text === "string")
 			.map(part => part.text);
 		return parts.join("\n") || null;
 	}

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Gateway } from "@oh-my-pi/pi-kernel";
@@ -204,6 +204,62 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(() => call("contract.verify", { id: "nope" })).toThrow(/contract not found/);
 	});
 
+	test("level-3 contracts mandate the independent reviewer (paste-4 P1)", async () => {
+		// The contract's verificationLevel determines verification: the caller
+		// cannot omit the reviewer a level-3 contract requires. The reviewer
+		// spawn is mocked to return a rejection.
+		await fs.writeFile(path.join(sessionDir, "out.txt"), "done");
+		await call("contract.create", {
+			id: "c3",
+			objective: "write out.txt",
+			checks: [{ kind: "fileExists", path: path.join(sessionDir, "out.txt") }],
+			verificationLevel: 3,
+		});
+		const structuredSubagent = await import("../../src/task/structured-subagent");
+		const real = structuredSubagent.runStructuredSubagent;
+		vi.spyOn(structuredSubagent, "runStructuredSubagent").mockImplementation(
+			async () =>
+				({
+					result: {
+						index: 0,
+						id: "reviewer-1",
+						agent: "reviewer",
+						agentSource: "bundled",
+						task: "review",
+						exitCode: 0,
+						output: "rejected",
+						stderr: "",
+						truncated: false,
+						structuredOutput: {
+							source: "caller",
+							mode: "strict",
+							status: "passed",
+							data: { pass: false, note: "the fix is not complete" },
+						},
+						durationMs: 10,
+						tokens: 1,
+						requests: 1,
+					},
+					policy: { defaultAgent: "reviewer", depth: 1 },
+					mergeSummary: "",
+					changesApplied: false,
+					artifactsDir: "/tmp/artifacts",
+					temporaryArtifacts: false,
+				}) as never,
+		);
+
+		// No `review: true` passed — but level 3 still runs the reviewer.
+		const report = (await call("contract.verify", { id: "c3" })) as {
+			pass: boolean;
+			review?: { reviewerModel: string; pass: boolean };
+		};
+		expect(report.review).toBeDefined();
+		expect(report.review?.pass).toBe(false);
+		expect(report.pass).toBe(false); // reviewer verdict ANDs into the report
+		vi.restoreAllMocks();
+		expect(real).toBeDefined();
+	});
+
 	test("routing.resolve returns a rule-based model selection", async () => {
 		await call("routing.register", { role: "main", provider: "anthropic", model: "claude-4" });
 		const selection = (await call("routing.resolve", {
@@ -392,6 +448,38 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		await call("memory.stale", { id: proposed.id });
 		const afterStale = (await call("memory.recall", {})) as { id: string }[];
 		expect(afterStale.some(item => item.id === proposed.id)).toBe(false);
+	});
+
+	test("memory lifecycle ops route to the owning backend (paste-4 P1)", async () => {
+		// A mnemopi-proposed fact's lifecycle stays in mnemopi: commit is
+		// idempotent success (mnemopi has no staged lifecycle), and
+		// reject/stale are REFUSED — never silently routed to the kernel store
+		// for a fact the kernel never saw.
+		const session = makeSession({
+			getMnemopiSessionState: () =>
+				({
+					rememberScoped(memory: { content: string }) {
+						return `mn-live-${memory.content.length}`;
+					},
+					async recallResultsScoped() {
+						return [];
+					},
+				}) as never,
+		});
+		const proposed = (await call("memory.propose", { fact: "live fact" }, session)) as { id: string };
+		expect(proposed.id).toBe("mn-live-9");
+
+		const committed = (await call("memory.commit", { id: proposed.id }, session)) as {
+			committed: string;
+			backend: string;
+		};
+		expect(committed.backend).toBe("mnemopi");
+		expect(committed.committed).toBe(proposed.id);
+
+		// Reject/stale on a mnemopi fact are unsupported — and must NOT land
+		// in the kernel store.
+		expect(() => call("memory.reject", { id: proposed.id }, session)).toThrow(/unsupported/);
+		expect(() => call("memory.stale", { id: proposed.id }, session)).toThrow(/unsupported/);
 	});
 
 	test("memory events land in the session event log", async () => {

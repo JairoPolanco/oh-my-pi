@@ -18,6 +18,7 @@ import * as path from "node:path";
 import { EventBus, EventLog, Gateway, startGatewayServer } from "@oh-my-pi/pi-kernel";
 import { logger, postmortem } from "@oh-my-pi/pi-utils";
 import {
+	KERNEL_GATEWAY_AUTH_TOKEN_ENV,
 	KERNEL_GATEWAY_PROJECT_DIR_ENV,
 	KERNEL_GATEWAY_READY_PATTERN,
 	KERNEL_GATEWAY_WORKER_ARG,
@@ -74,6 +75,12 @@ export async function runKernelGatewayWorker(): Promise<void> {
 	await log.load();
 	log.persistFromNow();
 
+	// Inbound events are authenticated with the PROJECT'S broker token
+	// (paste-4 P1): the daemon event log is not a public write surface. The
+	// broker spawns the daemon with the same token the session clients hold.
+	const authToken = process.env[KERNEL_GATEWAY_AUTH_TOKEN_ENV];
+	delete process.env[KERNEL_GATEWAY_AUTH_TOKEN_ENV];
+
 	const stopped = Promise.withResolvers<void>();
 	const cancelCleanup = postmortem.register("kernel-gateway", () => gateway.dispose());
 	try {
@@ -83,6 +90,7 @@ export async function runKernelGatewayWorker(): Promise<void> {
 			// Default-deny operator: anonymous scope-less calls (roster/status)
 			// work; scoped methods require an authenticated proxy operator.
 			operator: { id: "daemon", scopes: [] },
+			authToken,
 			onEvent: payload => {
 				try {
 					events.append(payload as never);

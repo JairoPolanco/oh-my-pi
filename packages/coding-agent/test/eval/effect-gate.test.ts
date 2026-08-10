@@ -40,10 +40,20 @@ describe("authorizeToolEffect (EffectBroker gate)", () => {
 		).toBe(true);
 	});
 
-	test("ungoverned tools pass through (OMP's own machinery still applies)", async () => {
+	test("constitutional mode denies unmapped tools (paste-4 P0 #3)", async () => {
 		host = new KernelHost(testDir);
 		await host.warm();
+		// `irc` is not in the OMP mapper and not classified pure → denied, so
+		// no unknown effectful tool silently passes through.
 		const gate = await authorizeToolEffect({ host, actor: "agent", tool: "irc", args: {} });
+		expect(gate.blocked).toBe(true);
+		expect(gate.reason).toContain("no declared effect classification");
+	});
+
+	test("explicitly pure tools pass without a capability grant", async () => {
+		host = new KernelHost(testDir);
+		await host.warm();
+		const gate = await authorizeToolEffect({ host, actor: "agent", tool: "todo", args: { list: true } });
 		expect(gate.blocked).toBe(false);
 	});
 

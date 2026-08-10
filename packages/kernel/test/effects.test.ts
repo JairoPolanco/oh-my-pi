@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { CapabilityRegistry } from "../src/capabilities";
-import { EffectBroker, mapToolEffectToOperation } from "../src/effects";
+import { EffectBroker, mapToolEffectToOperation, PURE_EFFECT, type ToolEffectMapper } from "../src/effects";
 import { PolicyEngine } from "../src/policy";
 
 describe("mapToolEffectToOperation", () => {
@@ -67,6 +67,23 @@ describe("EffectBroker", () => {
 		const broker = new EffectBroker(new PolicyEngine(registry));
 		const decision = broker.authorize("agent", { tool: "irc", args: {} });
 		expect(decision).toEqual({ allow: true, op: null });
+	});
+
+	test("constitutional mode denies unmapped tools (paste-4 P0 #3)", () => {
+		const registry = new CapabilityRegistry();
+		const broker = new EffectBroker(new PolicyEngine(registry), undefined, { denyUnknown: true });
+		const decision = broker.authorize("agent", { tool: "irc", args: {} });
+		expect(decision.allow).toBe(false);
+		if (!decision.allow) expect(decision.reason).toContain("no declared effect classification");
+	});
+
+	test("explicitly pure tools are allowed without a capability grant", () => {
+		const registry = new CapabilityRegistry();
+		const pureMapper: ToolEffectMapper = effect => (effect.tool === "todo" ? PURE_EFFECT : null);
+		const broker = new EffectBroker(new PolicyEngine(registry), pureMapper, { denyUnknown: true });
+		expect(broker.allows("agent", { tool: "todo", args: {} })).toBe(true);
+		// Another unmapped tool is still denied under the same constitutional broker.
+		expect(broker.allows("agent", { tool: "irc", args: {} })).toBe(false);
 	});
 
 	test("least-privilege child: a child without direct grants is denied even when the parent holds the capability", () => {

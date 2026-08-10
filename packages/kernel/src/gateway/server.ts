@@ -28,6 +28,12 @@ export interface GatewayServerOptions {
 	 * control plane sees every session's trajectory, not just its own.
 	 */
 	onEvent?: (payload: unknown) => void;
+	/**
+	 * Shared secret required on inbound `event.append` frames (paste-4 P1):
+	 * `{ kind: "event.append", token, payload }`. Frames without a matching
+	 * token are dropped — the daemon event log is not a public write surface.
+	 */
+	authToken?: string;
 }
 
 interface RpcRequest {
@@ -125,18 +131,19 @@ export async function startGatewayServer(
 			},
 			message(_ws, raw) {
 				// Inbound path (audit #14): sessions stream their kernel
-				// events to the daemon. Frames: { kind: "event.append", payload }.
-				// Everything else is ignored (client→gateway calls use POST /rpc).
+				// events to the daemon. Frames: { kind: "event.append", token,
+				// payload }. Frames must carry the daemon's auth token
+				// (paste-4 P1) — the event log is not a public write surface.
 				if (!options.onEvent) return;
-				let frame: { kind?: string; payload?: unknown };
+				let frame: { kind?: string; token?: string; payload?: unknown };
 				try {
-					frame = JSON.parse(String(raw)) as { kind?: string; payload?: unknown };
+					frame = JSON.parse(String(raw)) as { kind?: string; token?: string; payload?: unknown };
 				} catch {
 					return;
 				}
-				if (frame.kind === "event.append" && frame.payload !== undefined) {
-					options.onEvent(frame.payload);
-				}
+				if (frame.kind !== "event.append" || frame.payload === undefined) return;
+				if (options.authToken !== undefined && frame.token !== options.authToken) return;
+				options.onEvent(frame.payload);
 			},
 		},
 	});

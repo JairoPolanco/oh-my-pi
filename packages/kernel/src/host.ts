@@ -83,6 +83,20 @@ export class KernelHost implements Kernel {
 				}).allow,
 		);
 		this.versions = new HarnessVersionLedger(path.join(dir, "harness.db"));
+		// Main-actor capability baseline (paste-4 P0 #4): a trusted bootstrap
+		// establishes the main actor's starting authority so the EffectBroker
+		// gate is usable out of the box. The baseline is the workspace root —
+		// read + write + exec within the project, network for remote ops —
+		// NOT a global grant. Subagents derive from this via
+		// `deriveChildCapabilities` (requested ∩ bound).
+		if (Bun.env.OMP_KERNEL_EFFECT_GATE === "1") {
+			this.capabilities.bootstrap("main", [
+				{ id: "fs.read", scope: "repo/**", effect: "read" },
+				{ id: "fs.write", scope: "repo/**", effect: "write" },
+				{ id: "process.exec", scope: "repo/**", effect: "execute" },
+				{ id: "network", scope: "*", effect: "network" },
+			]);
+		}
 		// ONE daemon-scoped gateway above all session hosts (blueprint §92):
 		// this host attaches its event bus and registers as a runtime; it does
 		// not own a private gateway instance.

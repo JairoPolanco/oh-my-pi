@@ -133,6 +133,36 @@ describe("CapabilityRegistry monotonicity", () => {
 		expect(registry.effective("scout")).toHaveLength(1);
 	});
 
+	test("deriveChildCapabilities grants exactly requested ∩ parent upper bound (paste-4 P0 #4)", () => {
+		const registry = new CapabilityRegistry();
+		registry.grant("parent", { id: "fs.read", scope: "repo/**", effect: "read" });
+		registry.setParent("child", "parent");
+
+		const granted = registry.deriveChildCapabilities("child", [
+			{ id: "fs.read", scope: "repo/src/**", effect: "read" }, // covered → granted
+			{ id: "process.exec", scope: "test", effect: "execute" }, // NOT covered → dropped
+			{ id: "fs.write", scope: "repo/out/**", effect: "write" }, // NOT covered → dropped
+		]);
+
+		expect(granted).toHaveLength(1);
+		expect(granted[0]!.scope).toBe("repo/src/**");
+		expect(registry.effective("child")).toEqual(granted);
+		// The dropped capabilities never enter the child's authority.
+		expect(registry.effective("child").some(c => c.id === "process.exec")).toBe(false);
+	});
+
+	test("bootstrap establishes a baseline for a parentless principal (main actor)", () => {
+		const registry = new CapabilityRegistry();
+		registry.bootstrap("main", [
+			{ id: "fs.read", scope: "repo/**", effect: "read" },
+			{ id: "process.exec", scope: "repo/scripts/**", effect: "execute" },
+		]);
+		expect(registry.effective("main")).toHaveLength(2);
+		// Idempotent: re-bootstrapping the same set does not duplicate.
+		registry.bootstrap("main", [{ id: "fs.read", scope: "repo/**", effect: "read" }]);
+		expect(registry.effective("main")).toHaveLength(2);
+	});
+
 	test("equal capability grants are idempotent", () => {
 		const registry = new CapabilityRegistry();
 		const cap: Capability = { id: "fs.read", scope: "repo/**", effect: "read" };

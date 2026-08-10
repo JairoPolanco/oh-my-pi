@@ -208,4 +208,44 @@ export class CapabilityRegistry {
 		}
 		return chain.flatMap(id => this.#grants.get(id) ?? []);
 	}
+
+	/**
+	 * Least-privilege child derivation (paste-4 P0 #4, §54):
+	 *
+	 *     C_child = C_requested ∩ C_parent_upper_bound
+	 *
+	 * Every requested capability that the parent's upper bound covers is
+	 * granted to the child; anything the parent cannot cover is dropped, never
+	 * an error (the child simply does not get more than its parent holds).
+	 * Returns the capabilities actually granted.
+	 */
+	deriveChildCapabilities(child: PrincipalId, requested: readonly Capability[]): Capability[] {
+		const parent = this.#parents.get(child);
+		const bound = parent !== undefined ? this.upperBound(parent) : requested;
+		const granted: Capability[] = [];
+		for (const cap of requested) {
+			const covered = bound.some(p => capabilityCovers(p, cap));
+			if (!covered) continue;
+			this.grant(child, cap);
+			granted.push(cap);
+		}
+		return granted;
+	}
+
+	/**
+	 * Bootstrap a principal's baseline capabilities (paste-4 P0 #4). Trusted
+	 * callers (the host, the main-actor bootstrap) establish a baseline
+	 * directly; later grants are still monotonicity-checked against the parent
+	 * chain when one exists.
+	 */
+	bootstrap(principal: PrincipalId, capabilities: readonly Capability[]): void {
+		const existing = this.#grants.get(principal) ?? [];
+		const merged = [...existing];
+		for (const cap of capabilities) {
+			if (!merged.some(e => capabilityCovers(e, cap) && capabilityCovers(cap, e))) {
+				merged.push(cap);
+			}
+		}
+		this.#grants.set(principal, merged);
+	}
 }

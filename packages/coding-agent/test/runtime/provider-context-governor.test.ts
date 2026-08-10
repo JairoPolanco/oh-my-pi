@@ -69,13 +69,15 @@ describe("ProviderContextGovernor", () => {
 		const result = await governor.transform({ messages }, MODEL);
 
 		// Developer instruction and the last (current) message always survive.
-		expect(result.messages[0].role).toBe("developer");
+		// Mandatory pass-through keeps identity; optional survivors are REBUILT
+		// copies (P0 #1), so order is asserted by timestamp, not object identity.
+		expect(result.messages[0]?.role).toBe("developer");
 		expect(result.messages[result.messages.length - 1]).toBe(messages[5]);
 		// The final user turn is the objective: it must not be dropped.
 		expect(result.messages.some(m => m === messages[5])).toBe(true);
 		// Original order is preserved.
-		const order = result.messages.map(m => messages.indexOf(m));
-		expect(order).toEqual([...order].sort((a, b) => a - b));
+		const timestamps = result.messages.map(m => (m as { timestamp: number }).timestamp);
+		expect(timestamps).toEqual([...timestamps].sort((a, b) => a - b));
 	});
 
 	test("gate open: oversize history is trimmed to the budget", async () => {
@@ -89,8 +91,8 @@ describe("ProviderContextGovernor", () => {
 
 		// Current turn survives, order is preserved, and the context shrank.
 		expect(result.messages[result.messages.length - 1]).toBe(messages[39]);
-		const order = result.messages.map(m => messages.indexOf(m));
-		expect(order).toEqual([...order].sort((a, b) => a - b));
+		const timestamps = result.messages.map(m => (m as { timestamp: number }).timestamp);
+		expect(timestamps).toEqual([...timestamps].sort((a, b) => a - b));
 		const keptTokens = result.messages.reduce((sum, message) => sum + textTokens(message), 0);
 		expect(keptTokens).toBeLessThan(2_000);
 		expect(result.messages.length).toBeLessThan(messages.length);
@@ -128,5 +130,51 @@ describe("ProviderContextGovernor", () => {
 			expect(result.messages.some(m => m === messages[3])).toBe(false);
 			expect(result.messages.some(m => m === messages[4])).toBe(false);
 		}
+	});
+
+	test("P0 #1: the provider receives the MATERIALIZED content, not full originals", async () => {
+		// A huge optional message against a tiny window: the VM truncates it to
+		// ~12 tokens, and the governor must SEND the truncated representation —
+		// not the full ~1000-token original. Sent == accounted.
+		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
+		const huge = "x".repeat(4000); // ≈ 1000 tokens
+		const messages = [
+			textMessage("developer", "i", 0),
+			textMessage("user", "do it", 1),
+			textMessage("assistant", huge, 2), // huge optional history
+			textMessage("user", "finish", 3), // current turn (mandatory)
+		];
+		const result = await governor.transform({ messages }, MODEL);
+		const survivor = result.messages.find(m => m === messages[2]);
+		if (survivor) {
+			// The survivor must be the TRUNCATED message, not the original.
+			const content = (survivor as { content: unknown }).content;
+			const text = typeof content === "string" ? content : "";
+			expect(text.length).toBeLessThan(4000);
+			expect(text).toContain("[truncated]");
+		}
+		// Whatever is sent, its measured cost fits the history budget
+		// (2000 − 25% reserves = 1500), including mandatory + rebuilt content.
+		const sentTokens = result.messages.reduce((sum, message) => sum + textTokens(message), 0);
+		expect(sentTokens).toBeLessThanOrEqual(1_500);
+	});
+
+	test("P0 #2: mandatory structure is budgeted FIRST, never a post-budget fixup", async () => {
+		// A window too small for the mandatory structure alone: the developer
+		// message + current turn + tool span must ALL survive regardless of the
+		// optional history, and optional history is what gets squeezed — not
+		// the other way around.
+		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
+		const smallModel = { contextWindow: 400 } as unknown as Model; // history budget 300
+		const messages = [
+			textMessage("developer", "d".repeat(800), 0), // ≈ 200 tokens, mandatory
+			textMessage("assistant", "history ".repeat(100), 1), // optional
+			textMessage("user", "u".repeat(800), 2), // ≈ 200 tokens, mandatory (CURRENT turn)
+		];
+		const result = await governor.transform({ messages }, smallModel);
+		expect(result.messages.some(m => m === messages[0])).toBe(true); // developer
+		expect(result.messages.some(m => m === messages[2])).toBe(true); // current turn
+		// The optional history is what the budget squeezed (or dropped).
+		expect(result.messages.some(m => m === messages[1])).toBe(false);
 	});
 });
