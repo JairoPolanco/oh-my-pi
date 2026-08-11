@@ -19,6 +19,7 @@
  */
 
 import * as fs from "node:fs/promises";
+import * as os from "node:os";
 import * as path from "node:path";
 import {
 	type Capability,
@@ -53,13 +54,36 @@ interface KernelBridgeOptions {
 	signal?: AbortSignal;
 }
 
-/** Resolve a session-scoped kernel directory from the ToolSession. */
-function kernelDirFor(session: ToolSession): string {
+/** Kernel storage dirs created for sessions with no file/artifacts home (temp). */
+const TRANSIENT_KERNEL_DIRS = new Set<string>();
+
+/**
+ * Resolve a session-scoped kernel directory from the ToolSession. The
+ * storage location and the authorization root are DIFFERENT concepts
+ * (paste-7 P0 #5): the kernel store NEVER lands inside the agent workspace —
+ * a session with no file/artifacts home (in-memory benchmark sessions,
+ * bare eval) gets a session-scoped TEMP dir instead of `cwd/.omp/kernel`,
+ * which would pollute the workspace with kernel SQLite state (dogfooding:
+ * the edit benchmark's verification flagged `.omp/kernel/*.db` as
+ * unexpected files in the task tree).
+ */
+async function kernelDirFor(session: ToolSession): Promise<string> {
 	const sessionFile = session.getSessionFile?.() ?? null;
 	if (sessionFile) return path.join(path.dirname(sessionFile), "kernel");
 	const artifactsDir = session.getArtifactsDir?.() ?? null;
 	if (artifactsDir) return path.join(artifactsDir, "kernel");
-	return path.join(session.cwd, ".omp", "kernel");
+	// In-memory session: a temp dir keyed by session identity, created
+	// lazily and removed on release/reset. Never the workspace.
+	const key = session.getSessionId?.() ?? session.cwd;
+	const dir = path.join(os.tmpdir(), `omp-kernel-${sanitizeFileSegment(key)}`);
+	await fs.mkdir(dir, { recursive: true });
+	TRANSIENT_KERNEL_DIRS.add(dir);
+	return dir;
+}
+
+/** Filesystem-safe segment for temp dir names. */
+function sanitizeFileSegment(value: string): string {
+	return value.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 80) || "session";
 }
 
 const HOSTS = new Map<string, KernelHost>();
@@ -198,7 +222,7 @@ export async function kernelHostFor(session: ToolSession): Promise<KernelHost> {
 		// M) — never the hard-coded lowercase "main", or the bootstrap and the
 		// real actor diverge and the gate default-denies the actual agent
 		// (paste-5 P0).
-		host = new KernelHost(kernelDirFor(session), {
+		host = new KernelHost(await kernelDirFor(session), {
 			mainPrincipal: session.getAgentId?.() ?? "main",
 			// Security state is ALWAYS built (paste-7 P0/P1): the verifier
 			// authorizes through the EffectBroker regardless of the rollout
@@ -222,6 +246,18 @@ export async function releaseKernelSession(sessionId: string): Promise<void> {
 	if (host) {
 		await host.close();
 		HOSTS.delete(sessionId);
+	}
+	await removeTransientKernelDirs();
+}
+
+/** Remove temp kernel dirs no longer owned by a live host (benchmark hygiene). */
+async function removeTransientKernelDirs(): Promise<void> {
+	const liveDirs = new Set([...HOSTS.values()].map(host => host.dir));
+	for (const dir of TRANSIENT_KERNEL_DIRS) {
+		if (!liveDirs.has(dir)) {
+			await fs.rm(dir, { recursive: true, force: true });
+			TRANSIENT_KERNEL_DIRS.delete(dir);
+		}
 	}
 }
 
@@ -253,6 +289,7 @@ export async function resetKernelHosts(): Promise<void> {
 		await host.close();
 		HOSTS.delete(key);
 	}
+	await removeTransientKernelDirs();
 }
 
 interface KernelBridgeArgs {
