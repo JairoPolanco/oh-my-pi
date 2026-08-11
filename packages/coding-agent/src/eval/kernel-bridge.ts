@@ -89,17 +89,29 @@ async function kernelDirFor(session: KernelSessionAdapter): Promise<string> {
 	if (sessionFile) return path.join(path.dirname(sessionFile), "kernel");
 	const artifactsDir = session.getArtifactsDir?.() ?? null;
 	if (artifactsDir) return path.join(artifactsDir, "kernel");
-	// In-memory session: a temp dir keyed by session identity, created
-	// lazily and removed on release/reset. Never the workspace. The key
-	// prefers the kernel session id (the actor-tree identity — always
-	// present even when an embedding exposes no getSessionId/cwd on the
-	// session object), falling back to session id, then cwd, then a literal.
-	// (Dogfooding: an in-memory session with only getKernelSessionId used to
-	// crash sanitizeFileSegment(undefined).)
-	const key = session.getKernelSessionId?.() ?? session.getSessionId?.() ?? session.cwd ?? "session";
-	const dir = path.join(os.tmpdir(), `omp-kernel-${sanitizeFileSegment(key)}`);
+	// Split-brain fix (dogfooding): a ROOT session with no session file (the
+	// omjai interactive TUI resolves getSessionFile() lazily/null) used to
+	// fall into the per-session temp dir, so its kernel authority tree,
+	// harness ledger, and events lived apart from file-based sessions of the
+	// SAME project — two ledgers, two capability trees, one workspace. The
+	// paste-6 P0 #1 invariant is ONE kernel tree per project: resolve the
+	// project-scoped session dir (the same `-Projects-oh-my-pi` derivation
+	// file-based sessions use) and put the kernel under it. Only sessions
+	// with an EXPLICIT kernelSessionId (benchmark arms, subagent isolation)
+	// keep the isolated temp dir keyed by that identity.
+	const explicitKernelId = session.getKernelSessionId?.();
+	if (explicitKernelId) {
+		const dir = path.join(os.tmpdir(), `omp-kernel-${sanitizeFileSegment(explicitKernelId)}`);
+		await fs.mkdir(dir, { recursive: true });
+		TRANSIENT_KERNEL_DIRS.add(dir);
+		return dir;
+	}
+	// Root (main agent): project-scoped, shared with file-based sessions.
+	const { computeDefaultSessionDir } = await import("../session/session-paths");
+	const { FileSessionStorage } = await import("../session/session-storage");
+	const sessionDir = computeDefaultSessionDir(session.cwd, new FileSessionStorage());
+	const dir = path.join(sessionDir, "kernel");
 	await fs.mkdir(dir, { recursive: true });
-	TRANSIENT_KERNEL_DIRS.add(dir);
 	return dir;
 }
 

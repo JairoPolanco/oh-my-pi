@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Kernel host dir split-brain (dogfooding finding): a ROOT session with no session file (the omjai interactive TUI resolves `getSessionFile()` lazily/null) used to fall into a per-session temp kernel dir, so its harness ledger, capability tree, and events lived apart from file-based sessions of the SAME project — two ledgers, two authority trees, one workspace. The root now resolves the project-scoped session dir (`-Projects-oh-my-pi/kernel`) that file-based sessions already use (paste-6 P0 #1: ONE kernel tree per project). Sessions with an explicit `kernelSessionId` (benchmark arms, subagent isolation) keep the isolated temp dir. Pinned by 2 regression tests.
 - Kernel gateway daemon event log moved OUT of the project directory (dogfooding finding): `startGatewayServer` wrote `<projectDir>/.omp/gateway/events.jsonl`, polluting the workspace whenever `OMP_KERNEL_GATEWAY_PROJECT_DIR` was set (the omjai launcher sets it). The log now lives under the daemon runtime dir (`~/.omp/run/daemons/<key>/gateway/`), resolved from `OMP_DAEMON_RUNTIME_DIR` (injected by the spawning client) with a config-root fallback. Same bug class as the kernel-store workspace write. Test updated to assert the runtime-dir log AND that the project dir stays clean.
 - RLM bridge `contract.create` validates check shapes (dogfooding finding): a bare-string check (e.g. `checks: ["1+1==2"]`) previously slipped through unvalidated and crashed `contract.verify` later. Create now rejects non-object checks and unknown `kind`s with a descriptive error; valid checks unchanged.
 

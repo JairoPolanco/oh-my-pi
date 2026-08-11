@@ -782,4 +782,34 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(ref?.status).toBe("aborted");
 		AgentRegistry.resetGlobalForTests();
 	});
+
+	test("root session (no file, no kernel id) resolves the PROJECT-scoped kernel dir, not a per-session temp (split-brain fix)", async () => {
+		// Regression (dogfooding): the omjai interactive root has no session
+		// file at gate-hook time and no explicit kernelSessionId — it used to
+		// fall into `os.tmpdir()/omp-kernel-<sessionId>`, so its harness
+		// ledger + capability tree lived apart from file-based sessions of the
+		// SAME project (two ledgers, one workspace). The root must resolve the
+		// project session dir (`-Projects-oh-my-pi/kernel`), the same place
+		// file-based sessions land.
+		const root = makeSession({
+			getSessionFile: () => null,
+			getKernelSessionId: () => null,
+		});
+		const host = await kernelHostFor(root);
+		const { computeDefaultSessionDir } = await import("../../src/session/session-paths");
+		const { FileSessionStorage } = await import("../../src/session/session-storage");
+		const projectDir = path.join(computeDefaultSessionDir(testDir, new FileSessionStorage()), "kernel");
+		expect(host.dir).toBe(projectDir);
+		await resetKernelHosts();
+	});
+
+	test("explicit kernelSessionId keeps the isolated temp dir (benchmark/subagent isolation)", async () => {
+		const isolated = makeSession({
+			getSessionFile: () => null,
+			getKernelSessionId: () => "bench-arm-1",
+		});
+		const host = await kernelHostFor(isolated);
+		expect(host.dir).toContain("omp-kernel-bench-arm-1");
+		await resetKernelHosts();
+	});
 });
