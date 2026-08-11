@@ -10,6 +10,7 @@ import {
 	runKernelBridge,
 } from "../../src/eval/kernel-bridge";
 import { AgentRegistry } from "../../src/registry/agent-registry";
+import type { AgentSession } from "../../src/session/agent-session";
 import type { ToolSession } from "../../src/tools";
 
 const testDir = `${import.meta.dir}/tmp-kernel-bridge`;
@@ -700,6 +701,66 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		};
 		expect(status.state).toBe("running");
 		expect(status.lastHeartbeat).toBeGreaterThan(0);
+		AgentRegistry.resetGlobalForTests();
+	});
+
+	test("actors.send delivers to a live registered peer and logs an agent.message event (write-side)", async () => {
+		AgentRegistry.resetGlobalForTests();
+		const delivered: unknown[] = [];
+		const peerSession = {
+			abort: () => {},
+			deliverIrcMessage: async (message: unknown) => {
+				delivered.push(message);
+				return "delivered" as const;
+			},
+		} as unknown as AgentSession;
+		AgentRegistry.global().register({
+			id: "peer-1",
+			displayName: "Peer",
+			kind: "sub",
+			parentId: "Main",
+			session: peerSession,
+			status: "idle",
+		});
+		const session = makeSession({ getAgentId: () => "Main" });
+		const receipt = (await call(
+			"actors.send",
+			{ to: "peer-1", kind: "task-update", payload: { n: 1 } },
+			session,
+		)) as { to: string; outcome: string; messageId: string };
+		expect(receipt.to).toBe("peer-1");
+		expect(receipt.outcome).toBe("delivered");
+		expect(receipt.messageId).toBeTruthy();
+		// The wire message carries the SESSION identity as from — never
+		// caller-supplied (audit).
+		expect(delivered).toHaveLength(1);
+		const wire = delivered[0] as { from: string; to: string };
+		expect(wire.from).toBe("Main");
+		expect(wire.to).toBe("peer-1");
+		AgentRegistry.resetGlobalForTests();
+	});
+
+	test("actors.abort hard-kills a registered peer (write-side)", async () => {
+		AgentRegistry.resetGlobalForTests();
+		const aborted: string[] = [];
+		const peerSession = {
+			abort: () => aborted.push("abort"),
+			deliverIrcMessage: async () => "delivered" as const,
+		} as unknown as AgentSession;
+		AgentRegistry.global().register({
+			id: "peer-1",
+			displayName: "Peer",
+			kind: "sub",
+			parentId: "Main",
+			session: peerSession,
+			status: "running",
+		});
+		const session = makeSession({ getAgentId: () => "Main" });
+		const result = (await call("actors.abort", { id: "peer-1" }, session)) as { aborted: string };
+		expect(result.aborted).toBe("peer-1");
+		expect(aborted).toEqual(["abort"]);
+		const ref = AgentRegistry.global().get("peer-1");
+		expect(ref?.status).toBe("aborted");
 		AgentRegistry.resetGlobalForTests();
 	});
 });
