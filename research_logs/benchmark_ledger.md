@@ -287,6 +287,24 @@ Verified both halves live:
 - REJECT: real trials file with failed heldout (overfit) → pairedGate PASS but heldout FAIL → verdict reject → ledger v1 (reject) → skill STAYS staged.
 
 Cost: $0 (pure decision + file moves; the real-model trial collection is the metaharness's job, wired via the same gates).
+## Everyday-use optimization batch (Context VM + memory, 2026-08-11, traced)
+
+Deep trace of BOTH dimensions on real omjai sessions (the user asked: can we make them better in everyday use?):
+
+**Context VM — the under-budget no-op was CORRECT; the over-budget path was the bug.**
+- Real session usage: cacheRead dominates (120.7k vs 34.2k fresh on the biggest turn). Provider cache is ~4x cheaper than fresh input.
+- Cost model: proactive under-budget compression is NET-NEGATIVE — evicting 2k mid-history busts the cache prefix for everything after it (~13.5k re-read cost vs 2k saved). The byte-identical under-budget pass is optimal.
+- The REAL bug: over-budget value-ranked re-ranking churned the survivor set turn-to-turn — on the real 156k session, 21 of 25 removals re-entered later, busting the prefix every flip (~3.4x cache cost on the final turn).
+- Fix: monotonic selection (sticky survivors + permanent eviction by message index + content-stable span ids). 25 removals, 0 re-admissions. Under-budget untouched. 3 regression tests.
+- **Everyday answer: the VM's everyday value is CACHE PRESERVATION, not compression. Under budget it must do nothing (it does); over budget it must evict deterministically (now it does).**
+
+**Memory — the model never SAW the memories; autoRecall was a first-turn lottery.**
+- Root cause: `beforeAgentStartPrompt` latched `hasRecalledForFirstTurn = true` after turn 1 REGARDLESS of match. Zero `<memories>` blocks in any live session — the opening prompt didn't match, so recall was disabled forever.
+- Fix: re-arm on miss (only a successful injection latches) + strengthened trust instruction ("use them; do not re-derive"). 3 regression tests.
+- **Adoption answer: the model greps partly because it never received the memory (fixed), and partly because the instruction said memories are untrustworthy background (fixed). The single-step-recall prompt pattern still wins for guaranteed adoption.**
+
+**Side observation (not fixed, noted):** the skill auto-executor's heldout probes (fresh sessions with "continue") auto-retain noise into the shared mnemopi bank, polluting recall. Works as designed (episodes from user turns), but the auto-executor pollutes shared memory — a design smell for a future pass.
+
 ## Live dogfooding prompts A/B/C (2026-08-11)
 
 Three remaining surfaces exercised in the live omjai session:
