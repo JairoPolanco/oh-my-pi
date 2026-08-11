@@ -10,7 +10,14 @@
  * Success: the task id survives both turns through the durable store.
  * Supervised abort caps.
  */
-import { createAgentSession, discoverAuthStorage, ModelRegistry, SessionManager, Settings, AgentRegistry } from "@oh-my-pi/pi-coding-agent";
+import {
+	AgentRegistry,
+	createAgentSession,
+	discoverAuthStorage,
+	ModelRegistry,
+	SessionManager,
+	Settings,
+} from "@oh-my-pi/pi-coding-agent";
 import { kernelHostFor } from "../src/eval/kernel-bridge";
 
 const REPO = "/Users/jairopolanco/Projects/oh-my-pi";
@@ -24,7 +31,12 @@ await Settings.init({ cwd: REPO });
 
 // Bootstrap Main on the shared host so the gated bridge authorizes the
 // model's task ops (in-memory sessions have a kernel id → isRoot=false).
-const adapter = { cwd: REPO, getSessionId: () => "tasks-bench", getKernelSessionId: () => KERNEL_ID, getAgentId: () => "Main" };
+const adapter = {
+	cwd: REPO,
+	getSessionId: () => "tasks-bench",
+	getKernelSessionId: () => KERNEL_ID,
+	getAgentId: () => "Main",
+};
 const host = await kernelHostFor(adapter);
 host.capabilities.bootstrap("Main", [
 	{ id: "task.write", scope: "board", effect: "write" },
@@ -52,10 +64,17 @@ async function makeSession() {
 	return result.session;
 }
 
-async function runTurn(session: ReturnType<typeof makeSession> extends Promise<infer T> ? T : never, label: string, prompt: string): Promise<{ last: string; stats: { assistantMessages: number } }> {
+async function runTurn(
+	session: ReturnType<typeof makeSession> extends Promise<infer T> ? T : never,
+	label: string,
+	prompt: string,
+): Promise<{ last: string; stats: { assistantMessages: number } }> {
 	const t0 = performance.now();
 	const timedOut = await Promise.race([
-		session.prompt(prompt, { expandPromptTemplates: false }).then(() => session.waitForIdle()).then(() => false),
+		session
+			.prompt(prompt, { expandPromptTemplates: false })
+			.then(() => session.waitForIdle())
+			.then(() => false),
 		Bun.sleep(ARM_TIMEOUT_MS).then(() => true),
 	]);
 	if (timedOut) session.abort();
@@ -65,7 +84,9 @@ async function runTurn(session: ReturnType<typeof makeSession> extends Promise<i
 		const content = (m as { content?: unknown }).content;
 		if (!Array.isArray(content)) return [];
 		return content
-			.filter((p: unknown) => (p as { type?: string }).type === "toolCall" && (p as { name?: string }).name === "eval")
+			.filter(
+				(p: unknown) => (p as { type?: string }).type === "toolCall" && (p as { name?: string }).name === "eval",
+			)
 			.map((p: unknown) => String((p as { arguments?: { code?: string } }).arguments?.code ?? "").slice(0, 130));
 	});
 	console.log(
@@ -94,8 +115,12 @@ Then reply with the word "done" and the task id dt-1.`,
 tasks.list()
 Then reply with every task id you see.`,
 	);
-	const t1HasTask = /dt-1/.test(t1.last + JSON.stringify((session.messages ?? []).map((m: unknown) => JSON.stringify(m)).join(" ")));
-	const t2HasTask = /dt-1/.test(t2.last + JSON.stringify((session.messages ?? []).map((m: unknown) => JSON.stringify(m)).join(" ")));
+	const t1HasTask = /dt-1/.test(
+		t1.last + JSON.stringify((session.messages ?? []).map((m: unknown) => JSON.stringify(m)).join(" ")),
+	);
+	const t2HasTask = /dt-1/.test(
+		t2.last + JSON.stringify((session.messages ?? []).map((m: unknown) => JSON.stringify(m)).join(" ")),
+	);
 	console.log(`\ntask dt-1 persisted+visible in t1: ${t1HasTask} | retrieved in t2: ${t2HasTask}`);
 	await Bun.write(
 		new URL("../../../research_logs/durable_tasks_001.jsonl", import.meta.url),

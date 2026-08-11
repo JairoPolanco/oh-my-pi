@@ -14,7 +14,14 @@
  * Metric: early-evidence survival, calls, tokens, wall, cost, A vs B.
  * Supervised abort caps.
  */
-import { createAgentSession, discoverAuthStorage, ModelRegistry, SessionManager, Settings, AgentRegistry } from "@oh-my-pi/pi-coding-agent";
+import {
+	AgentRegistry,
+	createAgentSession,
+	discoverAuthStorage,
+	ModelRegistry,
+	SessionManager,
+	Settings,
+} from "@oh-my-pi/pi-coding-agent";
 
 const REPO = "/Users/jairopolanco/Projects/oh-my-pi";
 const MODEL = "opencode-go/deepseek-v4-flash";
@@ -66,7 +73,10 @@ async function runArm(arm: string): Promise<Record<string, unknown>> {
 	try {
 		const t0 = performance.now();
 		const timedOut = await Promise.race([
-			session.prompt(PROMPT, { expandPromptTemplates: false }).then(() => session.waitForIdle()).then(() => false),
+			session
+				.prompt(PROMPT, { expandPromptTemplates: false })
+				.then(() => session.waitForIdle())
+				.then(() => false),
 			Bun.sleep(ARM_TIMEOUT_MS).then(() => true),
 		]);
 		if (timedOut) session.abort();
@@ -77,7 +87,12 @@ async function runArm(arm: string): Promise<Record<string, unknown>> {
 		// AND the session actually read file 1.
 		const readFiles = (session.messages ?? []).filter((m: unknown) => {
 			const c = (m as { content?: unknown }).content;
-			return Array.isArray(c) && c.some((p: unknown) => (p as { type?: string }).type === "toolCall" && (p as { name?: string }).name === "read");
+			return (
+				Array.isArray(c) &&
+				c.some(
+					(p: unknown) => (p as { type?: string }).type === "toolCall" && (p as { name?: string }).name === "read",
+				)
+			);
 		}).length;
 		const evidence = /kernelHostFor/.test(last);
 		const record = {

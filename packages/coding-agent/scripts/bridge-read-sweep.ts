@@ -8,7 +8,14 @@
  * through the gated bridge and the model reports real values.
  * Supervised abort cap.
  */
-import { createAgentSession, discoverAuthStorage, ModelRegistry, SessionManager, Settings, AgentRegistry } from "@oh-my-pi/pi-coding-agent";
+import {
+	AgentRegistry,
+	createAgentSession,
+	discoverAuthStorage,
+	ModelRegistry,
+	SessionManager,
+	Settings,
+} from "@oh-my-pi/pi-coding-agent";
 import { kernelHostFor } from "../src/eval/kernel-bridge";
 
 const REPO = "/Users/jairopolanco/Projects/oh-my-pi";
@@ -20,7 +27,12 @@ const authStorage = await discoverAuthStorage();
 const modelRegistry = new ModelRegistry(authStorage);
 await Settings.init({ cwd: REPO });
 
-const adapter = { cwd: REPO, getSessionId: () => "sweep-bench", getKernelSessionId: () => KERNEL_ID, getAgentId: () => "Main" };
+const adapter = {
+	cwd: REPO,
+	getSessionId: () => "sweep-bench",
+	getKernelSessionId: () => KERNEL_ID,
+	getAgentId: () => "Main",
+};
 const host = await kernelHostFor(adapter);
 // Bootstrap Main with the read-side grants the sweep exercises.
 host.capabilities.bootstrap("Main", [
@@ -96,7 +108,18 @@ Then reply with a JSON summary of what each key returned (a few chars each).`,
 	console.log(`last text (200): ${String(last).slice(0, 200)}`);
 	await Bun.write(
 		new URL("../../../research_logs/bridge_read_sweep_001.jsonl", import.meta.url),
-		JSON.stringify({ experiment: "bridge-read-sweep-001", agent: MODEL, surfaces, ok, timedOut, stats: { calls: stats.assistantMessages, tokens: stats.tokens.total, cost: stats.cost } }, null, 1) + "\n",
+		JSON.stringify(
+			{
+				experiment: "bridge-read-sweep-001",
+				agent: MODEL,
+				surfaces,
+				ok,
+				timedOut,
+				stats: { calls: stats.assistantMessages, tokens: stats.tokens.total, cost: stats.cost },
+			},
+			null,
+			1,
+		) + "\n",
 	);
 	console.log("record -> research_logs/bridge_read_sweep_001.jsonl");
 } finally {

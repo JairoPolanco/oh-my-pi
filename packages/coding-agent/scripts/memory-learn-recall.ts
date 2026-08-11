@@ -11,7 +11,14 @@
  * Metric: does the recalled fact surface in session B, plus calls/tokens/
  * cost per session. Supervised abort caps.
  */
-import { createAgentSession, discoverAuthStorage, ModelRegistry, SessionManager, Settings, AgentRegistry } from "@oh-my-pi/pi-coding-agent";
+import {
+	AgentRegistry,
+	createAgentSession,
+	discoverAuthStorage,
+	ModelRegistry,
+	SessionManager,
+	Settings,
+} from "@oh-my-pi/pi-coding-agent";
 
 const REPO = "/Users/jairopolanco/Projects/oh-my-pi";
 const MODEL = "opencode-go/deepseek-v4-flash";
@@ -43,7 +50,12 @@ async function makeSession() {
 }
 
 /** Bridge actor identity for in-memory sessions: the session's agent id. */
-function sessionAdapter(session: unknown): { cwd: string; getSessionId: () => string; getKernelSessionId: () => string; getAgentId: () => string } {
+function sessionAdapter(session: unknown): {
+	cwd: string;
+	getSessionId: () => string;
+	getKernelSessionId: () => string;
+	getAgentId: () => string;
+} {
 	return {
 		cwd: REPO,
 		getSessionId: () => "mem-bench-session",
@@ -57,7 +69,10 @@ async function runTurn(label: string, prompt: string): Promise<Record<string, un
 	try {
 		const t0 = performance.now();
 		const timedOut = await Promise.race([
-			session.prompt(prompt, { expandPromptTemplates: false }).then(() => session.waitForIdle()).then(() => false),
+			session
+				.prompt(prompt, { expandPromptTemplates: false })
+				.then(() => session.waitForIdle())
+				.then(() => false),
 			Bun.sleep(ARM_TIMEOUT_MS).then(() => true),
 		]);
 		if (timedOut) session.abort();
@@ -69,7 +84,10 @@ async function runTurn(label: string, prompt: string): Promise<Record<string, un
 		const trace = (session.messages ?? []).flatMap((m: unknown) => {
 			const content = (m as { content?: unknown }).content;
 			if (!Array.isArray(content)) return [];
-			return content.filter((p: unknown) => (p as { type?: string }).type === "toolCall" && (p as { name?: string }).name === "eval")
+			return content
+				.filter(
+					(p: unknown) => (p as { type?: string }).type === "toolCall" && (p as { name?: string }).name === "eval",
+				)
 				.map((p: unknown) => String((p as { arguments?: { code?: string } }).arguments?.code ?? "").slice(0, 140));
 		});
 		console.log(`  eval traces: ${trace.length ? trace.join(" || ") : "(none)"}`);
@@ -87,6 +105,7 @@ async function runTurn(label: string, prompt: string): Promise<Record<string, un
 // gates authorize the model's memory ops (in-memory sessions have a kernel
 // session id, so isRoot=false and no auto-bootstrap happens).
 import { kernelHostFor } from "../src/eval/kernel-bridge";
+
 const host = await kernelHostFor(sessionAdapter({}));
 host.capabilities.bootstrap("Main", [
 	{ id: "memory.write", scope: "facts", effect: "write" },
@@ -128,7 +147,9 @@ const recallResults = (recall.messages ?? [])
 	})
 	.join(" ");
 const recalledInResults = recallResults.includes("OMP_KERNEL_EFFECT_GATE");
-console.log(`\nfact persisted: ${learnedId} | recalled in session B (prose): ${recalled} | (tool results): ${recalledInResults}`);
+console.log(
+	`\nfact persisted: ${learnedId} | recalled in session B (prose): ${recalled} | (tool results): ${recalledInResults}`,
+);
 
 await Bun.write(
 	new URL("../../../research_logs/memory_learn_recall_001.jsonl", import.meta.url),
@@ -139,7 +160,11 @@ await Bun.write(
 			kernelSessionId: KERNEL_ID,
 			fact,
 			learn: { id: learnedId, calls: (learn as { stats?: { assistantMessages: number } }).stats?.assistantMessages },
-			recall: { surfaced: recalled, surfacedInResults: recalledInResults, calls: (recall as { stats?: { assistantMessages: number } }).stats?.assistantMessages },
+			recall: {
+				surfaced: recalled,
+				surfacedInResults: recalledInResults,
+				calls: (recall as { stats?: { assistantMessages: number } }).stats?.assistantMessages,
+			},
 		},
 		null,
 		1,

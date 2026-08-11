@@ -79,6 +79,7 @@ import * as AIError from "@oh-my-pi/pi-ai/error";
 import { resetOpenAICodexHistoryAfterCompaction } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
 import { toolWireSchema } from "@oh-my-pi/pi-ai/utils/schema";
 import { modelsAreEqual } from "@oh-my-pi/pi-catalog/models";
+import type { KernelHost } from "@oh-my-pi/pi-kernel";
 import { MacOSPowerAssertion } from "@oh-my-pi/pi-natives";
 import {
 	$env,
@@ -463,6 +464,8 @@ export class AgentSession {
 	#observedSessionId: string | undefined;
 	/** Constitutional kernel authority id inherited from the root session (paste-6 P0 #1). */
 	#kernelSessionId: string | undefined;
+	/** Detach for the kernel trajectory tap (attached once when the gate host is created). */
+	#detachKernelTrajectoryTap: (() => void) | undefined;
 
 	/** Messages queued to be included with the next user prompt as context ("asides"). */
 	#pendingNextTurnMessages: CustomMessage[] = [];
@@ -3268,6 +3271,11 @@ export class AgentSession {
 					getAgentId: () => this.getAgentId(),
 				};
 				const host = await kernelHostFor(adapter);
+				// Instrument this session's REAL trajectory into the kernel
+				// event log — the one place production turns reach the host.
+				// Best-effort and once-per-session (lazy import keeps the
+				// module-cycle break; the tap failing must never block a tool).
+				this.#ensureKernelTrajectoryTap(host);
 				const gate = await authorizeToolEffect({
 					host,
 					actor: this.getAgentId?.() ?? host.mainPrincipal,
@@ -3618,6 +3626,10 @@ export class AgentSession {
 		if (this.#unsubscribeAgent) {
 			this.#unsubscribeAgent();
 			this.#unsubscribeAgent = undefined;
+		}
+		if (this.#detachKernelTrajectoryTap) {
+			this.#detachKernelTrajectoryTap();
+			this.#detachKernelTrajectoryTap = undefined;
 		}
 	}
 
@@ -4637,6 +4649,46 @@ export class AgentSession {
 	 *  inherited value on subagents so the actor tree shares one KernelHost. */
 	getKernelSessionId(): string | null {
 		return this.#kernelSessionId ?? null;
+	}
+
+	/**
+	 * Attach the kernel trajectory tap AND the kernel memory lifecycle ONCE
+	 * per session (dogfooding gap closed): the production turn path reaches
+	 * the kernel host here (the effect-gate hook), so this is where ordinary
+	 * user messages, model calls, and tool calls flow into the kernel event
+	 * log — and where substantive turns auto-propose durable facts to the
+	 * kernel memory store. Before this, the tap only ran inside
+	 * `OmpAgentRuntime` — which production never instantiates — so the
+	 * kernel's durable machinery never observed real turns. Best-effort and
+	 * idempotent; a tap failure must never affect the tool call.
+	 */
+	#ensureKernelTrajectoryTap(host: KernelHost): void {
+		if (this.#detachKernelTrajectoryTap !== undefined) return;
+		try {
+			// Lazy import keeps the module-cycle break (tools/learn →
+			// kernel-bridge → session), same as the gate hook above.
+			void import("../runtime/trajectory-tap").then(({ attachKernelTrajectoryTap }) => {
+				if (this.#detachKernelTrajectoryTap !== undefined) return;
+				this.#detachKernelTrajectoryTap = attachKernelTrajectoryTap(this, host);
+				// Lifecycle memory: kernel store only (mnemopi already
+				// auto-retains when it is the live backend — never both).
+				if (this.getMnemopiSessionState() === undefined) {
+					void import("../runtime/kernel-memory-lifecycle").then(({ attachKernelMemoryLifecycle }) => {
+						if (this.#detachKernelTrajectoryTap === undefined) return;
+						const detachMemory = attachKernelMemoryLifecycle(this, host, () =>
+							String(this.settings.get("providers.memoryModel") ?? ""),
+						);
+						const prev = this.#detachKernelTrajectoryTap;
+						this.#detachKernelTrajectoryTap = () => {
+							prev();
+							detachMemory();
+						};
+					});
+				}
+			});
+		} catch {
+			// Uninstrumented turns are fine — the kernel log is best-effort.
+		}
 	}
 
 	/** Current session display name, if set */
