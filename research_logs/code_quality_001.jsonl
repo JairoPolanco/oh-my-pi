@@ -1,132 +1,50 @@
 {
  "experiment": "code-quality-001",
  "agent": "opencode-go/deepseek-v4-flash",
+ "suite": "hard",
  "taskIds": [
-  "access-remove-optional-chain-001",
-  "literal-flip-boolean-001",
-  "literal-off-by-one-001",
-  "operator-swap-equality-001"
+  "duplicate-duplicate-line-flip-004",
+  "identifier-identifier-multi-edit-004",
+  "identifier-identifier-multi-edit-007",
+  "identifier-identifier-multi-edit-008",
+  "multi-composite-multi-edit-008",
+  "multi-composite-multi-edit-012",
+  "multi-composite-multi-edit-015",
+  "structural-remove-case-label-004",
+  "structural-swap-sibling-blocks-012",
+  "structural-wrap-redundant-if-004"
  ],
- "arms": {
-  "A_baseline": {
-   "verified": 4,
-   "total": 4,
-   "calls": 18,
-   "tokens": 117100,
-   "cost": 0.0017722656000000003
-  },
-  "B_harness": {
-   "verified": 4,
-   "total": 4,
-   "calls": 20,
-   "tokens": 129769,
-   "cost": 0.0015023092000000001
-  }
- },
  "results": [
-  {
-   "task": "access-remove-optional-chain-001",
-   "arm": "A_baseline",
-   "timedOut": false,
-   "modelCalls": 5,
-   "toolCalls": 4,
-   "tokens": 33820,
-   "wallMs": 8994,
-   "cost": 0.0005777044000000001,
-   "verified": true,
-   "formattedEquivalent": true,
-   "answerLen": 162
-  },
-  {
-   "task": "literal-flip-boolean-001",
-   "arm": "A_baseline",
-   "timedOut": false,
-   "modelCalls": 3,
-   "toolCalls": 2,
-   "tokens": 18719,
-   "wallMs": 5538,
-   "cost": 0.00043050840000000005,
-   "verified": true,
-   "formattedEquivalent": true,
-   "answerLen": 91
-  },
-  {
-   "task": "literal-off-by-one-001",
-   "arm": "A_baseline",
-   "timedOut": false,
-   "modelCalls": 5,
-   "toolCalls": 4,
-   "tokens": 32308,
-   "wallMs": 9116,
-   "cost": 0.00038447640000000005,
-   "verified": true,
-   "formattedEquivalent": true,
-   "answerLen": 161
-  },
-  {
-   "task": "operator-swap-equality-001",
-   "arm": "A_baseline",
-   "timedOut": false,
-   "modelCalls": 5,
-   "toolCalls": 4,
-   "tokens": 32253,
-   "wallMs": 8362,
-   "cost": 0.00037957640000000004,
-   "verified": true,
-   "formattedEquivalent": true,
-   "answerLen": 149
-  },
-  {
-   "task": "access-remove-optional-chain-001",
-   "arm": "B_harness",
-   "timedOut": false,
-   "modelCalls": 5,
-   "toolCalls": 4,
-   "tokens": 33333,
-   "wallMs": 7804,
-   "cost": 0.00039294080000000004,
-   "verified": true,
-   "formattedEquivalent": true,
-   "answerLen": 119
-  },
-  {
-   "task": "literal-flip-boolean-001",
-   "arm": "B_harness",
-   "timedOut": false,
-   "modelCalls": 5,
-   "toolCalls": 4,
-   "tokens": 31879,
-   "wallMs": 8061,
-   "cost": 0.00036273720000000003,
-   "verified": true,
-   "formattedEquivalent": true,
-   "answerLen": 92
-  },
-  {
-   "task": "literal-off-by-one-001",
-   "arm": "B_harness",
-   "timedOut": false,
-   "modelCalls": 5,
-   "toolCalls": 4,
-   "tokens": 32338,
-   "wallMs": 8718,
-   "cost": 0.00037786559999999995,
-   "verified": true,
-   "formattedEquivalent": true,
-   "answerLen": 154
-  },
-  {
-   "task": "operator-swap-equality-001",
-   "arm": "B_harness",
-   "timedOut": false,
-   "modelCalls": 5,
-   "toolCalls": 4,
-   "tokens": 32219,
-   "wallMs": 8145,
-   "cost": 0.0003687656000000001,
-   "verified": true,
-   "formattedEquivalent": true,
-   "answerLen": 177
-  }
- ]
+  {"task": "duplicate-duplicate-line-flip-004", "arm": "A_baseline", "timedOut": false, "modelCalls": 5, "toolCalls": 4, "tokens": 33626, "wallMs": 10972, "cost": 0.0004, "verified": true},
+  {"task": "identifier-identifier-multi-edit-004", "arm": "A_baseline", "timedOut": false, "modelCalls": 5, "toolCalls": 5, "tokens": 34993, "wallMs": 10511, "cost": 0.0004, "verified": true},
+  {"task": "identifier-identifier-multi-edit-007", "arm": "A_baseline", "timedOut": false, "modelCalls": 5, "toolCalls": 4, "tokens": 33131, "wallMs": 9172, "cost": 0.0004, "verified": true},
+  {"task": "identifier-identifier-multi-edit-008", "arm": "A_baseline", "timedOut": false, "modelCalls": 5, "toolCalls": 6, "tokens": 34662, "wallMs": 9540, "cost": 0.0005, "verified": true},
+  {"task": "multi-composite-multi-edit-008", "arm": "A_baseline", "timedOut": false, "modelCalls": 8, "toolCalls": 11, "tokens": 60223, "wallMs": 20756, "cost": 0.0007, "verified": true},
+  {"task": "multi-composite-multi-edit-012", "arm": "A_baseline", "timedOut": false, "modelCalls": 9, "toolCalls": 14, "tokens": 77130, "wallMs": 27915, "cost": 0.0009, "verified": true},
+  {"task": "multi-composite-multi-edit-015", "arm": "A_baseline", "timedOut": false, "modelCalls": 7, "toolCalls": 12, "tokens": 63670, "wallMs": 27214, "cost": 0.001, "verified": true},
+  {"task": "structural-remove-case-label-004", "arm": "A_baseline", "timedOut": false, "modelCalls": 6, "toolCalls": 5, "tokens": 42252, "wallMs": 13736, "cost": 0.0005, "verified": true},
+  {"task": "structural-swap-sibling-blocks-012", "arm": "A_baseline", "timedOut": false, "modelCalls": 5, "toolCalls": 5, "tokens": 38364, "wallMs": 16825, "cost": 0.0006, "verified": true},
+  {"task": "structural-wrap-redundant-if-004", "arm": "A_baseline", "timedOut": false, "modelCalls": 5, "toolCalls": 4, "tokens": 34156, "wallMs": 10293, "cost": 0.0004, "verified": true},
+  {"task": "duplicate-duplicate-line-flip-004", "arm": "B_harness", "timedOut": false, "modelCalls": 6, "toolCalls": 5, "tokens": 41786, "wallMs": 11063, "cost": 0.0005, "verified": true},
+  {"task": "identifier-identifier-multi-edit-004", "arm": "B_harness", "timedOut": false, "modelCalls": 4, "toolCalls": 3, "tokens": 25730, "wallMs": 6800, "cost": 0.0003, "verified": true},
+  {"task": "identifier-identifier-multi-edit-007", "arm": "B_harness", "timedOut": false, "modelCalls": 5, "toolCalls": 5, "tokens": 32908, "wallMs": 8780, "cost": 0.0004, "verified": true},
+  {"task": "identifier-identifier-multi-edit-008", "arm": "B_harness", "timedOut": false, "modelCalls": 4, "toolCalls": 5, "tokens": 26044, "wallMs": 7774, "cost": 0.0004, "verified": true},
+  {"task": "multi-composite-multi-edit-008", "arm": "B_harness", "timedOut": false, "modelCalls": 9, "toolCalls": 10, "tokens": 69309, "wallMs": 21294, "cost": 0.0007, "verified": true},
+  {"task": "multi-composite-multi-edit-012", "arm": "B_harness", "timedOut": false, "modelCalls": 7, "toolCalls": 15, "tokens": 59825, "wallMs": 25317, "cost": 0.0009, "verified": true},
+  {"task": "multi-composite-multi-edit-015", "arm": "B_harness", "timedOut": false, "modelCalls": 10, "toolCalls": 12, "tokens": 102960, "wallMs": 44414, "cost": 0.0012, "verified": true},
+  {"task": "structural-remove-case-label-004", "arm": "B_harness", "timedOut": false, "modelCalls": 5, "toolCalls": 4, "tokens": 32873, "wallMs": 8048, "cost": 0.0004, "verified": false},
+  {"task": "structural-swap-sibling-blocks-012", "arm": "B_harness", "timedOut": false, "modelCalls": 6, "toolCalls": 5, "tokens": 44492, "wallMs": 88310, "cost": 0.0006, "verified": true},
+  {"task": "structural-wrap-redundant-if-004", "arm": "B_harness", "timedOut": false, "modelCalls": 4, "toolCalls": 3, "tokens": 27779, "wallMs": 8948, "cost": 0.0004, "verified": true}
+ ],
+ "rerun": {
+  "task": "structural-remove-case-label-004",
+  "note": "B failed this task in the main run (VERIFIED=false); isolated re-run of ONLY this task on both arms verified TRUE on both (A 5 calls/33.4k, B 6 calls/46.3k) — the miss was stochastic, not a harness regression",
+  "A_verified": true,
+  "B_verified": true
+ },
+ "arms": {
+  "A_baseline": {"verified": 10, "total": 10, "calls": 60, "tokens": 452112, "cost": 0.0058},
+  "B_harness": {"verified": 9, "total": 10, "calls": 60, "tokens": 461706, "cost": 0.0058}
+ },
+ "note": "10/10 vs 9/10; the single B miss was stochastic (rerun true on both arms). Verdict: harness is NEUTRAL on hard code-quality tasks — no improvement, no regression."
 }

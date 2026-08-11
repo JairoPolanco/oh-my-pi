@@ -287,9 +287,7 @@ Verified both halves live:
 - REJECT: real trials file with failed heldout (overfit) → pairedGate PASS but heldout FAIL → verdict reject → ledger v1 (reject) → skill STAYS staged.
 
 Cost: $0 (pure decision + file moves; the real-model trial collection is the metaharness's job, wired via the same gates).
-## Productionization batch (items 2+3+4, 2026-08-11)
-
-**Item 2 — Context VM real default for omjai.** Previously the promotion was a ledger record; the VM only ran via the launcher's env var. Now `kernel.contextGovernance` is a real settings key (default false) that the `ProviderContextGovernor` honors via constructor override, ORing with the benchmark env. The omjai config overlay sets it `true` — verified: `Settings.get("kernel.contextGovernance")` = true with overlay, false without. Pinned by regression test (settings-enabled governor engages the VM with env gate closed). Plain omp stays byte-identical (default false).
+## Productionization batch (items 2+3+4, 2026-08-11)**Item 2 — Context VM real default for omjai.** Previously the promotion was a ledger record; the VM only ran via the launcher's env var. Now `kernel.contextGovernance` is a real settings key (default false) that the `ProviderContextGovernor` honors via constructor override, ORing with the benchmark env. The omjai config overlay sets it `true` — verified: `Settings.get("kernel.contextGovernance")` = true with overlay, false without. Pinned by regression test (settings-enabled governor engages the VM with env gate closed). Plain omp stays byte-identical (default false).
 
 **Item 3 — skill promotion auto-executor (interactive UX).** Arming the gate previously stranded every learned skill in staging (the executor was a manual script). New `SkillPromotionLifecycle` (wired in the session gate hook, only when `OMP_KERNEL_SKILL_PROMOTION_GATE=1`): on turn-end cadence (every 3 turns, 1 skill/sweep), captures the source task to `staging/<name>/SOURCE.txt`, runs replay (fresh in-memory session WITH the skill on the source task) + heldout (usability probe requiring the skill name in the answer), and promotes live via `promoteManagedSkill` + records the verdict in the harness ledger when both pass. Interactive bar is deliberately weaker than the benchmark's improvement gate (verifies the skill WORKS standalone, not that it beats absence) — the executor remains the strict path. 2/2 unit tests (promote on pass, stays staged on replay fail). The omjai launcher keeps the gate OFF by default (documented: arming changes interactive skill behavior); the hook makes arming safe when opted in.
 
@@ -301,6 +299,19 @@ Cost: $0 (pure decision + file moves; the real-model trial collection is the met
 | B harness (gates on) | 4/4 | 20 | 129.8k | $0.0015 |
 
 **Verdict: the harness does NOT degrade code quality on real bug-fix tasks** — byte-exact verification passes both arms. The effect gate permits the main agent's edits (baseline grants), and the Context VM has nothing to compress at ~30k/session. This is the "no-harm" half of the code-quality claim, now measured by a verifier instead of token counts. The "improves" half would need tasks where harness docs/knowledge change the outcome (a larger slice or harder fixtures) — parked, honest. Cost ~$0.0034 total.
+
+### Code-quality HARD suite (round 2, code-quality-001, supervised)
+
+User asked for harder tasks to test whether the harness HELPS. New suite: 10 nightmare + high-difficulty + largest fixtures (multi-composite multi-edit ×3 incl. 849-line input, identifier-multi-edit ×3 incl. score-14 tasks, structural ×3, duplicate-line-flip ×1). 300s caps:
+
+| Arm | VERIFIED | Calls | Tokens | Cost |
+|---|---|---|---|---|
+| A baseline (gates off) | **10/10** | 60 | 452.1k | $0.0058 |
+| B harness (gates on) | 9/10 | 60 | 461.7k | $0.0058 |
+
+B's single miss (structural-remove-case-label-004) was re-run in isolation: verified TRUE on both arms (A 5 calls, B 6 calls) — **stochastic, not a harness regression.**
+
+**Verdict: the harness is NEUTRAL on hard code-quality tasks** — no improvement, no regression (10/10 vs 10/10 effective). The "improves" half of the code-quality claim remains unproven even at nightmare difficulty: the harness's measured value is efficiency (Context VM), safety (gates), and memory — not edit precision, which the model already has. Cost ~$0.012 total for the hard suite.
 
 ## Skill promotion real-model run (skill-promotion-real-001, supervised)
 

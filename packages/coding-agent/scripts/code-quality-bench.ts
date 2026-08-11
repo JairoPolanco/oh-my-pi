@@ -26,13 +26,26 @@ import { verifyExpectedFileSubset } from "@oh-my-pi/typescript-edit-benchmark/ve
 
 const REPO = "/Users/jairopolanco/Projects/oh-my-pi";
 const MODEL = "opencode-go/deepseek-v4-flash";
-const TASK_TIMEOUT_MS = Number(process.env.CQ_TASK_TIMEOUT_MS ?? 180_000);
+const TASK_TIMEOUT_MS = Number(process.env.CQ_TASK_TIMEOUT_MS ?? 300_000);
 
-// Task slice: a fixed set of mutation categories across fixture tasks. Use
-// the same ids for BOTH arms (paired comparison per task).
+// Hard task suite (item 4 round 2): nightmare + high-difficulty + largest
+// fixture files — precision (near-identical code), thoroughness (multi-
+// composite: several unrelated bugs per file), and placement (structural).
+// Same ids for BOTH arms (paired comparison per task).
 const TASK_IDS = (
 	process.env.CQ_TASK_IDS ??
-	"access-remove-optional-chain-001,literal-flip-boolean-001,literal-off-by-one-001,operator-swap-equality-001"
+	[
+		"multi-composite-multi-edit-015", // 849-line input, largest fixture
+		"multi-composite-multi-edit-008", // nightmare
+		"multi-composite-multi-edit-012", // nightmare
+		"identifier-identifier-multi-edit-008", // 770 lines, score 14, nightmare
+		"identifier-identifier-multi-edit-007", // score 14
+		"identifier-identifier-multi-edit-004", // score 12, nightmare
+		"structural-swap-sibling-blocks-012", // nightmare
+		"structural-wrap-redundant-if-004", // 719 lines, nightmare
+		"structural-remove-case-label-004", // nightmare
+		"duplicate-duplicate-line-flip-004", // score 13, nightmare
+	].join(",")
 ).split(",");
 
 async function resolveTasks(): Promise<{ tasks: EditTask[]; cleanup: () => Promise<void> }> {
