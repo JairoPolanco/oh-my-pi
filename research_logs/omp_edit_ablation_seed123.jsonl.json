@@ -1,0 +1,90 @@
+{
+ "experiment": "omp_edit_ablation",
+ "variant": "seed123",
+ "agent": "opencode-go/deepseek-v4-flash",
+ "benchmark": "typescript-edit-benchmark",
+ "sample": "22-task stratified (every 5th of 106)",
+ "seeds": 3,
+ "gates": {
+  "A_baseline": {
+   "context_governance": false,
+   "effect_gate": false
+  },
+  "B_context": {
+   "context_governance": true,
+   "effect_gate": false
+  },
+  "C_gate": {
+   "context_governance": false,
+   "effect_gate": true
+  },
+  "D_both": {
+   "context_governance": true,
+   "effect_gate": true
+  }
+ },
+ "arms": {
+  "A_baseline": {
+   "seed_success": [
+    20,
+    22,
+    22
+   ],
+   "success_min": 20,
+   "success_mean": 21.333333333333332,
+   "tokens_per_task_mean_across_seeds": 35206.3,
+   "tokens_per_task_min": 27776.9,
+   "tokens_per_task_max": 45496.1,
+   "duration_ms_mean_across_seeds": 41506.9,
+   "tool_calls_per_task_mean_across_seeds": 4.32
+  },
+  "B_context": {
+   "seed_success": [
+    21,
+    21,
+    21
+   ],
+   "success_min": 21,
+   "success_mean": 21.0,
+   "tokens_per_task_mean_across_seeds": 29118.3,
+   "tokens_per_task_min": 27543.4,
+   "tokens_per_task_max": 30170.1,
+   "duration_ms_mean_across_seeds": 48606.0,
+   "tool_calls_per_task_mean_across_seeds": 4.38
+  },
+  "C_gate": {
+   "seed_success": [
+    22,
+    22,
+    22
+   ],
+   "success_min": 22,
+   "success_mean": 22.0,
+   "tokens_per_task_mean_across_seeds": 27956.9,
+   "tokens_per_task_min": 22335.2,
+   "tokens_per_task_max": 37172.6,
+   "duration_ms_mean_across_seeds": 39885.4,
+   "tool_calls_per_task_mean_across_seeds": 3.88
+  },
+  "D_both": {
+   "seed_success": [
+    22,
+    22,
+    22
+   ],
+   "success_min": 22,
+   "success_mean": 22.0,
+   "tokens_per_task_mean_across_seeds": 28955.7,
+   "tokens_per_task_min": 28242.5,
+   "tokens_per_task_max": 29745.0,
+   "duration_ms_mean_across_seeds": 51636.2,
+   "tool_calls_per_task_mean_across_seeds": 3.82
+  }
+ },
+ "findings": [
+  "Dogfooding bug: with OMP_KERNEL_EFFECT_GATE=1, in-memory benchmark sessions wrote kernel SQLite into cwd/.omp/kernel; benchmark verification flagged the .db files as unexpected -> 0/22. Fixed: kernel store uses a session-scoped temp dir for in-memory sessions (7b1b2e7e2).",
+  "Worst-seed success (min across 3 seeds): baseline 20/22, context 21/22, gate 22/22, both 22/22.",
+  "Gate arms used fewer tokens/task than baseline (mean across seeds): C 27.96k vs A 35.21k (-20.6%), D 28.96k (-17.8%).",
+  "No gate arm had any task fail in any seed; baseline had 2 tasks fail in exactly 1 seed each; context arm 3 tasks."
+ ]
+}

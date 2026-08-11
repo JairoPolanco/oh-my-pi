@@ -1,0 +1,4406 @@
+{
+  "config": {
+    "provider": "opencode-go",
+    "model": "opencode-go/deepseek-v4-flash",
+    "runsPerTask": 3,
+    "timeout": 120000,
+    "connectionTimeout": 30000,
+    "maxTurns": 30,
+    "taskConcurrency": 6,
+    "guided": false,
+    "maxAttempts": 1,
+    "noOpRetryLimit": 2,
+    "maxTimeoutRetries": 3,
+    "maxProviderFailureRetries": 3,
+    "mutationScopeWindow": 20,
+    "inProcess": true,
+    "earlyStopOnMatch": true,
+    "conversationDumpDir": "/Users/jairopolanco/Projects/oh-my-pi/research_logs/omp_edit_ablation_D_both_seed123.dump"
+  },
+  "tasks": [
+    {
+      "id": "access-remove-optional-chain-001",
+      "name": "Access Remove Optional Chain 001",
+      "files": [
+        "uuid.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-optional-chain",
+          "mutationCategory": "access",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 15527,
+            "output": 377,
+            "reasoning": 7,
+            "total": 15904
+          },
+          "duration": 25681,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Line 5 now reads `if (globalThis.crypto?.getRandomValues) {` — exactly the requested change, nothing else modified.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 236
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_ET_ffIwh6SOvhb5qFp8Rj0S4912|7f08aa83-2baa-4388-8284-a0153c1350ef",
+              "args": {
+                "input": "[uuid.ts#7D88]\nPUT 5.=5:\n+  if (globalThis.crypto?.getRandomValues) {"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[uuid.ts#7D88]\\nPUT 5.=5:\\n+  if (globalThis.crypto?.getRandomValues) {\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-optional-chain",
+          "mutationCategory": "access",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 15558,
+            "output": 376,
+            "reasoning": 7,
+            "total": 15934
+          },
+          "duration": 30594,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Line 5 now reads `if (globalThis.crypto?.getRandomValues) {` — exactly the requested change, nothing else modified.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 236
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_ET_2dsDSjKrYWHQtIP8qYBC8770|6cdddf6b-5785-4aef-be34-19afdcfd195f",
+              "args": {
+                "input": "[uuid.ts#7D88]\nPUT 5.=5:\n+  if (globalThis.crypto?.getRandomValues) {"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[uuid.ts#7D88]\\nPUT 5.=5:\\n+  if (globalThis.crypto?.getRandomValues) {\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-optional-chain",
+          "mutationCategory": "access",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 15523,
+            "output": 376,
+            "reasoning": 7,
+            "total": 15899
+          },
+          "duration": 35309,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Line 5 now reads `if (globalThis.crypto?.getRandomValues) {` — exactly the requested change, nothing else modified.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 236
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_ET_U9jAHwNSS9mytrXLTf0z4502|0ea7cc69-a131-490c-98b7-7f159085f8bf",
+              "args": {
+                "input": "[uuid.ts#7D88]\nPUT 5.=5:\n+  if (globalThis.crypto?.getRandomValues) {"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[uuid.ts#7D88]\\nPUT 5.=5:\\n+  if (globalThis.crypto?.getRandomValues) {\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 2,
+      "success": true,
+      "tokens": {
+        "input": 15523,
+        "output": 376,
+        "reasoning": 7,
+        "total": 15899
+      },
+      "duration": 35309,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 2,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 1,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 236
+      },
+      "editSuccessRate": 0.5,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "duplicate-duplicate-line-flip-004",
+      "name": "Duplicate Duplicate Line Flip 004",
+      "files": [
+        "tools-manager.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "duplicate-line-flip",
+          "mutationCategory": "duplicate",
+          "difficultyScore": 13,
+          "tokens": {
+            "input": 29919,
+            "output": 940,
+            "reasoning": 364,
+            "total": 30859
+          },
+          "duration": 40345,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. The only occurrence of the inverted check was in the `fd` config's `win32` branch; it now reads `architecture === 'arm64' ? 'aarch64' : 'x86_64'`, matching the other three identical lines in the file. No other code touched.",
+          "toolCalls": {
+            "read": 4,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 333
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "duplicate-line-flip",
+          "mutationCategory": "duplicate",
+          "difficultyScore": 13,
+          "tokens": {
+            "input": 56487,
+            "output": 2256,
+            "reasoning": 1145,
+            "total": 58743
+          },
+          "duration": 69839,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. The `fd` config's win32 branch in `getAssetName` (line 52) now reads:\n\n```ts\n        const archStr = architecture === 'arm64' ? 'aarch64' : 'x86_64';\n```\n\nOnly that single line changed — the darwin/linux branches and the `rg` config blocks were untouched. This was the only copy using the inverted `!==` comparison; all other `archStr` occurrences already used `===`.",
+          "toolCalls": {
+            "read": 4,
+            "edit": 3,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 2,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 998
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_ZyMUaA59bDhWEWknKEcj2536|11217491-0b98-4573-b155-5be2c16b49e7",
+              "args": {
+                "old_string": "      } else if (plat === 'win32') {\n        const archStr = architecture !== 'arm64' ? 'aarch64' : 'x86_64';\n        return `fd-v${version}-${archStr}-pc-windows-msvc.zip`;",
+                "new_string": "      } else if (plat === 'win32') {\n        const archStr = architecture === 'arm64' ? 'aarch64' : 'x86_64';\n        return `fd-v${version}-${archStr}-pc-windows-msvc.zip`;",
+                "input": "tools-manager.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"tools-manager.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_00_ET_1JFZtY7nNgDQvKFAsCxB0569|79bb1344-7095-4824-b09e-51376e4fdf6a",
+              "args": {
+                "input": "[tools-manager.ts#DC72]\nPUT 43.=43:\n+        const archStr = architecture === 'arm64' ? 'aarch64' : 'x86_64';\n"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[tools-manager.ts#DC72]\\nPUT 43.=43:\\n+        const archStr = architecture === 'arm64' ? 'aarch64' : 'x86_64';\\n\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "duplicate-line-flip",
+          "mutationCategory": "duplicate",
+          "difficultyScore": 13,
+          "tokens": {
+            "input": 41157,
+            "output": 1270,
+            "reasoning": 355,
+            "total": 42427
+          },
+          "duration": 67662,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. The single altered line in `tools-manager.ts` — the `fd` win32 branch of `getAssetName` — now reads:\n\n```ts\n        const archStr = architecture === 'arm64' ? 'aarch64' : 'x86_64';\n```\n\nVerified byte-for-byte in the edited region. No other lines touched; the other near-identical copies (darwin/linux branches of `fd`, and `rg`'s win32 branch) already used the correct `===` comparison.",
+          "toolCalls": {
+            "read": 5,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 776
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_f2VE47P8MYOupnmoXbH07095|4c6fde8a-db43-4c99-a8a0-c4caf578ad02",
+              "args": {
+                "old_string": "        const archStr = architecture !== 'arm64' ? 'aarch64' : 'x86_64';",
+                "new_string": "        const archStr = architecture === 'arm64' ? 'aarch64' : 'x86_64';",
+                "input": "tools-manager.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"tools-manager.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 29919,
+        "output": 940,
+        "reasoning": 364,
+        "total": 30859
+      },
+      "duration": 40345,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 4,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 333
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "identifier-identifier-multi-edit-003",
+      "name": "Identifier Identifier Multi Edit 003",
+      "files": [
+        "config.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "identifier-multi-edit",
+          "mutationCategory": "identifier",
+          "difficultyScore": 8,
+          "tokens": {
+            "input": 52852,
+            "output": 1263,
+            "reasoning": 619,
+            "total": 54115
+          },
+          "duration": 49658,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. All 3 occurrences of `nuinstallStep` in `makeSelfUpdateCommand` (config.ts) replaced with `uninstallStep`:\n\n- `if (!uninstallStep) return installStep;`\n- `display: `${uninstallStep.display} && ${installStep.display}`,`\n- `steps: [uninstallStep, installStep],`\n\nVerified by re-reading the region; the rest of the file is untouched.",
+          "toolCalls": {
+            "read": 3,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 508
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": false,
+          "verificationPassed": true,
+          "mutationType": "identifier-multi-edit",
+          "mutationCategory": "identifier",
+          "difficultyScore": 8,
+          "tokens": {
+            "input": 20013,
+            "output": 14975,
+            "reasoning": 9908,
+            "total": 34988
+          },
+          "duration": 340476,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "The edit tool in this harness is treating old_string literally (anchor included) and will never match. Falling back to the write tool with the full corrected file, which I have verbatim from the two raw reads.",
+          "toolCalls": {
+            "read": 0,
+            "edit": 0,
+            "write": 1,
+            "editSuccesses": 0,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 20700
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "timeoutTelemetry": {
+            "elapsedMs": 120010,
+            "eventCount": 12954,
+            "toolExecutionStarts": 1,
+            "toolExecutionEnds": 1,
+            "messageEnds": 3,
+            "lastEventType": "message_update",
+            "recentEventTypes": [
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update"
+            ],
+            "pendingRetry": false
+          },
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 2,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "identifier-multi-edit",
+          "mutationCategory": "identifier",
+          "difficultyScore": 8,
+          "tokens": {
+            "input": 63957,
+            "output": 1185,
+            "reasoning": 516,
+            "total": 65142
+          },
+          "duration": 45202,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Replaced all 3 occurrences of `nuinstallStep` with `uninstallStep` in `config.ts`:\n\n- Line 59: `if (!uninstallStep) return installStep;`\n- Line 62: `display: \\`${uninstallStep.display} && ${installStep.display}\\`,`\n- Line 63: `steps: [uninstallStep, installStep],`\n\n`replace_all` confirmed exactly 3 replacements; no other occurrences remain, and nothing else was touched.",
+          "toolCalls": {
+            "read": 3,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 169
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 1,
+      "success": true,
+      "tokens": {
+        "input": 20013,
+        "output": 14975,
+        "reasoning": 9908,
+        "total": 34988
+      },
+      "duration": 340476,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 0,
+        "edit": 0,
+        "write": 1,
+        "editSuccesses": 0,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 20700
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "identifier-identifier-multi-edit-008",
+      "name": "Identifier Identifier Multi Edit 008",
+      "files": [
+        "model-resolver.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "identifier-multi-edit",
+          "mutationCategory": "identifier",
+          "difficultyScore": 14,
+          "tokens": {
+            "input": 68893,
+            "output": 1361,
+            "reasoning": 673,
+            "total": 70254
+          },
+          "duration": 57977,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Both occurrences replaced and verified.\n\n- `csopedModels.push({ model: exactMatch, thinkingLevel })` → `scopedModels.push(...)` (glob branch, ~line 263)\n- `if (!csopedModels.find(...))` → `if (!scopedModels.find(...))` (non-glob branch, ~line 367)\n\nEdit tool confirmed exactly 2 replacements; both now reference the local `scopedModels: ScopedModel[]` declared at the top of `resolveModelScopeWithDiagnostics`. No other changes made.",
+          "toolCalls": {
+            "read": 3,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 199
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "identifier-multi-edit",
+          "mutationCategory": "identifier",
+          "difficultyScore": 14,
+          "tokens": {
+            "input": 91673,
+            "output": 1397,
+            "reasoning": 480,
+            "total": 93070
+          },
+          "duration": 71941,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. Both occurrences of `csopedModels` replaced with `scopedModels` in `model-resolver.ts`:\n\n1. Glob-branch duplicate check → `scopedModels.push({ model: exactMatch, thinkingLevel });` (line ~307)\n2. Non-glob duplicate check → `if (!scopedModels.find((sm) => modelsAreEqual(sm.model, model))) {` (line ~363)\n\n`replace_all` confirmed exactly 2 replacements; re-read verified both sites and no other text changed.",
+          "toolCalls": {
+            "read": 3,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 203
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "identifier-multi-edit",
+          "mutationCategory": "identifier",
+          "difficultyScore": 14,
+          "tokens": {
+            "input": 74563,
+            "output": 1512,
+            "reasoning": 572,
+            "total": 76075
+          },
+          "duration": 66548,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Both occurrences of `csopedModels` replaced with `scopedModels`:\n\n1. `resolveModelScopeWithDiagnostics` glob branch: `csopedModels.push({ model: exactMatch, thinkingLevel });` → `scopedModels.push(...)` (verified at lines 307-309)\n2. Same function's duplicate-check: `if (!csopedModels.find(...))` → `if (!scopedModels.find(...))` (verified at line 363)\n\nFull-file read confirmed exactly 2 occurrences existed; no other changes made.",
+          "toolCalls": {
+            "read": 3,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 2,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 672
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 68893,
+        "output": 1361,
+        "reasoning": 673,
+        "total": 70254
+      },
+      "duration": 57977,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 3,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 199
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "multi-composite-multi-edit-001",
+      "name": "Multi Composite Multi Edit 001",
+      "files": [
+        "initial-message.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 16376,
+            "output": 931,
+            "reasoning": 273,
+            "total": 17307
+          },
+          "duration": 37867,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "All three changes applied and verified:\n\n1. Line 1: `import type { ImageContent } from '@earendil-works/pi-ai';` — en-dash escape replaced with hyphen.\n2. Line 27: `if (stdinContent !== undefined) {`\n3. Line 41: `initialImages: fileImages && fileImages.length > 0 ? fileImages : undefined,`\n\nNo other lines touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 3,
+            "write": 0,
+            "editSuccesses": 3,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 600
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 11462,
+            "output": 585,
+            "reasoning": 306,
+            "total": 12047
+          },
+          "duration": 17978,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "All three changes applied and verified against the task spec:\n\n- Line 1: `@earendil-works/pi-ai` (en-dash replaced with hyphen)\n- Line 27: `stdinContent !== undefined`\n- Line 41: `fileImages && fileImages.length > 0 ? fileImages : undefined`\n\nNothing else touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 287
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 3
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 15818,
+            "output": 853,
+            "reasoning": 115,
+            "total": 16671
+          },
+          "duration": 31966,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "All three changes applied and verified in `initial-message.ts`:\n\n1. Line 1: `@earendil\\u2013works/pi-ai` → `@earendil-works/pi-ai`\n2. Line 27: `stdinContent === undefined` → `stdinContent !== undefined`\n3. Line 41: `fileImages || fileImages.length >= 1` → `fileImages && fileImages.length > 0`\n\nNo other lines touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 4,
+            "write": 0,
+            "editSuccesses": 3,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 821
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_HOXfir7NXyqlBro6xab72853|1421de7e-89a5-43b0-8ae9-b42781fd2861",
+              "args": {
+                "input": "[initial-message.ts#1B61]\nPUT 1.=1:\n+import type { ImageContent } from '@earendil-works/pi-ai';\nPUT 27.=27:\n+  if (stdinContent !== undefined) {\nPUT 41.=41:\n+    initialImages: fileImages && fileImages.length > 0 ? fileImages : undefined,"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[initial-message.ts#1B61]\\nPUT 1.=1:\\n+import type { ImageContent } from '@earendil-works/pi-ai';\\nPUT 27.=27:\\n+  if (stdinContent !== undefined) {\\nPUT 41.=41:\\n+    initialImages: fileImages && fileImages.length > 0 ? fileImages : undefined,\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 3
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 1,
+      "success": true,
+      "tokens": {
+        "input": 11462,
+        "output": 585,
+        "reasoning": 306,
+        "total": 12047
+      },
+      "duration": 17978,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 287
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "multi-composite-multi-edit-006",
+      "name": "Multi Composite Multi Edit 006",
+      "files": [
+        "select-list.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 39778,
+            "output": 14876,
+            "reasoning": 12187,
+            "total": 54654
+          },
+          "duration": 229607,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "The `edit` tool validation is rejecting the anchored `input` form inconsistently. Given the file is already corrupted from the earlier partial edits, I'll do one concrete deterministic repair: rewrite the whole file with `write`, restoring the original content with both fixes correctly placed in `render`.",
+          "toolCalls": {
+            "read": 0,
+            "edit": 1,
+            "write": 1,
+            "editSuccesses": 0,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 10062
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_aTLEowYrN3S1lTK7EAAC4413|5eb98086-3f1f-4f9e-8cd1-b1489096e9f4",
+              "args": {
+                "input": "[select-list.ts#D5DB]\nPUT 82.=125:\n+  render(width: number): string[] {\n+    const lines: string[] = [];\n+\n+    // If no items match filter, show message\n+    if (this.filteredItems.length === 0) {\n+      lines.push(this.theme.noMatch('  No matching commands'));\n+      return lines;\n+    }\n+\n+    const primaryColumnWidth = this.getPrimaryColumnWidth();\n+\n+    // Calculate visible range with scrolling\n+    const startIndex = Math.max(\n+      0,\n+      Math.min(\n+        this.selectedIndex - Math.floor(this.maxVisible / 2),\n+        this.filteredItems.length - this.maxVisible,\n+      ),\n+    );\n+    const endIndex = Math.min(startIndex + this.maxVisible, this.filteredItems.length);\n+\n+    // Render visible items\n+    for (let i = startIndex; i < endIndex; i++) {\n+      const item = this.filteredItems[i];\n+      if (!item) continue;\n+\n+      const isSelected = i === this.selectedIndex;\n+      const descriptionSingleLine = item.description\n+        ? normalizeToSingleLine(item.description)\n+        : undefined;\n+      lines.push(\n+        this.renderItem(item, isSelected, width, descriptionSingleLine, primaryColumnWidth),\n+      );\n+    }\n+\n+    // Add scroll indicators if needed\n+    if (startIndex > 0 || endIndex < this.filteredItems.length) {\n+      const scrollText = `  (${this.selectedIndex + 1}/${this.filteredItems.length})`;\n+      // Truncate if too long for terminal\n+      lines.push(this.theme.scrollInfo(truncateToWidth(scrollText, width - 2, '')));\n+    }\n+\n+    return lines;\n+  }",
+                "path": "select-list.ts"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[select-list.ts#D5DB]\\nPUT 82.=125:\\n+  render(width: number): string[] {\\n+    const lines: string[] = [];\\n+\\n+    // If no items match filter, show message\\n+    if (this.filteredItems.length === 0) {\\n+      lines.push(this.theme.noMatch('  No matching comman… [truncated 1256 chars]\",\n    \"path\": \"select-list.ts\"\n  },\n  \"normalized\": {\n    \"path\": \"select-list.ts\"\n  }\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "timeoutTelemetry": {
+            "elapsedMs": 120003,
+            "eventCount": 11268,
+            "toolExecutionStarts": 11,
+            "toolExecutionEnds": 11,
+            "messageEnds": 21,
+            "lastEventType": "message_update",
+            "recentEventTypes": [
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update"
+            ],
+            "pendingRetry": false
+          },
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 1,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 36200,
+            "output": 1119,
+            "reasoning": 116,
+            "total": 37319
+          },
+          "duration": 49269,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Both changes applied and verified.\n\n- Line 106: `if (item) continue;` → `if (!item) continue;`\n- Line 118: `if (startIndex > 0 ?? endIndex <= this.filteredItems.length) {` → `if (startIndex > 0 || endIndex < this.filteredItems.length) {`\n\nNo other modifications made.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 6,
+            "write": 0,
+            "editSuccesses": 2,
+            "editFailures": 4,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 996
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_AcSDs1dxib0rbdOH7IRy5533|00fea227-af63-46bb-a46c-45e6e663fe91",
+              "args": {
+                "input": "[select-list.ts#4174]\nPUT 106.=106:\n+      if (!item) continue;\nPUT 118.=118:\n+    if (startIndex > 0 || endIndex < this.filteredItems.length) {"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[select-list.ts#4174]\\nPUT 106.=106:\\n+      if (!item) continue;\\nPUT 118.=118:\\n+    if (startIndex > 0 || endIndex < this.filteredItems.length) {\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_00_GwudljsG8q0XqpYkSTGY8014|3798d8de-ca14-4dd2-b52b-885f482322e5",
+              "args": {
+                "old_string": "      if (item) continue;",
+                "new_string": "      if (!item) continue;",
+                "input": "select-list.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"select-list.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_01_Wt7hWXmKIb1zN3U34fMY4443|595e6098-1f26-47c0-8875-1a124f393eb1",
+              "args": {
+                "old_string": "    if (startIndex > 0 ?? endIndex <= this.filteredItems.length) {",
+                "new_string": "    if (startIndex > 0 || endIndex < this.filteredItems.length) {",
+                "input": "select-list.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"select-list.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_00_jdSC9a2N5NeIhLK6QRRP2031|345181f1-b152-45e2-9e47-04b4e4ad8cf7",
+              "args": {
+                "input": "[select-list.ts#4174]\nPUT 106.=106:\n+      if (!item) continue;\nPUT 118.=118:\n+    if (startIndex > 0 || endIndex < this.filteredItems.length) {",
+                "path": "select-list.ts"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[select-list.ts#4174]\\nPUT 106.=106:\\n+      if (!item) continue;\\nPUT 118.=118:\\n+    if (startIndex > 0 || endIndex < this.filteredItems.length) {\",\n    \"path\": \"select-list.ts\"\n  },\n  \"normalized\": {\n    \"path\": \"select-list.ts\"\n  }\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 4
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 26164,
+            "output": 790,
+            "reasoning": 170,
+            "total": 26954
+          },
+          "duration": 44424,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Both fixes applied and verified:\n\n- Line 106: `if (item) continue;` → `if (!item) continue;`\n- Line 118: `if (startIndex > 0 ?? endIndex <= this.filteredItems.length) {` → `if (startIndex > 0 || endIndex < this.filteredItems.length) {`\n\nNo other lines touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 3,
+            "write": 0,
+            "editSuccesses": 2,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 513
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_CKxuNTx3mKd3aI29ZXvz0367|42bb9266-6445-4a90-9f1f-ea1ecddc6aa9",
+              "args": {
+                "input": "[select-list.ts#4174]\nPUT 106.=106:\n+      if (!item) continue;\nPUT 118.=118:\n+    if (startIndex > 0 || endIndex < this.filteredItems.length) {"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[select-list.ts#4174]\\nPUT 106.=106:\\n+      if (!item) continue;\\nPUT 118.=118:\\n+    if (startIndex > 0 || endIndex < this.filteredItems.length) {\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 2
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 2,
+      "success": true,
+      "tokens": {
+        "input": 26164,
+        "output": 790,
+        "reasoning": 170,
+        "total": 26954
+      },
+      "duration": 44424,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 3,
+        "write": 0,
+        "editSuccesses": 2,
+        "editFailures": 1,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 513
+      },
+      "editSuccessRate": 0.6666666666666666,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "multi-composite-multi-edit-011",
+      "name": "Multi Composite Multi Edit 011",
+      "files": [
+        "retry.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 6,
+          "tokens": {
+            "input": 55376,
+            "output": 3468,
+            "reasoning": 1633,
+            "total": 58844
+          },
+          "duration": 86705,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "All three changes applied and verified byte-for-byte:\n\n1. **Line 180** — `if (response.stopReason === 'aborted') {` ✓\n2. **Line 187** — `if (lastRetry) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);` ✓\n3. **Lines 192–194** — `attempt >= maxAttempts` and `await callbacks?.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);` ✓\n\nNo other lines touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 11,
+            "write": 0,
+            "editSuccesses": 3,
+            "editFailures": 8,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 2490
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_rhTK7VDXoMjrbdZDLC2E0714|083c9344-4307-4b6b-848f-1b2427379b09",
+              "args": {
+                "input": "[retry.ts#63F4]\nPUT 180.=180:\n+    if (response.stopReason === 'aborted') {"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[retry.ts#63F4]\\nPUT 180.=180:\\n+    if (response.stopReason === 'aborted') {\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_01_gjPFLRE5XgRXbWXo9BSA4591|edb8a4cf-de7d-4893-ad18-ebd7eeeaad87",
+              "args": {
+                "input": "[retry.ts#63F4]\nPUT 187.=187:\n+      if (lastRetry) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[retry.ts#63F4]\\nPUT 187.=187:\\n+      if (lastRetry) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_02_l3ka7X4upI8hbFxOSPF42941|b0bb8f2f-ffa8-4170-a555-7114120beb26",
+              "args": {
+                "input": "[retry.ts#63F4]\nPUT 192.=194:\n+    if (attempt >= maxAttempts || !isRetryableAssistantError(response)) {\n+      if (lastRetry)\n+        await callbacks?.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[retry.ts#63F4]\\nPUT 192.=194:\\n+    if (attempt >= maxAttempts || !isRetryableAssistantError(response)) {\\n+      if (lastRetry)\\n+        await callbacks?.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_00_3zDmivqqniGHxND5WIAi8976|73e6de59-ad79-4c8b-9a33-5f11c718a4fa",
+              "args": {
+                "old_string": "    if (response.stopReason !== 'aborted') {",
+                "new_string": "    if (response.stopReason === 'aborted') {",
+                "input": "retry.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"retry.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_01_B2Q6R9VwCzrTHkLQES9h1184|34fce275-df18-44c9-aaa3-bedb02c43d55",
+              "args": {
+                "old_string": "    if (response.stopReason !== 'error') {\n      if (lastRetry) await callbacks?.onRetryFinished?.(false, lastRetry.attempt);",
+                "new_string": "    if (response.stopReason !== 'error') {\n      if (lastRetry) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);",
+                "input": "retry.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"retry.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_02_djey9pnYTXNWt1MKqIPr2585|13e1a7bd-b02b-4646-8a18-9f6913ce463e",
+              "args": {
+                "old_string": "    if (attempt > maxAttempts || !isRetryableAssistantError(response)) {\n      if (lastRetry)\n        await callbacks.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);",
+                "new_string": "    if (attempt >= maxAttempts || !isRetryableAssistantError(response)) {\n      if (lastRetry)\n        await callbacks?.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);",
+                "input": "retry.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"retry.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_00_6sP1qlHAQzVidmPJbOXC1144|d8896f3b-5078-42b9-b7cf-fd6be85d8f57",
+              "args": {
+                "input": "[retry.ts#63F4]\nPUT 180.=180:\n+    if (response.stopReason === 'aborted') {"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[retry.ts#63F4]\\nPUT 180.=180:\\n+    if (response.stopReason === 'aborted') {\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_00_3kXBbsKM93xzKwEj1n3G9106|016dfe7d-1815-42c6-88b5-68cbb29a4a2e",
+              "args": {
+                "path": "retry.ts#63F4",
+                "old_string": "    if (response.stopReason !== 'aborted') {",
+                "new_string": "    if (response.stopReason === 'aborted') {"
+              },
+              "error": "File not found: retry.ts#63F4",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 3,
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 6,
+          "tokens": {
+            "input": 30766,
+            "output": 2308,
+            "reasoning": 1183,
+            "total": 33074
+          },
+          "duration": 52674,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "All three changes applied and verified against the task:\n\n- **Change 1** (line 180): `!== 'aborted'` → `=== 'aborted'`\n- **Change 2** (line 187): `onRetryFinished?.(false, ...)` → `onRetryFinished?.(true, ...)`\n- **Change 3** (lines 192, 194): `attempt > maxAttempts` → `attempt >= maxAttempts`; `callbacks.onRetryFinished?.` → `callbacks?.onRetryFinished?.`\n\nRe-read of the region confirms each hunk matches the spec byte-for-byte; no other lines touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 5,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 4,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1711
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_1KIvIaYYnwr8QtKeHOTO3389|015d13e1-25c1-4431-b5ee-ac4fa5fc33c7",
+              "args": {
+                "input": "[retry.ts#63F4]\nPUT 180.=180:\n+    if (response.stopReason === 'aborted') {\nPUT 187.=187:\n+      if (lastRetry) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);\nPUT 192.=194:\n+    if (attempt >= maxAttempts || !isRetryableAssistantError(response)) {\n+      if (lastRetry)\n+        await callbacks?.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[retry.ts#63F4]\\nPUT 180.=180:\\n+    if (response.stopReason === 'aborted') {\\nPUT 187.=187:\\n+      if (lastRetry) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);\\nPUT 192.=194:\\n+    if (attempt >= maxAttempts || !isRetryableAssistantError(respons… [truncated 121 chars]\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_00_MxQ5P19CPyN8NFKNXYbs2564|ed3cd009-e8ba-43bf-982f-dea45f637811",
+              "args": {
+                "old_string": "    if (response.stopReason !== 'aborted') {",
+                "new_string": "    if (response.stopReason === 'aborted') {",
+                "input": "retry.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"retry.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_01_3wRNkzGQtrYtEViOpFCs9845|731b70ec-57ea-463d-b155-d074605b6000",
+              "args": {
+                "old_string": "    if (response.stopReason !== 'error') {\n      if (lastRetry) await callbacks?.onRetryFinished?.(false, lastRetry.attempt);",
+                "new_string": "    if (response.stopReason !== 'error') {\n      if (lastRetry) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);",
+                "input": "retry.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"retry.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_02_EalvI3hOLdlFGlcwbKqy7800|9f8ec126-17bd-4579-91f2-ef924650d74b",
+              "args": {
+                "old_string": "    if (attempt > maxAttempts || !isRetryableAssistantError(response)) {\n      if (lastRetry)\n        await callbacks.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);",
+                "new_string": "    if (attempt >= maxAttempts || !isRetryableAssistantError(response)) {\n      if (lastRetry)\n        await callbacks?.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);",
+                "input": "retry.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"retry.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 4,
+            "PUT N.=M:": 2
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 6,
+          "tokens": {
+            "input": 27372,
+            "output": 1182,
+            "reasoning": 100,
+            "total": 28554
+          },
+          "duration": 44604,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "All three changes applied and verified in `retry.ts`:\n\n1. Line 180: `!== 'aborted'` → `=== 'aborted'`\n2. Line 187: `onRetryFinished?.(false, ...)` → `onRetryFinished?.(true, ...)`\n3. Lines 192–194: `attempt > maxAttempts` → `attempt >= maxAttempts`, and `callbacks.onRetryFinished?.` → `callbacks?.onRetryFinished?.`\n\nNo other lines touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 6,
+            "write": 0,
+            "editSuccesses": 3,
+            "editFailures": 3,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1365
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_MCNfit3yMFNfws6PrXwP9609|416677d3-1029-4ea4-a489-35ae3b7c6bd0",
+              "args": {
+                "input": "[retry.ts#63F4]\nPUT 180.=180:\n+    if (response.stopReason === 'aborted') {"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[retry.ts#63F4]\\nPUT 180.=180:\\n+    if (response.stopReason === 'aborted') {\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_01_vmHLIf1Ik21vNGQhlvee8564|c5b6e838-cec8-4ac3-8e3c-fd26341a2e6e",
+              "args": {
+                "input": "[retry.ts#63F4]\nPUT 187.=187:\n+      if (lastRetry) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[retry.ts#63F4]\\nPUT 187.=187:\\n+      if (lastRetry) await callbacks?.onRetryFinished?.(true, lastRetry.attempt);\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_02_jyn6fwNzwRUi38xXQh7c6286|0482a7cb-02c1-4fe6-9039-f039dbc3018d",
+              "args": {
+                "input": "[retry.ts#63F4]\nPUT 192.=194:\n+    if (attempt >= maxAttempts || !isRetryableAssistantError(response)) {\n+      if (lastRetry)\n+        await callbacks?.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[retry.ts#63F4]\\nPUT 192.=194:\\n+    if (attempt >= maxAttempts || !isRetryableAssistantError(response)) {\\n+      if (lastRetry)\\n+        await callbacks?.onRetryFinished?.(false, lastRetry.attempt, response.errorMessage);\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 2,
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 2,
+      "success": true,
+      "tokens": {
+        "input": 27372,
+        "output": 1182,
+        "reasoning": 100,
+        "total": 28554
+      },
+      "duration": 44604,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 6,
+        "write": 0,
+        "editSuccesses": 3,
+        "editFailures": 3,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 1365
+      },
+      "editSuccessRate": 0.5,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "multi-composite-multi-edit-016",
+      "name": "Multi Composite Multi Edit 016",
+      "files": [
+        "terminal.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 10,
+          "tokens": {
+            "input": 39758,
+            "output": 937,
+            "reasoning": 239,
+            "total": 40695
+          },
+          "duration": 35139,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Both changes applied and verified:\n\n1. Line 107: `private _kittyProtocolActive = false;` — flipped from `true`.\n2. Line 424 (in `stop()`): `keyboardProtocolPushed || _kittyProtocolActive` — `&&` → `||`.\n\nLine 379 (`drainInput()`) already had `||` and was left untouched. No other code modified.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 3,
+            "write": 0,
+            "editSuccesses": 2,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 630
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_fud3dtfuDmppWNpzAFoW1978|c0637926-3937-4a94-babe-40b38fe4b0f9",
+              "args": {
+                "input": "[terminal.ts#68C8]\nPUT 107.=107:\n+  private _kittyProtocolActive = false;\nPUT 424.=424:\n+    const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this._kittyProtocolActive;"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[terminal.ts#68C8]\\nPUT 107.=107:\\n+  private _kittyProtocolActive = false;\\nPUT 424.=424:\\n+    const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this._kittyProtocolActive;\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 2
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 10,
+          "tokens": {
+            "input": 70107,
+            "output": 1913,
+            "reasoning": 948,
+            "total": 72020
+          },
+          "duration": 62232,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Both edits applied and verified:\n\n1. `private _kittyProtocolActive = false;` — initializer flipped from `true`.\n2. `stop()`: `const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this._kittyProtocolActive;` — `&&` changed to `||`.\n\nNotes:\n- The `&&` line existed only in `stop()`; `drainInput()` already used `||`, so the task's \"edit exactly the block shown\" targeted the unique `&&` occurrence.\n- No other code touched; both replacements were single-line and byte-exact.",
+          "toolCalls": {
+            "read": 3,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 2,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 441
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 10,
+          "tokens": {
+            "input": 50889,
+            "output": 1500,
+            "reasoning": 674,
+            "total": 52389
+          },
+          "duration": 51376,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Both edits applied and verified:\n\n1. **Change 1** — `terminal.ts:107`: `private _kittyProtocolActive = false;` (was `true`).\n2. **Change 2** — `terminal.ts:421` (inside `stop()`): `const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this._kittyProtocolActive;` (was `&&`).\n\nNote: the `drainInput()` method already contained the `||` variant, so the only `&&` occurrence — the one the task specified — was the `stop()` block, and only that was changed.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 2,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 429
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 39758,
+        "output": 937,
+        "reasoning": 239,
+        "total": 40695
+      },
+      "duration": 35139,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 3,
+        "write": 0,
+        "editSuccesses": 2,
+        "editFailures": 1,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 630
+      },
+      "editSuccessRate": 0.6666666666666666,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "operator-swap-increment-decrement-001",
+      "name": "Operator Swap Increment Decrement 001",
+      "files": [
+        "image.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-increment-decrement",
+          "mutationCategory": "operator",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 13539,
+            "output": 423,
+            "reasoning": 29,
+            "total": 13962
+          },
+          "duration": 33477,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Line 103 in `image.ts` now reads `for (let index = 0; index < text.length; index++) {`. Verified — no other changes made.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 281
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_ET_fhvZ48t0RPM8Rs8h78pV2931|5cbd3045-27a5-4f96-8ace-13d21a083077",
+              "args": {
+                "input": "[image.ts#1512]\nPUT 103.=103:\n+  for (let index = 0; index < text.length; index++) {"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[image.ts#1512]\\nPUT 103.=103:\\n+  for (let index = 0; index < text.length; index++) {\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-increment-decrement",
+          "mutationCategory": "operator",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 12501,
+            "output": 273,
+            "reasoning": 12,
+            "total": 12774
+          },
+          "duration": 25913,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Line 103 now reads `for (let index = 0; index < text.length; index++) {`, exactly as specified; no other changes.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 125
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-increment-decrement",
+          "mutationCategory": "operator",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 10574,
+            "output": 250,
+            "reasoning": 45,
+            "total": 10824
+          },
+          "duration": 12154,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Line 103 in `image.ts` now reads `for (let index = 0; index < text.length; index++) {` — exactly the requested change, nothing else touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 124
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 2,
+      "success": true,
+      "tokens": {
+        "input": 10574,
+        "output": 250,
+        "reasoning": 45,
+        "total": 10824
+      },
+      "duration": 12154,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 124
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-duplicate-block-002",
+      "name": "Structural Duplicate Block 002",
+      "files": [
+        "chat-simple.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "duplicate-block",
+          "mutationCategory": "structural",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 24275,
+            "output": 1845,
+            "reasoning": 1033,
+            "total": 26120
+          },
+          "duration": 34001,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. The duplicate `if (trimmed) {` block is deleted; only the first copy remains, and the region reads exactly:\n\n```ts\n    }, 1000);\n  }\n```\n\nThe file went from 180 to 132 lines, with only the second block removed — no other changes.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1525
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "duplicate-block",
+          "mutationCategory": "structural",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 22306,
+            "output": 1146,
+            "reasoning": 755,
+            "total": 23452
+          },
+          "duration": 40745,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. The duplicate `if (trimmed) {` block (former lines 129–175) was deleted; only the first copy remains.\n\nVerified region now reads exactly as required:\n\n```\n126:    }, 1000);\n127:  }\n128:\n129:};\n```\n\nNo other changes made — the `onSubmit` handler closes with `};` after the single block.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 104
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "CUT N.=M": 1
+          },
+          "mutationIntentMatched": false,
+          "mutationIntentReason": "Target line mismatch at chat-simple.ts:128.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "duplicate-block",
+          "mutationCategory": "structural",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 24687,
+            "output": 637,
+            "reasoning": 194,
+            "total": 25324
+          },
+          "duration": 38827,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Deleted the duplicate `if (trimmed) {` block (originally lines 129–175). The affected region now reads exactly:\n\n```ts\n    }, 1000);\n  }\n```\n\nfollowed by the closing `};` of `editor.onSubmit`. First copy kept; no other changes.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 110
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "CUT N.=M": 1
+          },
+          "mutationIntentMatched": false,
+          "mutationIntentReason": "Target line mismatch at chat-simple.ts:128.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 1,
+      "success": true,
+      "tokens": {
+        "input": 22306,
+        "output": 1146,
+        "reasoning": 755,
+        "total": 23452
+      },
+      "duration": 40745,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 104
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-move-distant-block-001",
+      "name": "Structural Move Distant Block 001",
+      "files": [
+        "13-session-runtime.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "move-distant-block",
+          "mutationCategory": "structural",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 41323,
+            "output": 2048,
+            "reasoning": 910,
+            "total": 43371
+          },
+          "duration": 68144,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fix applied. Verified final state matches the task exactly:\n\n- `let session = await bindSession();` block moved out from after `let unsubscribe: (() => void) | undefined;`\n- It now sits directly before `await runtime.newSession();`, after the `bindSession` function definition\n- No other content modified",
+          "toolCalls": {
+            "read": 3,
+            "edit": 5,
+            "write": 0,
+            "editSuccesses": 2,
+            "editFailures": 3,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1583
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_Dy72IYs9hzl5vy1xBOAp9301|748690fb-d43a-4d89-8868-559c3f666c08",
+              "args": {
+                "old_string": "  return session;\n}\n\nawait runtime.newSession();",
+                "new_string": "  return session;\n}\n\nlet session = await bindSession();\nconst originalSessionFile = session.sessionFile;\nconsole.log('Initial session:', originalSessionFile);\n\nawait runtime.newSession();",
+                "input": "13-session-runtime.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"13-session-runtime.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_00_txfHWbJTs8UIK1YOokGc8176|d5131cd8-5c40-4b41-8d03-648179bb1bc0",
+              "args": {
+                "old_string": "  return session;\n}\n\nawait runtime.newSession();",
+                "path": "13-session-runtime.ts",
+                "input": "  return session;\n}\n\nlet session = await bindSession();\nconst originalSessionFile = session.sessionFile;\nconsole.log('Initial session:', originalSessionFile);\n\nawait runtime.newSession();"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"  return session;\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_00_ET_MuG7UndVsyBd42cAMuTm6990|70202eff-d2a4-4e45-adcc-c88672dbf1e1",
+              "args": {
+                "input": "[13-session-runtime.ts#97EC]\nPUT >54:\n+\n+let session = await bindSession();\n+const originalSessionFile = session.sessionFile;\n+console.log('Initial session:', originalSessionFile);\n"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[13-session-runtime.ts#97EC]\\nPUT >54:\\n+\\n+let session = await bindSession();\\n+const originalSessionFile = session.sessionFile;\\n+console.log('Initial session:', originalSessionFile);\\n\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT >N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "move-distant-block",
+          "mutationCategory": "structural",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 45630,
+            "output": 2058,
+            "reasoning": 931,
+            "total": 47688
+          },
+          "duration": 75415,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fix applied. The block now sits directly before `await runtime.newSession();`:\n\n- `let unsubscribe` (line 42) → blank → `async function bindSession() {` (line 44) → ... → blank → `let session = await bindSession();` / `const originalSessionFile...` / `console.log('Initial session:', ...)` → blank → `await runtime.newSession();`\n\nVerified the full file matches the required ordering exactly; nothing else modified.",
+          "toolCalls": {
+            "read": 5,
+            "edit": 4,
+            "write": 0,
+            "editSuccesses": 2,
+            "editFailures": 2,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1470
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_ET_o8S23Mb74EJN5EDgQsdj8603|1c8d6cdc-40c5-4f31-bfe7-9ed5f87a2723",
+              "args": {
+                "old_string": "  return session;\n}\n\nawait runtime.newSession();",
+                "new_string": "  return session;\n}\n\nlet session = await bindSession();\nconst originalSessionFile = session.sessionFile;\nconsole.log('Initial session:', originalSessionFile);\n\nawait runtime.newSession();",
+                "input": "13-session-runtime.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"13-session-runtime.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_00_ET_XVIvB74PNkDUBhxWkNLd5833|44ca8190-543c-4747-a74b-2a68fdf4ae09",
+              "args": {
+                "old_string": "  return session;\n}\n\nawait runtime.newSession();",
+                "new_string": "  return session;\n}\n\nlet session = await bindSession();\nconst originalSessionFile = session.sessionFile;\nconsole.log('Initial session:', originalSessionFile);\n\nawait runtime.newSession();",
+                "input": "13-session-runtime.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"13-session-runtime.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "move-distant-block",
+          "mutationCategory": "structural",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 15410,
+            "output": 2567,
+            "reasoning": 1921,
+            "total": 17977
+          },
+          "duration": 51518,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "toolCalls": {
+            "read": 2,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1673
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_tX1LjudxqjQuRCQ1Solo2796|bebc1991-0190-4e5d-b998-c65d7867a3fb",
+              "args": {
+                "input": "[13-session-runtime.ts#?]\nPUT 44.=58:\n+async function bindSession() {\n+  unsubscribe?.();\n+  const session = runtime.session;\n+  await session.bindExtensions({});\n+  unsubscribe = session.subscribe((event) => {\n+    if (event.type === 'queue_update') {\n+      console.log('Queued:', event.steering.length + event.followUp.length);\n+    }\n+  });\n+  return session;\n+}\n+\n+let session = await bindSession();\n+const originalSessionFile = session.sessionFile;\n+console.log('Initial session:', originalSessionFile);"
+              },
+              "error": "Input header must be [PATH] or [PATH#TAG] with a 4-hex content-hash tag; got \"[13-session-runtime.ts#?]\".",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 2,
+      "success": true,
+      "tokens": {
+        "input": 15410,
+        "output": 2567,
+        "reasoning": 1921,
+        "total": 17977
+      },
+      "duration": 51518,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 2,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 1,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 1673
+      },
+      "editSuccessRate": 0.5,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-move-distant-block-006",
+      "name": "Structural Move Distant Block 006",
+      "files": [
+        "rpc-process.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "move-distant-block",
+          "mutationCategory": "structural",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 5626,
+            "output": 968,
+            "reasoning": 591,
+            "total": 6594
+          },
+          "duration": 55222,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 760
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "move-distant-block",
+          "mutationCategory": "structural",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 9499,
+            "output": 1199,
+            "reasoning": 749,
+            "total": 10698
+          },
+          "duration": 60081,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "toolCalls": {
+            "read": 3,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 797
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "move-distant-block",
+          "mutationCategory": "structural",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 15222,
+            "output": 1141,
+            "reasoning": 607,
+            "total": 16363
+          },
+          "duration": 29718,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. The `if (!parsed.id) { return; }` guard now sits directly before `const pending = this.pendingRequests.get(parsed.id);` in the `'response'` case, with `pending.resolve(parsed as RpcResponse);` following the map deletion. Verified the region reads exactly as specified (guard at ~line 108, resolve at ~line 114).",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 760
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 5626,
+        "output": 968,
+        "reasoning": 591,
+        "total": 6594
+      },
+      "duration": 55222,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 760
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-remove-case-label-002",
+      "name": "Structural Remove Case Label 002",
+      "files": [
+        "cli.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-case-label",
+          "mutationCategory": "structural",
+          "difficultyScore": 9,
+          "tokens": {
+            "input": 12982,
+            "output": 647,
+            "reasoning": 369,
+            "total": 13629
+          },
+          "duration": 25292,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Added `case 'info':` as a fall-through label directly before `case 'progress':` in the `switch` inside `notify`. Region now reads exactly:\n\n```ts\n            break;\n          case 'info':\n          case 'progress':\n```\n\nNo other changes made.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 88
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-case-label",
+          "mutationCategory": "structural",
+          "difficultyScore": 9,
+          "tokens": {
+            "input": 25209,
+            "output": 2109,
+            "reasoning": 1526,
+            "total": 27318
+          },
+          "duration": 47149,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. The switch now reads:\n\n```ts\n          case 'device_code':\n            console.log(`\\nOpen this URL in your browser:\\n${event.verificationUri}`);\n            console.log(`Enter code: ${event.userCode}`);\n            break;\n          case 'info':\n          case 'progress':\n            console.log(event.message);\n            break;\n```\n\nThe fall-through `case 'info':` label sits directly before `case 'progress':`, matching the required region exactly (including the blank line removal). Nothing else in the file was touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 301
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_7mGOL4oNmz2QB19jqsPk5638|4586fc82-0b17-42a6-95f3-3388aa504a60",
+              "args": {
+                "input": "[cli.ts#8776]\nPUT 69.=70:\n+          case 'info':\n+          case 'progress':\n"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[cli.ts#8776]\\nPUT 69.=70:\\n+          case 'info':\\n+          case 'progress':\\n\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-case-label",
+          "mutationCategory": "structural",
+          "difficultyScore": 9,
+          "tokens": {
+            "input": 21415,
+            "output": 757,
+            "reasoning": 279,
+            "total": 22172
+          },
+          "duration": 38409,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Added fall-through `case 'info':` directly before `case 'progress':`, removing the blank line between them. Region now reads:\n\n```ts\n            break;\n          case 'info':\n          case 'progress':\n            console.log(event.message);\n            break;\n```\n\nNothing else touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 299
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_o1JM2Z0cpwUmislLND7t3937|8303cbb2-fdec-4717-8f06-5e8cfd021bb4",
+              "args": {
+                "input": "[cli.ts#8776]\nPUT 69.=70:\n+          case 'info':\n+          case 'progress':"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[cli.ts#8776]\\nPUT 69.=70:\\n+          case 'info':\\n+          case 'progress':\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 12982,
+        "output": 647,
+        "reasoning": 369,
+        "total": 13629
+      },
+      "duration": 25292,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 88
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-remove-case-label-007",
+      "name": "Structural Remove Case Label 007",
+      "files": [
+        "branch-summarization.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-case-label",
+          "mutationCategory": "structural",
+          "difficultyScore": 12,
+          "tokens": {
+            "input": 12572,
+            "output": 477,
+            "reasoning": 62,
+            "total": 13049
+          },
+          "duration": 32169,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Added `case 'model_change':` as a fall-through label directly before `case 'custom':` in the `switch` within `getMessageFromEntry`. Region now reads exactly:\n\n```ts\n    case 'thinking_level_change':\n    case 'model_change':\n    case 'custom':\n```\n\nNo other changes made.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 288
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-case-label",
+          "mutationCategory": "structural",
+          "difficultyScore": 12,
+          "tokens": {
+            "input": 11075,
+            "output": 499,
+            "reasoning": 151,
+            "total": 11574
+          },
+          "duration": 24893,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. The switch now reads:\n\n```ts\n    case 'thinking_level_change':\n    case 'model_change':\n    case 'custom':\n```\n\nAdded the fall-through `case 'model_change':` label directly before `case 'custom':` and removed the intervening blank line so the three labels are consecutive, matching the expected region byte-for-byte. Nothing else was touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 242
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-case-label",
+          "mutationCategory": "structural",
+          "difficultyScore": 12,
+          "tokens": {
+            "input": 64611,
+            "output": 5835,
+            "reasoning": 5356,
+            "total": 70446
+          },
+          "duration": 221583,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Added the fall-through `case 'model_change':` label directly before `case 'custom':` in `getMessageFromEntry`'s switch, and removed the stray blank line so the region reads exactly:\n\n```ts\n    case 'thinking_level_change':\n    case 'model_change':\n    case 'custom':\n```\n\nVerified by re-reading lines 177–183; no other lines touched.",
+          "toolCalls": {
+            "read": 0,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 0,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 342
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_ZuPooS4fQrIsbNE4AyVc9400|0b79cd0f-59cc-4898-a880-6e9a175011bc",
+              "args": {
+                "path": "branch-summarization.ts",
+                "old_string": "[branch-summarization.ts#1A2B]\n    // These don't contribute to conversation content\n    case 'thinking_level_change':\n\n    case 'custom':",
+                "new_string": "    // These don't contribute to conversation content\n    case 'thinking_level_change':\n    case 'model_change':\n    case 'custom':"
+              },
+              "error": "Could not find a close enough match in branch-summarization.ts.\n\nClosest match (79% similar) at line 177:\n  - [branch-summarization.ts#1A2B]\n  + \nClosest match was below the 95% similarity threshold.",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "timeoutTelemetry": {
+            "elapsedMs": 120004,
+            "eventCount": 7066,
+            "toolExecutionStarts": 12,
+            "toolExecutionEnds": 12,
+            "messageEnds": 24,
+            "lastEventType": "message_update",
+            "recentEventTypes": [
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update",
+              "message_update"
+            ],
+            "pendingRetry": false
+          },
+          "retryStats": {
+            "timeoutRetries": 1,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 1,
+      "success": true,
+      "tokens": {
+        "input": 11075,
+        "output": 499,
+        "reasoning": 151,
+        "total": 11574
+      },
+      "duration": 24893,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 242
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-swap-adjacent-lines-004",
+      "name": "Structural Swap Adjacent Lines 004",
+      "files": [
+        "compat.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-adjacent-lines",
+          "mutationCategory": "structural",
+          "difficultyScore": 6,
+          "tokens": {
+            "input": 14975,
+            "output": 554,
+            "reasoning": 31,
+            "total": 15529
+          },
+          "duration": 36228,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Lines 37–38 in `compat.ts` now read:\n\n```ts\nimport { openAICodexResponsesApi } from './api/openai-codex-responses.lazy.ts';\nimport { openAICompletionsApi } from './api/openai-completions.lazy.ts';\n```\n\nNo other changes made.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 584
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_T2LhYOyly1B5KYpTK5Qs9844|e067ad31-ad52-4e3d-a2cf-ce230f26d2f8",
+              "args": {
+                "input": "[compat.ts#36E1]\nPUT 37.=38:\n+import { openAICodexResponsesApi } from './api/openai-codex-responses.lazy.ts';\n+import { openAICompletionsApi } from './api/openai-completions.lazy.ts';\n"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[compat.ts#36E1]\\nPUT 37.=38:\\n+import { openAICodexResponsesApi } from './api/openai-codex-responses.lazy.ts';\\n+import { openAICompletionsApi } from './api/openai-completions.lazy.ts';\\n\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-adjacent-lines",
+          "mutationCategory": "structural",
+          "difficultyScore": 6,
+          "tokens": {
+            "input": 14947,
+            "output": 598,
+            "reasoning": 83,
+            "total": 15545
+          },
+          "duration": 36147,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Swapped. Region now reads exactly as specified:\n\n```ts\nimport { openAICodexResponsesApi } from './api/openai-codex-responses.lazy.ts';\nimport { openAICompletionsApi } from './api/openai-completions.lazy.ts';\n```\n\nNo other changes made.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 582
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_5zPHffSDkxD7yhiu6rZT0202|29c92af5-8991-4b7d-a8fb-3e07f0e77c98",
+              "args": {
+                "input": "[compat.ts#36E1]\nPUT 37.=38:\n+import { openAICodexResponsesApi } from './api/openai-codex-responses.lazy.ts';\n+import { openAICompletionsApi } from './api/openai-completions.lazy.ts';"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[compat.ts#36E1]\\nPUT 37.=38:\\n+import { openAICodexResponsesApi } from './api/openai-codex-responses.lazy.ts';\\n+import { openAICompletionsApi } from './api/openai-completions.lazy.ts';\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-adjacent-lines",
+          "mutationCategory": "structural",
+          "difficultyScore": 6,
+          "tokens": {
+            "input": 11001,
+            "output": 289,
+            "reasoning": 31,
+            "total": 11290
+          },
+          "duration": 11055,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Swap applied and verified. Lines 37–38 now read:\n\n```ts\nimport { openAICodexResponsesApi } from './api/openai-codex-responses.lazy.ts';\nimport { openAICompletionsApi } from './api/openai-completions.lazy.ts';\n```\n\nNothing else changed.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 224
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 2,
+      "success": true,
+      "tokens": {
+        "input": 11001,
+        "output": 289,
+        "reasoning": 31,
+        "total": 11290
+      },
+      "duration": 11055,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 224
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-swap-if-else-003",
+      "name": "Structural Swap If Else 003",
+      "files": [
+        "write.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-if-else",
+          "mutationCategory": "structural",
+          "difficultyScore": 8,
+          "tokens": {
+            "input": 19584,
+            "output": 875,
+            "reasoning": 324,
+            "total": 20459
+          },
+          "duration": 46595,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. The `if (fileContent !== null)` branch now holds the highlight cache rebuild, and `component.cache = undefined;` moved to the `else`. Verified region matches the expected output exactly; nothing else changed.",
+          "toolCalls": {
+            "read": 3,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 736
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-if-else",
+          "mutationCategory": "structural",
+          "difficultyScore": 8,
+          "tokens": {
+            "input": 16278,
+            "output": 782,
+            "reasoning": 199,
+            "total": 17060
+          },
+          "duration": 15961,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Swapped the two branch bodies in `write.ts:253-259`:\n\n- `if (fileContent !== null)` now computes the highlight cache (`rebuildWriteHighlightCacheFull` / `updateWriteHighlightCacheIncremental`).\n- `else` now sets `component.cache = undefined`.\n\nVerified the edited region matches the required text exactly.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1029
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_p3f37tMSaySGw0fD4TPd5817|56f56cd9-c379-4626-b4e1-cadfbe3edfb6",
+              "args": {
+                "input": "[write.ts#6745]\nPUT 253.=259:\n+      if (fileContent !== null) {\n+        component.cache = context.argsComplete\n+          ? rebuildWriteHighlightCacheFull(rawPath, fileContent)\n+          : updateWriteHighlightCacheIncremental(component.cache, rawPath, fileContent);\n+      } else {\n+        component.cache = undefined;\n+      }"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[write.ts#6745]\\nPUT 253.=259:\\n+      if (fileContent !== null) {\\n+        component.cache = context.argsComplete\\n+          ? rebuildWriteHighlightCacheFull(rawPath, fileContent)\\n+          : updateWriteHighlightCacheIncremental(component.cache, rawPath, f… [truncated 75 chars]\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-if-else",
+          "mutationCategory": "structural",
+          "difficultyScore": 8,
+          "tokens": {
+            "input": 16624,
+            "output": 1100,
+            "reasoning": 498,
+            "total": 17724
+          },
+          "duration": 28854,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Swapped. `write.ts` now reads:\n\n```ts\n      if (fileContent !== null) {\n        component.cache = context.argsComplete\n          ? rebuildWriteHighlightCacheFull(rawPath, fileContent)\n          : updateWriteHighlightCacheIncremental(component.cache, rawPath, fileContent);\n      } else {\n        component.cache = undefined;\n      }\n```\n\nBoth quoted fragments verified at lines 253 and 258; nothing else changed.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1029
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_nEawujpB4Qtpq2O2XRcP7233|2abcc377-9c92-4e8f-88ad-6e1ec6281de0",
+              "args": {
+                "input": "[write.ts#6745]\nPUT 253.=259:\n+      if (fileContent !== null) {\n+        component.cache = context.argsComplete\n+          ? rebuildWriteHighlightCacheFull(rawPath, fileContent)\n+          : updateWriteHighlightCacheIncremental(component.cache, rawPath, fileContent);\n+      } else {\n+        component.cache = undefined;\n+      }"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[write.ts#6745]\\nPUT 253.=259:\\n+      if (fileContent !== null) {\\n+        component.cache = context.argsComplete\\n+          ? rebuildWriteHighlightCacheFull(rawPath, fileContent)\\n+          : updateWriteHighlightCacheIncremental(component.cache, rawPath, f… [truncated 75 chars]\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 1,
+      "success": true,
+      "tokens": {
+        "input": 16278,
+        "output": 782,
+        "reasoning": 199,
+        "total": 17060
+      },
+      "duration": 15961,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 2,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 1,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 1029
+      },
+      "editSuccessRate": 0.5,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-swap-if-else-008",
+      "name": "Structural Swap If Else 008",
+      "files": [
+        "output-accumulator.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-if-else",
+          "mutationCategory": "structural",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 20739,
+            "output": 2216,
+            "reasoning": 1540,
+            "total": 22955
+          },
+          "duration": 47207,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Swapped the two branch bodies in `appendDecodedText`:\n\n- `if (newlines === 0)` now holds `this.currentLineBytes += bytes; this.hasOpenLine = true;`\n- `else` now holds the `completedLines`/`tail` logic, ending with `this.hasOpenLine = tail.length > 0;`\n\nRe-read confirms the region matches the spec byte-for-byte; nothing else touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1064
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_SjHbCdPDVisVpWM8DHBF6880|e04b0b04-b0ef-4718-ad61-538fb502ea88",
+              "args": {
+                "input": "[output-accumulator.ts#AFE2]\nPUT 172.=180:\n+    if (newlines === 0) {\n+      this.currentLineBytes += bytes;\n+      this.hasOpenLine = true;\n+    } else {\n+      this.completedLines += newlines;\n+      const tail = text.slice(lastNewline + 1);\n+      this.currentLineBytes = byteLength(tail);\n+      this.hasOpenLine = tail.length > 0;\n+    }"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[output-accumulator.ts#AFE2]\\nPUT 172.=180:\\n+    if (newlines === 0) {\\n+      this.currentLineBytes += bytes;\\n+      this.hasOpenLine = true;\\n+    } else {\\n+      this.completedLines += newlines;\\n+      const tail = text.slice(lastNewline + 1);\\n+      this.… [truncated 86 chars]\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-if-else",
+          "mutationCategory": "structural",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 17363,
+            "output": 723,
+            "reasoning": 169,
+            "total": 18086
+          },
+          "duration": 38278,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Swapped the two branch bodies in `appendDecodedText` (`output-accumulator.ts`): the `if (newlines === 0)` branch now contains `this.currentLineBytes += bytes; this.hasOpenLine = true;`, and the `else` branch holds the newline-processing logic ending with `this.hasOpenLine = tail.length > 0;`. Verified the region reads exactly as specified; nothing else changed.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 732
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-if-else",
+          "mutationCategory": "structural",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 14576,
+            "output": 391,
+            "reasoning": 30,
+            "total": 14967
+          },
+          "duration": 24029,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Swapped. The `if (newlines === 0)` branch now holds `currentLineBytes += bytes; hasOpenLine = true;` and the `else` branch holds the tail-computing lines — matching the required regions exactly. Nothing else touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 404
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 2,
+      "success": true,
+      "tokens": {
+        "input": 14576,
+        "output": 391,
+        "reasoning": 30,
+        "total": 14967
+      },
+      "duration": 24029,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 404
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-swap-sibling-blocks-005",
+      "name": "Structural Swap Sibling Blocks 005",
+      "files": [
+        "12-full-control.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-sibling-blocks",
+          "mutationCategory": "structural",
+          "difficultyScore": 2,
+          "tokens": {
+            "input": 31702,
+            "output": 2040,
+            "reasoning": 542,
+            "total": 33742
+          },
+          "duration": 47260,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Swap applied and verified. The `createAgentSession` block (lines 51–61) now precedes the `try` block (lines 63–74), matching the expected output exactly — no other content changed.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 4,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 3,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 3920
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_eK75853pT8acNB8FB0zt8942|db2e5f50-41e3-4276-be6a-c52716909aff",
+              "args": {
+                "input": "[12-full-control.ts#76F7]\nPUT 51.=74:\n+const { session } = await createAgentSession({\n+  cwd,\n+  agentDir: '/tmp/my-agent',\n+  model,\n+  thinkingLevel: 'off',\n+  modelRuntime,\n+  resourceLoader,\n+  tools: ['read', 'bash'],\n+  sessionManager: SessionManager.inMemory(cwd),\n+  settingsManager,\n+});\n+\n+try {\n+  session.subscribe((event) => {\n+    if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {\n+      process.stdout.write(event.assistantMessageEvent.delta);\n+    }\n+  });\n+\n+  await session.prompt('List files in the current directory.');\n+  console.log();\n+} finally {\n+  session.dispose();\n+}"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[12-full-control.ts#76F7]\\nPUT 51.=74:\\n+const { session } = await createAgentSession({\\n+  cwd,\\n+  agentDir: '/tmp/my-agent',\\n+  model,\\n+  thinkingLevel: 'off',\\n+  modelRuntime,\\n+  resourceLoader,\\n+  tools: ['read', 'bash'],\\n+  sessionManager: SessionManager… [truncated 381 chars]\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_00_JPAOTrhDxeDG5C1WpTYP1826|bf902e66-ca1a-4e67-97fe-3ba73565e714",
+              "args": {
+                "old_string": "try {\n  session.subscribe((event) => {\n    if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {\n      process.stdout.write(event.assistantMessageEvent.delta);\n    }\n  });\n\n  await session.prompt('List files in the current directory.');\n  console.log();\n} finally {\n  session.dispose();\n}\n\nconst { session } = await createAgentSession({\n  cwd,\n  agentDir: '/tmp/my-agent',\n  model,\n  thinkingLevel: 'off',\n  modelRuntime,\n  resourceLoader,\n  tools: ['read', 'bash'],\n  sessionManager: SessionManager.inMemory(cwd),\n  settingsManager,\n});",
+                "new_string": "const { session } = await createAgentSession({\n  cwd,\n  agentDir: '/tmp/my-agent',\n  model,\n  thinkingLevel: 'off',\n  modelRuntime,\n  resourceLoader,\n  tools: ['read', 'bash'],\n  sessionManager: SessionManager.inMemory(cwd),\n  settingsManager,\n});\n\ntry {\n  session.subscribe((event) => {\n    if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {\n      process.stdout.write(event.assistantMessageEvent.delta);\n    }\n  });\n\n  await session.prompt('List files in the current directory.');\n  console.log();\n} finally {\n  session.dispose();\n}",
+                "input": "12-full-control.ts"
+              },
+              "error": "input must begin with \"[PATH#HASH]\" on the first non-blank line for anchored edits; got: \"12-full-control.ts\". Example: \"[src/foo.ts#1A2B]\" then edit ops.",
+              "category": "other"
+            },
+            {
+              "toolCallId": "call_00_d2Hnfd8Dz3kZyaPGPPdq2919|c19f1891-0dac-4279-b379-ceced1bd9c29",
+              "args": {
+                "input": "[12-full-control.ts#76F7]\nPUT 51.=74:\n+const { session } = await createAgentSession({\n+  cwd,\n+  agentDir: '/tmp/my-agent',\n+  model,\n+  thinkingLevel: 'off',\n+  modelRuntime,\n+  resourceLoader,\n+  tools: ['read', 'bash'],\n+  sessionManager: SessionManager.inMemory(cwd),\n+  settingsManager,\n+});\n+\n+try {\n+  session.subscribe((event) => {\n+    if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {\n+      process.stdout.write(event.assistantMessageEvent.delta);\n+    }\n+  });\n+\n+  await session.prompt('List files in the current directory.');\n+  console.log();\n+} finally {\n+  session.dispose();\n+}",
+                "path": "12-full-control.ts"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[12-full-control.ts#76F7]\\nPUT 51.=74:\\n+const { session } = await createAgentSession({\\n+  cwd,\\n+  agentDir: '/tmp/my-agent',\\n+  model,\\n+  thinkingLevel: 'off',\\n+  modelRuntime,\\n+  resourceLoader,\\n+  tools: ['read', 'bash'],\\n+  sessionManager: SessionManager… [truncated 381 chars]\",\n    \"path\": \"12-full-control.ts\"\n  },\n  \"normalized\": {\n    \"path\": \"12-full-control.ts\"\n  }\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 2
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-sibling-blocks",
+          "mutationCategory": "structural",
+          "difficultyScore": 2,
+          "tokens": {
+            "input": 15632,
+            "output": 1162,
+            "reasoning": 501,
+            "total": 16794
+          },
+          "duration": 41049,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Blocks swapped. `const { session } = await createAgentSession({ ... });` now precedes `try { ... } finally { ... }`, matching the required region exactly. Nothing else changed.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1321
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-sibling-blocks",
+          "mutationCategory": "structural",
+          "difficultyScore": 2,
+          "tokens": {
+            "input": 11426,
+            "output": 635,
+            "reasoning": 77,
+            "total": 12061
+          },
+          "duration": 31248,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. The `createAgentSession` block now precedes the `try {` block in `12-full-control.ts`, matching the specified order exactly. No other content was touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1286
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 2,
+      "success": true,
+      "tokens": {
+        "input": 11426,
+        "output": 635,
+        "reasoning": 77,
+        "total": 12061
+      },
+      "duration": 31248,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 1286
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-swap-sibling-blocks-012",
+      "name": "Structural Swap Sibling Blocks 012",
+      "files": [
+        "index.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-sibling-blocks",
+          "mutationCategory": "structural",
+          "difficultyScore": 14,
+          "tokens": {
+            "input": 28543,
+            "output": 4345,
+            "reasoning": 3479,
+            "total": 32888
+          },
+          "duration": 39380,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Swapped the two blocks inside `if (isOAuth) {` so the Claude Code identity assignment comes first, followed by the `if (context.systemPrompt) { ... push ... }` block, with the `else if (context.systemPrompt)` branch unchanged after it.\n\nVerified region (index.ts:410–434):\n\n```ts\n      // System prompt with Claude Code identity for OAuth\n      if (isOAuth) {\n        params.system = [\n          {\n            type: 'text',\n            text: \"You are Claude Code, Anthropic's official CLI for Claude.\",\n            cache_control: { type: 'ephemeral' },\n          },\n        ];\n        if (context.systemPrompt) {\n          params.system.push({\n            type: 'text',\n            text: sanitizeSurrogates(context.systemPrompt),\n            cache_control: { type: 'ephemeral' },\n          });\n        }\n      } else if (context.systemPrompt) {\n        ...\n      }\n```\n\nMatches the required text exactly; no other lines touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1640
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_I9FnCe0uxtui6ITfDmfj4997|381bccdc-d28e-4571-9dc8-3b615570bf0c",
+              "args": {
+                "input": "[index.ts#B79B]\nPUT 412.=425:\n+        params.system = [\n+          {\n+            type: 'text',\n+            text: \"You are Claude Code, Anthropic's official CLI for Claude.\",\n+            cache_control: { type: 'ephemeral' },\n+          },\n+        ];\n+        if (context.systemPrompt) {\n+          params.system.push({\n+            type: 'text',\n+            text: sanitizeSurrogates(context.systemPrompt),\n+            cache_control: { type: 'ephemeral' },\n+          });\n+        }\n"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[index.ts#B79B]\\nPUT 412.=425:\\n+        params.system = [\\n+          {\\n+            type: 'text',\\n+            text: \\\"You are Claude Code, Anthropic's official CLI for Claude.\\\",\\n+            cache_control: { type: 'ephemeral' },\\n+          },\\n+        ];\\n+ … [truncated 232 chars]\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-sibling-blocks",
+          "mutationCategory": "structural",
+          "difficultyScore": 14,
+          "tokens": {
+            "input": 24319,
+            "output": 2778,
+            "reasoning": 2051,
+            "total": 27097
+          },
+          "duration": 24807,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Swap applied and verified. Inside `if (isOAuth)`, `params.system` is now assigned the Claude Code identity first, then the `if (context.systemPrompt) { params.system.push(...) }` block appends the user prompt. The `else if (context.systemPrompt)` branch is untouched. No other code modified.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1512
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_KWmZYYmSfbdyaX8faD6B5371|4fa0b5b0-380b-466b-a577-d5267abf369d",
+              "args": {
+                "input": "[index.ts#B79B]\nPUT 412.=425:\n+        params.system = [\n+          {\n+            type: 'text',\n+            text: \"You are Claude Code, Anthropic's official CLI for Claude.\",\n+            cache_control: { type: 'ephemeral' },\n+          },\n+        ];\n+        if (context.systemPrompt) {\n+          params.system.push({\n+            type: 'text',\n+            text: sanitizeSurrogates(context.systemPrompt),\n+            cache_control: { type: 'ephemeral' },\n+          });\n+        }\n"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[index.ts#B79B]\\nPUT 412.=425:\\n+        params.system = [\\n+          {\\n+            type: 'text',\\n+            text: \\\"You are Claude Code, Anthropic's official CLI for Claude.\\\",\\n+            cache_control: { type: 'ephemeral' },\\n+          },\\n+        ];\\n+ … [truncated 232 chars]\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-sibling-blocks",
+          "mutationCategory": "structural",
+          "difficultyScore": 14,
+          "tokens": {
+            "input": 37753,
+            "output": 7326,
+            "reasoning": 6354,
+            "total": 45079
+          },
+          "duration": 62059,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. The two blocks are swapped within the `if (isOAuth)` branch:\n\n- `params.system = [...]` (Claude Code identity) now comes first.\n- The `if (context.systemPrompt) { params.system.push(...) }` block now follows it — which also fixes the latent bug of pushing onto an uninitialized `params.system`.\n- The `} else if (context.systemPrompt) { ... }` branch is untouched.\n\nVerified the edited region (index.ts:411–434) matches the task's expected output byte-for-byte; no other lines changed.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1926
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_TLhQqbXwoldTV85rF1sJ0187|ff3ac9da-c149-42d6-a999-d606b56716c5",
+              "args": {
+                "input": "[index.ts#B79B]\nPUT 411.=434:\n+      if (isOAuth) {\n+        params.system = [\n+          {\n+            type: 'text',\n+            text: \"You are Claude Code, Anthropic's official CLI for Claude.\",\n+            cache_control: { type: 'ephemeral' },\n+          },\n+        ];\n+        if (context.systemPrompt) {\n+          params.system.push({\n+            type: 'text',\n+            text: sanitizeSurrogates(context.systemPrompt),\n+            cache_control: { type: 'ephemeral' },\n+          });\n+        }\n+      } else if (context.systemPrompt) {\n+        params.system = [\n+          {\n+            type: 'text',\n+            text: sanitizeSurrogates(context.systemPrompt),\n+            cache_control: { type: 'ephemeral' },\n+          },\n+        ];\n+      }"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[index.ts#B79B]\\nPUT 411.=434:\\n+      if (isOAuth) {\\n+        params.system = [\\n+          {\\n+            type: 'text',\\n+            text: \\\"You are Claude Code, Anthropic's official CLI for Claude.\\\",\\n+            cache_control: { type: 'ephemeral' },\\n+     … [truncated 509 chars]\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 1,
+      "success": true,
+      "tokens": {
+        "input": 24319,
+        "output": 2778,
+        "reasoning": 2051,
+        "total": 27097
+      },
+      "duration": 24807,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 2,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 1,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 1512
+      },
+      "editSuccessRate": 0.5,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-wrap-redundant-if-004",
+      "name": "Structural Wrap Redundant If 004",
+      "files": [
+        "nodejs.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "wrap-redundant-if",
+          "mutationCategory": "structural",
+          "difficultyScore": 10,
+          "tokens": {
+            "input": 15043,
+            "output": 912,
+            "reasoning": 532,
+            "total": 15955
+          },
+          "duration": 17303,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Removed the `if (true) {` wrapper (line 482) and its closing brace, dedenting the body one level. The region now reads exactly as specified:\n\n```ts\n        stdout += chunk;\n        try {\n          options?.onStdout?.(chunk);\n        } catch (error) {\n          const cause = toError(error);\n          callbackError = new ExecutionError('callback_error', cause.message, cause);\n          onAbort();\n        }\n```\n\nNothing else modified.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 347
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "wrap-redundant-if",
+          "mutationCategory": "structural",
+          "difficultyScore": 10,
+          "tokens": {
+            "input": 16407,
+            "output": 615,
+            "reasoning": 38,
+            "total": 17022
+          },
+          "duration": 34494,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Removed `if (true) {` and its closing brace, dedented the body one level. Region now reads exactly as specified; nothing else changed.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1109
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_hpHxS3frhjE1P8d8hjp74851|531be768-ad48-4ae2-89c9-02a8bbf1ca19",
+              "args": {
+                "input": "[nodejs.ts#2991]\nPUT 482.=491:\n+        stdout += chunk;\n+        try {\n+          options?.onStdout?.(chunk);\n+        } catch (error) {\n+          const cause = toError(error);\n+          callbackError = new ExecutionError('callback_error', cause.message, cause);\n+          onAbort();\n+        }\n"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[nodejs.ts#2991]\\nPUT 482.=491:\\n+        stdout += chunk;\\n+        try {\\n+          options?.onStdout?.(chunk);\\n+        } catch (error) {\\n+          const cause = toError(error);\\n+          callbackError = new ExecutionError('callback_error', cause.message… [truncated 43 chars]\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "wrap-redundant-if",
+          "mutationCategory": "structural",
+          "difficultyScore": 10,
+          "tokens": {
+            "input": 13981,
+            "output": 845,
+            "reasoning": 264,
+            "total": 14826
+          },
+          "duration": 41745,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Removed the `if (true) {` wrapper and its closing brace, dedenting the body one level. Verified region now reads exactly as specified:\n\n```ts\n      child.stdout?.on('data', (chunk: string) => {\n        stdout += chunk;\n        try {\n          options?.onStdout?.(chunk);\n        } catch (error) {\n          const cause = toError(error);\n          callbackError = new ExecutionError('callback_error', cause.message, cause);\n          onAbort();\n        }\n      });\n```\n\nNothing else modified.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 820
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 2,
+      "success": true,
+      "tokens": {
+        "input": 13981,
+        "output": 845,
+        "reasoning": 264,
+        "total": 14826
+      },
+      "duration": 41745,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 820
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-wrap-redundant-if-010",
+      "name": "Structural Wrap Redundant If 010",
+      "files": [
+        "utils.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "wrap-redundant-if",
+          "mutationCategory": "structural",
+          "difficultyScore": 7,
+          "tokens": {
+            "input": 20678,
+            "output": 2622,
+            "reasoning": 1794,
+            "total": 23300
+          },
+          "duration": 45523,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Removed the `if (true) {` wrapper and its closing brace in `extractFileOpsFromMessage`, dedented the body one level, with blank lines exactly as specified. Verified the region now reads:\n\n```ts\n  if (message.role !== 'assistant') return;\n  if (!('content' in message) || !Array.isArray(message.content)) return;\n\n  for (const block of message.content) {\n    ...\n  }\n```\n\nNo other changes made.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1785
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "wrap-redundant-if",
+          "mutationCategory": "structural",
+          "difficultyScore": 7,
+          "tokens": {
+            "input": 7343,
+            "output": 693,
+            "reasoning": 44,
+            "total": 8036
+          },
+          "duration": 37472,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1791
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "wrap-redundant-if",
+          "mutationCategory": "structural",
+          "difficultyScore": 7,
+          "tokens": {
+            "input": 24514,
+            "output": 3963,
+            "reasoning": 2744,
+            "total": 28477
+          },
+          "duration": 57994,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "The first edit already produced the exact expected result (I had included the blank lines in its `new_string`); the failed second attempt was a redundant no-op. Verified current state at lines 25-48 matches the task's required region byte-for-byte: `if (true) {` and its closing brace removed, body dedented one level, blank-line grouping preserved.\n\nChange complete — nothing else was touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 1785
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 1,
+      "success": true,
+      "tokens": {
+        "input": 7343,
+        "output": 693,
+        "reasoning": 44,
+        "total": 8036
+      },
+      "duration": 37472,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 1791
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "unicode-unicode-hyphen-001",
+      "name": "Unicode Unicode Hyphen 001",
+      "files": [
+        "shared.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "unicode-hyphen",
+          "mutationCategory": "unicode",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 10834,
+            "output": 334,
+            "reasoning": 102,
+            "total": 11168
+          },
+          "duration": 21459,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. Line 3 of `shared.ts` now reads:\n\n```ts\nimport { uuidv7 } from '@earendil-works/pi-ai';\n```\n\nThe `\\u2013` en dash in `@earendil–works` was replaced with a plain hyphen. Verified in the edit response — no other lines touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 109
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 1,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "unicode-hyphen",
+          "mutationCategory": "unicode",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 10761,
+            "output": 235,
+            "reasoning": 33,
+            "total": 10996
+          },
+          "duration": 15550,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. Line 3 now reads `import { uuidv7 } from '@earendil-works/pi-ai';` with the ASCII hyphen replacing the U+2013 lookalike dash.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 109
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        },
+        {
+          "runIndex": 2,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "unicode-hyphen",
+          "mutationCategory": "unicode",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 21594,
+            "output": 1156,
+            "reasoning": 644,
+            "total": 22750
+          },
+          "duration": 46512,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Line 3 now reads `import { uuidv7 } from '@earendil-works/pi-ai';` with the ASCII hyphen replacing the U+2013 en dash. Nothing else changed.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 287
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_enV9PfXdtmu0cxmk0kfT2571|e15342f4-7f47-4e42-a7c9-d55e28919ef3",
+              "args": {
+                "input": "[shared.ts#CD90]\nPUT 3.=3:\n+import { uuidv7 } from '@earendil-works/pi-ai';"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[shared.ts#CD90]\\nPUT 3.=3:\\n+import { uuidv7 } from '@earendil-works/pi-ai';\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 1,
+      "success": true,
+      "tokens": {
+        "input": 10761,
+        "output": 235,
+        "reasoning": 33,
+        "total": 10996
+      },
+      "duration": 15550,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 109
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    }
+  ],
+  "summary": {
+    "successfulOneShotTasks": 22,
+    "totalOneShotSuccessTokens": {
+      "input": 590894,
+      "output": 44459,
+      "reasoning": 27333,
+      "total": 635353
+    },
+    "avgOneShotSuccessTokensPerTask": {
+      "input": 26859,
+      "output": 2021,
+      "reasoning": 1242,
+      "total": 28880
+    },
+    "medianOneShotSuccessTokensPerTask": {
+      "input": 20709,
+      "output": 954,
+      "reasoning": 537,
+      "total": 23128
+    },
+    "p1OneShotSuccessTokensPerTask": {
+      "input": 6720,
+      "output": 343,
+      "reasoning": 12,
+      "total": 7555
+    },
+    "p99OneShotSuccessTokensPerTask": {
+      "input": 66054,
+      "output": 12664,
+      "reasoning": 10358,
+      "total": 67858
+    },
+    "totalTasks": 22,
+    "totalRuns": 66,
+    "successfulRuns": 66,
+    "successfulTasks": 22,
+    "taskSuccessRate": 1,
+    "flakyTasks": 0,
+    "consistentlyPassingTasks": 22,
+    "totalTokens": {
+      "input": 426762,
+      "output": 33871,
+      "reasoning": 18328,
+      "total": 460633
+    },
+    "avgTokensPerTask": {
+      "input": 19398,
+      "output": 1540,
+      "reasoning": 833,
+      "total": 20938
+    },
+    "medianTokensPerTask": {
+      "input": 14993,
+      "output": 786,
+      "reasoning": 219,
+      "total": 15433
+    },
+    "p1TokensPerTask": {
+      "input": 5987,
+      "output": 238,
+      "reasoning": 12,
+      "total": 6897
+    },
+    "p99TokensPerTask": {
+      "input": 62775,
+      "output": 12414,
+      "reasoning": 8258,
+      "total": 64047
+    },
+    "totalDuration": 1027943,
+    "avgDurationPerTask": 46725,
+    "avgIndentScore": 0,
+    "totalToolCalls": {
+      "read": 34,
+      "edit": 34,
+      "write": 1,
+      "editSuccesses": 25,
+      "editFailures": 9,
+      "editWarnings": 0,
+      "editAutocorrects": 0,
+      "totalInputChars": 34429
+    },
+    "avgToolCallsPerTask": {
+      "read": 1.5454545454545454,
+      "edit": 1.5454545454545454,
+      "write": 0.045454545454545456,
+      "editSuccesses": 1.1363636363636365,
+      "editFailures": 0.4090909090909091,
+      "editWarnings": 0,
+      "editAutocorrects": 0,
+      "totalInputChars": 1564.9545454545455
+    },
+    "editSuccessRate": 0.7352941176470589,
+    "autocorrectFreeSuccessfulTasks": 22,
+    "autocorrectFreeSuccessRate": 1,
+    "autocorrectedBestRuns": 0,
+    "editAutocorrectRate": 0,
+    "timeoutRuns": 0,
+    "totalTimeoutRetries": 4,
+    "totalZeroToolRetries": 0,
+    "totalProviderFailureRetries": 0,
+    "ghostRuns": 0,
+    "transportFailureRuns": 0,
+    "mutationIntentMatchRate": 0.9545454545454546,
+    "editFailureCategories": {
+      "range-continuation": 0,
+      "unified-diff": 0,
+      "no-change": 0,
+      "hash-mismatch": 0,
+      "other": 52
+    },
+    "hashlineEditSubtypes": {
+      "PUT N.=N:": 34,
+      "PUT N.=M:": 22,
+      "CUT N.=M": 2,
+      "PUT >N:": 1
+    }
+  },
+  "startTime": "2026-08-11T03:38:13.007Z",
+  "endTime": "2026-08-11T03:44:55.566Z"
+}

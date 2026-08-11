@@ -1,0 +1,1905 @@
+{
+  "config": {
+    "provider": "opencode-go",
+    "model": "opencode-go/deepseek-v4-flash",
+    "runsPerTask": 1,
+    "timeout": 120000,
+    "connectionTimeout": 30000,
+    "maxTurns": 30,
+    "taskConcurrency": 6,
+    "guided": false,
+    "maxAttempts": 1,
+    "noOpRetryLimit": 2,
+    "maxTimeoutRetries": 3,
+    "maxProviderFailureRetries": 3,
+    "mutationScopeWindow": 20,
+    "inProcess": true,
+    "earlyStopOnMatch": true,
+    "conversationDumpDir": "/Users/jairopolanco/Projects/oh-my-pi/research_logs/omp_edit_ablation_D_both.dump"
+  },
+  "tasks": [
+    {
+      "id": "access-remove-optional-chain-001",
+      "name": "Access Remove Optional Chain 001",
+      "files": [
+        "uuid.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-optional-chain",
+          "mutationCategory": "access",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 11389,
+            "output": 219,
+            "reasoning": 40,
+            "total": 11608
+          },
+          "duration": 16705,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Applied. Line 5 now reads `if (globalThis.crypto?.getRandomValues) {`; nothing else changed.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 101
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 11389,
+        "output": 219,
+        "reasoning": 40,
+        "total": 11608
+      },
+      "duration": 16705,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 101
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "duplicate-duplicate-line-flip-004",
+      "name": "Duplicate Duplicate Line Flip 004",
+      "files": [
+        "tools-manager.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "duplicate-line-flip",
+          "mutationCategory": "duplicate",
+          "difficultyScore": 13,
+          "tokens": {
+            "input": 50143,
+            "output": 1576,
+            "reasoning": 815,
+            "total": 51719
+          },
+          "duration": 47803,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. Line 52 in `tools-manager.ts` (the `fd` win32 branch) now reads:\n\n```ts\n        const archStr = architecture === 'arm64' ? 'aarch64' : 'x86_64';\n```\n\nIt was the only `!==` variant — all other `archStr` copies (fd darwin/linux, rg darwin/win32) already used `===` and were left untouched.",
+          "toolCalls": {
+            "read": 7,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 336
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 50143,
+        "output": 1576,
+        "reasoning": 815,
+        "total": 51719
+      },
+      "duration": 47803,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 7,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 336
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "identifier-identifier-multi-edit-003",
+      "name": "Identifier Identifier Multi Edit 003",
+      "files": [
+        "config.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "identifier-multi-edit",
+          "mutationCategory": "identifier",
+          "difficultyScore": 8,
+          "tokens": {
+            "input": 56458,
+            "output": 1713,
+            "reasoning": 1028,
+            "total": 58171
+          },
+          "duration": 46099,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. All 3 occurrences of `nuinstallStep` in `makeSelfUpdateCommand` (config.ts lines 59, 62, 63) replaced with `uninstallStep`. Verified by re-reading the region: `if (!uninstallStep)`, `display: \\`${uninstallStep.display}...\\``, `steps: [uninstallStep, installStep]`. The parameter declaration at line 57 was already correct and untouched. No other changes made.",
+          "toolCalls": {
+            "read": 4,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 321
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 3
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 56458,
+        "output": 1713,
+        "reasoning": 1028,
+        "total": 58171
+      },
+      "duration": 46099,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 4,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 321
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "identifier-identifier-multi-edit-008",
+      "name": "Identifier Identifier Multi Edit 008",
+      "files": [
+        "model-resolver.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "identifier-multi-edit",
+          "mutationCategory": "identifier",
+          "difficultyScore": 14,
+          "tokens": {
+            "input": 40087,
+            "output": 1261,
+            "reasoning": 731,
+            "total": 41348
+          },
+          "duration": 46738,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Both occurrences of `csopedModels` replaced with `scopedModels`:\n\n- Line 309: `csopedModels.push(...)` → `scopedModels.push(...)` (inside the exact-match branch of `resolveModelScopeWithDiagnostics`)\n- Line 364: `if (!csopedModels.find(...))` → `if (!scopedModels.find(...))` (duplicate check)\n\nFull-file scan confirms no remaining `csopedModels` instances; nothing else was touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 272
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 2
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 40087,
+        "output": 1261,
+        "reasoning": 731,
+        "total": 41348
+      },
+      "duration": 46738,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 272
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "multi-composite-multi-edit-001",
+      "name": "Multi Composite Multi Edit 001",
+      "files": [
+        "initial-message.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 15750,
+            "output": 565,
+            "reasoning": 201,
+            "total": 16315
+          },
+          "duration": 32848,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "All three changes applied and verified against the file:\n\n1. Line 1: `@earendil-works/pi-ai` (hyphen replaces `\\u2013`)\n2. Line 27: `if (stdinContent !== undefined) {`\n3. Line 41: `initialImages: fileImages && fileImages.length > 0 ? fileImages : undefined,`\n\nNo other lines touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 287
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 3
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 15750,
+        "output": 565,
+        "reasoning": 201,
+        "total": 16315
+      },
+      "duration": 32848,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 287
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "multi-composite-multi-edit-006",
+      "name": "Multi Composite Multi Edit 006",
+      "files": [
+        "select-list.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 25713,
+            "output": 851,
+            "reasoning": 488,
+            "total": 26564
+          },
+          "duration": 33790,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Both changes applied and verified against the task spec:\n\n- Line 106: `if (!item) continue;`\n- Line 118: `if (startIndex > 0 || endIndex < this.filteredItems.length) {`\n\nNo other lines touched.",
+          "toolCalls": {
+            "read": 3,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 250
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 2
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 25713,
+        "output": 851,
+        "reasoning": 488,
+        "total": 26564
+      },
+      "duration": 33790,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 3,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 250
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "multi-composite-multi-edit-011",
+      "name": "Multi Composite Multi Edit 011",
+      "files": [
+        "retry.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 6,
+          "tokens": {
+            "input": 17787,
+            "output": 605,
+            "reasoning": 183,
+            "total": 18392
+          },
+          "duration": 15117,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "All three changes applied and verified in the edit response:\n\n1. Line 180: `!== 'aborted'` → `=== 'aborted'`\n2. Line 187: `onRetryFinished?.(false, ...)` → `onRetryFinished?.(true, ...)`\n3. Lines 192/194: `attempt > maxAttempts` → `attempt >= maxAttempts`; `callbacks.onRetryFinished?.` → `callbacks?.onRetryFinished?.`\n\nNothing else touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 445
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 2,
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 17787,
+        "output": 605,
+        "reasoning": 183,
+        "total": 18392
+      },
+      "duration": 15117,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 445
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "multi-composite-multi-edit-016",
+      "name": "Multi Composite Multi Edit 016",
+      "files": [
+        "terminal.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "composite-multi-edit",
+          "mutationCategory": "multi",
+          "difficultyScore": 10,
+          "tokens": {
+            "input": 81400,
+            "output": 1643,
+            "reasoning": 664,
+            "total": 83043
+          },
+          "duration": 66190,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Both edits applied and verified:\n\n1. `terminal.ts` field init: `private _kittyProtocolActive = true;` → `= false;`\n2. `stop()`: `const shouldDisableKittyProtocol = this.keyboardProtocolPushed && this._kittyProtocolActive;` → `|| this._kittyProtocolActive;`\n\nThe `drainInput()` variant already used `||` — left untouched, matching the task's \"edit exactly the block shown\" constraint. No other changes made.",
+          "toolCalls": {
+            "read": 3,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 2,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 455
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 81400,
+        "output": 1643,
+        "reasoning": 664,
+        "total": 83043
+      },
+      "duration": 66190,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 3,
+        "edit": 2,
+        "write": 0,
+        "editSuccesses": 2,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 455
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "operator-swap-increment-decrement-001",
+      "name": "Operator Swap Increment Decrement 001",
+      "files": [
+        "image.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-increment-decrement",
+          "mutationCategory": "operator",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 14260,
+            "output": 270,
+            "reasoning": 9,
+            "total": 14530
+          },
+          "duration": 21902,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Line 103 now reads `for (let index = 0; index < text.length; index++) {` — exactly the requested change, nothing else touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 124
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 14260,
+        "output": 270,
+        "reasoning": 9,
+        "total": 14530
+      },
+      "duration": 21902,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 124
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-duplicate-block-002",
+      "name": "Structural Duplicate Block 002",
+      "files": [
+        "chat-simple.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "duplicate-block",
+          "mutationCategory": "structural",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 23200,
+            "output": 733,
+            "reasoning": 383,
+            "total": 23933
+          },
+          "duration": 31870,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Duplicate `if (trimmed) {` block (lines 129–175) deleted. Region now reads exactly:\n\n```ts\n    }, 1000);\n  }\n```\n\n(lines 126–127), followed by the blank line and `};` closing `onSubmit`. First copy kept verbatim; nothing else touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 104
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "CUT N.=M": 1
+          },
+          "mutationIntentMatched": false,
+          "mutationIntentReason": "Target line mismatch at chat-simple.ts:128.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 23200,
+        "output": 733,
+        "reasoning": 383,
+        "total": 23933
+      },
+      "duration": 31870,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 104
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-move-distant-block-001",
+      "name": "Structural Move Distant Block 001",
+      "files": [
+        "13-session-runtime.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "move-distant-block",
+          "mutationCategory": "structural",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 29486,
+            "output": 3090,
+            "reasoning": 2529,
+            "total": 32576
+          },
+          "duration": 81504,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "toolCalls": {
+            "read": 2,
+            "edit": 4,
+            "write": 0,
+            "editSuccesses": 3,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 671
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_ET_lkEg3xwmwzlZwreFPLZT2298|7f76f94c-e488-4eb4-a5b3-3b55cbbd7dab",
+              "args": {
+                "input": "[13-session-runtime.ts#97EC]\nPUT >54:\n+let session = await bindSession();\n+const originalSessionFile = session.sessionFile;\n+console.log('Initial session:', originalSessionFile);"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[13-session-runtime.ts#97EC]\\nPUT >54:\\n+let session = await bindSession();\\n+const originalSessionFile = session.sessionFile;\\n+console.log('Initial session:', originalSessionFile);\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "CUT N.=M": 1,
+            "CUT N.=N": 1,
+            "PUT >N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 29486,
+        "output": 3090,
+        "reasoning": 2529,
+        "total": 32576
+      },
+      "duration": 81504,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 4,
+        "write": 0,
+        "editSuccesses": 3,
+        "editFailures": 1,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 671
+      },
+      "editSuccessRate": 0.75,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-move-distant-block-006",
+      "name": "Structural Move Distant Block 006",
+      "files": [
+        "rpc-process.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": false,
+          "patchApplied": true,
+          "verificationPassed": false,
+          "mutationType": "move-distant-block",
+          "mutationCategory": "structural",
+          "difficultyScore": 5,
+          "error": "File mismatch for rpc-process.ts",
+          "tokens": {
+            "input": 21868,
+            "output": 2180,
+            "reasoning": 1745,
+            "total": 24048
+          },
+          "duration": 56815,
+          "indentScore": 0,
+          "formattedEquivalent": false,
+          "diffStats": {
+            "linesChanged": 1,
+            "charsChanged": 1
+          },
+          "agentResponse": "Fixed. The `if (!parsed.id) { return; }` block now sits directly before `const pending = this.pendingRequests.get(parsed.id);`, and `pending.resolve(parsed as RpcResponse);` follows the delete — nothing else touched.\n\nVerified region (lines 108–120):\n\n```ts\n      case 'response': {\n        if (!parsed.id) {\n          return;\n        }\n        const pending = this.pendingRequests.get(parsed.id);\n        if (!pending) {\n          return;\n        }\n        this.pendingRequests.delete(parsed.id);\n        pending.resolve(parsed as RpcResponse);\n\n        return;\n      }\n```",
+          "diff": "@@ -115 @@\n         }\n         this.pendingRequests.delete(parsed.id);\n         pending.resolve(parsed as RpcResponse);\n+\n         return;\n       }\n ",
+          "toolCalls": {
+            "read": 3,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 166
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "CUT N.=M @reg": 1,
+            "PUT <N @reg": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": false,
+      "tokens": {
+        "input": 21868,
+        "output": 2180,
+        "reasoning": 1745,
+        "total": 24048
+      },
+      "duration": 56815,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 3,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 166
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": false,
+      "flakeSuccessRate": 0
+    },
+    {
+      "id": "structural-remove-case-label-002",
+      "name": "Structural Remove Case Label 002",
+      "files": [
+        "cli.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-case-label",
+          "mutationCategory": "structural",
+          "difficultyScore": 9,
+          "tokens": {
+            "input": 24610,
+            "output": 1636,
+            "reasoning": 1121,
+            "total": 26246
+          },
+          "duration": 36915,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Fixed. The region now reads exactly:\n\n```ts\n            break;\n          case 'info':\n          case 'progress':\n            console.log(event.message);\n            break;\n```\n\n`'info'` falls through to the `'progress'` handler; nothing else touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 2,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 1,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 272
+          },
+          "editFailures": [
+            {
+              "toolCallId": "call_00_upisUUz24exUrPar3UEF6247|55498903-f213-4722-a5bd-a52ca74c1274",
+              "args": {
+                "input": "[cli.ts#8776]\nPUT 69.=69:\n+          case 'info':\n"
+              },
+              "error": "Validation failed for tool \"edit\":\n  - path: path must be a string (was missing)\n  - old_string: old_string must be a string (was missing)\n  - new_string: new_string must be a string (was missing)\n\nReceived arguments:\n{\n  \"original\": {\n    \"input\": \"[cli.ts#8776]\\nPUT 69.=69:\\n+          case 'info':\\n\"\n  },\n  \"normalized\": {}\n}",
+              "category": "other"
+            }
+          ],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 24610,
+        "output": 1636,
+        "reasoning": 1121,
+        "total": 26246
+      },
+      "duration": 36915,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 2,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 1,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 272
+      },
+      "editSuccessRate": 0.5,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-remove-case-label-007",
+      "name": "Structural Remove Case Label 007",
+      "files": [
+        "branch-summarization.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-case-label",
+          "mutationCategory": "structural",
+          "difficultyScore": 12,
+          "tokens": {
+            "input": 21826,
+            "output": 781,
+            "reasoning": 416,
+            "total": 22607
+          },
+          "duration": 28473,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Added the fall-through `case 'model_change':` label directly before `case 'custom':`, removing the intervening blank line so the region reads exactly:\n\n```ts\n    case 'thinking_level_change':\n    case 'model_change':\n    case 'custom':\n```\n\nNo other changes made.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 217
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 21826,
+        "output": 781,
+        "reasoning": 416,
+        "total": 22607
+      },
+      "duration": 28473,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 217
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-swap-adjacent-lines-004",
+      "name": "Structural Swap Adjacent Lines 004",
+      "files": [
+        "compat.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-adjacent-lines",
+          "mutationCategory": "structural",
+          "difficultyScore": 6,
+          "tokens": {
+            "input": 19697,
+            "output": 503,
+            "reasoning": 165,
+            "total": 20200
+          },
+          "duration": 19749,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Swap applied. Lines 37–38 now read exactly:\n\n```ts\nimport { openAICodexResponsesApi } from './api/openai-codex-responses.lazy.ts';\nimport { openAICompletionsApi } from './api/openai-completions.lazy.ts';\n```\n\nVerified against the edit response snapshot — no other lines touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 246
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 19697,
+        "output": 503,
+        "reasoning": 165,
+        "total": 20200
+      },
+      "duration": 19749,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 246
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-swap-if-else-003",
+      "name": "Structural Swap If Else 003",
+      "files": [
+        "write.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-if-else",
+          "mutationCategory": "structural",
+          "difficultyScore": 8,
+          "tokens": {
+            "input": 16542,
+            "output": 557,
+            "reasoning": 217,
+            "total": 17099
+          },
+          "duration": 18971,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Swapped the two branch bodies in `write.ts`: the `if (fileContent !== null)` branch now rebuilds/updates the highlight cache, and the `else` branch sets `component.cache = undefined`. Verified the region matches the spec exactly (lines 253–259).",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 378
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 16542,
+        "output": 557,
+        "reasoning": 217,
+        "total": 17099
+      },
+      "duration": 18971,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 378
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-swap-if-else-008",
+      "name": "Structural Swap If Else 008",
+      "files": [
+        "output-accumulator.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-if-else",
+          "mutationCategory": "structural",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 16325,
+            "output": 537,
+            "reasoning": 136,
+            "total": 16862
+          },
+          "duration": 29361,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Swapped the two branch bodies in `appendDecodedText`:\n\n- `if (newlines === 0)` now runs `this.currentLineBytes += bytes; this.hasOpenLine = true;`\n- `else` now runs the `completedLines`/`tail` logic with `this.hasOpenLine = tail.length > 0;`\n\nVerified lines 172–180 match the task's spec byte-for-byte; nothing else changed.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 404
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 16325,
+        "output": 537,
+        "reasoning": 136,
+        "total": 16862
+      },
+      "duration": 29361,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 404
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-swap-sibling-blocks-005",
+      "name": "Structural Swap Sibling Blocks 005",
+      "files": [
+        "12-full-control.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-sibling-blocks",
+          "mutationCategory": "structural",
+          "difficultyScore": 2,
+          "tokens": {
+            "input": 17911,
+            "output": 5278,
+            "reasoning": 4789,
+            "total": 23189
+          },
+          "duration": 54708,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Swap applied and verified. The file now reads:\n\n- Lines 51–61: `const { session } = await createAgentSession({ ... });` — begins around line 51 as specified, with the blank line (62) then `try {` at 63.\n- Lines 63–74: the `try { ... } finally { session.dispose(); }` block, closing `}` at line 74.\n\nBlock contents, indentation, and blank lines preserved byte-for-byte; nothing else touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 703
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 17911,
+        "output": 5278,
+        "reasoning": 4789,
+        "total": 23189
+      },
+      "duration": 54708,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 703
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-swap-sibling-blocks-012",
+      "name": "Structural Swap Sibling Blocks 012",
+      "files": [
+        "index.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-sibling-blocks",
+          "mutationCategory": "structural",
+          "difficultyScore": 14,
+          "tokens": {
+            "input": 21116,
+            "output": 2688,
+            "reasoning": 2174,
+            "total": 23804
+          },
+          "duration": 30172,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Swapped the two blocks inside `if (isOAuth) {`: the `params.system = [...]` identity assignment now precedes the `if (context.systemPrompt) { params.system.push(...) }` block.\n\nVerified region (index.ts:410-434):\n- Line 411: `if (isOAuth) {` unchanged.\n- `params.system = [ ... \"You are Claude Code, Anthropic's official CLI for Claude.\" ... ];` now comes first, followed by the `if (context.systemPrompt) { ... push(...) }` block — matching the required text at line 422 verbatim.\n- `} else if (context.systemPrompt) {` block untouched.\n\nThis also fixes the actual bug: previously the push was executed before the array reassignment, so the custom system prompt was silently discarded in OAuth mode.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 563
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 21116,
+        "output": 2688,
+        "reasoning": 2174,
+        "total": 23804
+      },
+      "duration": 30172,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 563
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-wrap-redundant-if-004",
+      "name": "Structural Wrap Redundant If 004",
+      "files": [
+        "nodejs.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "wrap-redundant-if",
+          "mutationCategory": "structural",
+          "difficultyScore": 10,
+          "tokens": {
+            "input": 15931,
+            "output": 622,
+            "reasoning": 242,
+            "total": 16553
+          },
+          "duration": 29580,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Removed the `if (true) {` wrapper (lines 482/491) and dedented the body one level. The region now matches the expected output exactly:\n\n```ts\n        stdout += chunk;\n        try {\n          options?.onStdout?.(chunk);\n        } catch (error) {\n          const cause = toError(error);\n          callbackError = new ExecutionError('callback_error', cause.message, cause);\n          onAbort();\n        }\n      });\n```\n\nNothing else was modified.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 349
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 15931,
+        "output": 622,
+        "reasoning": 242,
+        "total": 16553
+      },
+      "duration": 29580,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 349
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "structural-wrap-redundant-if-010",
+      "name": "Structural Wrap Redundant If 010",
+      "files": [
+        "utils.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "wrap-redundant-if",
+          "mutationCategory": "structural",
+          "difficultyScore": 7,
+          "tokens": {
+            "input": 22184,
+            "output": 643,
+            "reasoning": 50,
+            "total": 22827
+          },
+          "duration": 26274,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Removed the `if (true) {` wrapper (line 25) and its closing brace, dedenting the body one level. The region now matches the expected text exactly:\n\n```ts\n  if (message.role !== 'assistant') return;\n  if (!('content' in message) || !Array.isArray(message.content)) return;\n\n  for (const block of message.content) {\n    ...\n  }\n```\n\nNothing else was touched.",
+          "toolCalls": {
+            "read": 2,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 2,
+            "editAutocorrects": 0,
+            "totalInputChars": 932
+          },
+          "editFailures": [],
+          "editWarnings": [
+            "Auto-prefixed bare body row(s) with `+`. Body rows must be `+TEXT` literal lines.",
+            "Auto-repaired a delimiter-balance mismatch in the replacement at line 25: dropped 1 duplicated trailing payload line(s) already present below the range. Issue the payload as the final desired content only — never restate or omit a closing bracket bordering the range."
+          ],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=M:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 22184,
+        "output": 643,
+        "reasoning": 50,
+        "total": 22827
+      },
+      "duration": 26274,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 2,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 2,
+        "editAutocorrects": 0,
+        "totalInputChars": 932
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "unicode-unicode-hyphen-001",
+      "name": "Unicode Unicode Hyphen 001",
+      "files": [
+        "shared.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "unicode-hyphen",
+          "mutationCategory": "unicode",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 10863,
+            "output": 283,
+            "reasoning": 78,
+            "total": 11146
+          },
+          "duration": 15581,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Line 3 now reads `import { uuidv7 } from '@earendil-works/pi-ai';` — en dash (`\\u2013`) replaced with a regular hyphen. No other lines touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 109
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 10863,
+        "output": 283,
+        "reasoning": 78,
+        "total": 11146
+      },
+      "duration": 15581,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 109
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    }
+  ],
+  "summary": {
+    "successfulOneShotTasks": 21,
+    "totalOneShotSuccessTokens": {
+      "input": 552678,
+      "output": 26054,
+      "reasoning": 16459,
+      "total": 578732
+    },
+    "avgOneShotSuccessTokensPerTask": {
+      "input": 26318,
+      "output": 1241,
+      "reasoning": 784,
+      "total": 27559
+    },
+    "medianOneShotSuccessTokensPerTask": {
+      "input": 21116,
+      "output": 733,
+      "reasoning": 383,
+      "total": 22827
+    },
+    "p1OneShotSuccessTokensPerTask": {
+      "input": 10968,
+      "output": 229,
+      "reasoning": 15,
+      "total": 11238
+    },
+    "p99OneShotSuccessTokensPerTask": {
+      "input": 76412,
+      "output": 4840,
+      "reasoning": 4337,
+      "total": 78069
+    },
+    "totalTasks": 22,
+    "totalRuns": 22,
+    "successfulRuns": 21,
+    "successfulTasks": 21,
+    "taskSuccessRate": 0.9545454545454546,
+    "flakyTasks": 0,
+    "consistentlyPassingTasks": 21,
+    "totalTokens": {
+      "input": 574546,
+      "output": 28234,
+      "reasoning": 18204,
+      "total": 602780
+    },
+    "avgTokensPerTask": {
+      "input": 26116,
+      "output": 1283,
+      "reasoning": 827,
+      "total": 27399
+    },
+    "medianTokensPerTask": {
+      "input": 21471,
+      "output": 757,
+      "reasoning": 400,
+      "total": 23008
+    },
+    "p1TokensPerTask": {
+      "input": 10973,
+      "output": 230,
+      "reasoning": 16,
+      "total": 11243
+    },
+    "p99TokensPerTask": {
+      "input": 76162,
+      "output": 4819,
+      "reasoning": 4314,
+      "total": 77820
+    },
+    "totalDuration": 787165,
+    "avgDurationPerTask": 35780,
+    "avgIndentScore": 0,
+    "totalToolCalls": {
+      "read": 45,
+      "edit": 27,
+      "write": 0,
+      "editSuccesses": 25,
+      "editFailures": 2,
+      "editWarnings": 2,
+      "editAutocorrects": 0,
+      "totalInputChars": 7705
+    },
+    "avgToolCallsPerTask": {
+      "read": 2.0454545454545454,
+      "edit": 1.2272727272727273,
+      "write": 0,
+      "editSuccesses": 1.1363636363636365,
+      "editFailures": 0.09090909090909091,
+      "editWarnings": 0.09090909090909091,
+      "editAutocorrects": 0,
+      "totalInputChars": 350.22727272727275
+    },
+    "editSuccessRate": 0.9259259259259259,
+    "autocorrectFreeSuccessfulTasks": 21,
+    "autocorrectFreeSuccessRate": 0.9545454545454546,
+    "autocorrectedBestRuns": 0,
+    "editAutocorrectRate": 0,
+    "timeoutRuns": 0,
+    "totalTimeoutRetries": 0,
+    "totalZeroToolRetries": 0,
+    "totalProviderFailureRetries": 0,
+    "ghostRuns": 0,
+    "transportFailureRuns": 0,
+    "mutationIntentMatchRate": 0.9545454545454546,
+    "editFailureCategories": {
+      "range-continuation": 0,
+      "unified-diff": 0,
+      "no-change": 0,
+      "hash-mismatch": 0,
+      "other": 2
+    },
+    "hashlineEditSubtypes": {
+      "PUT N.=N:": 17,
+      "PUT N.=M:": 9,
+      "CUT N.=M": 2,
+      "CUT N.=N": 1,
+      "PUT >N:": 1,
+      "CUT N.=M @reg": 1,
+      "PUT <N @reg": 1
+    }
+  },
+  "startTime": "2026-08-11T03:17:56.460Z",
+  "endTime": "2026-08-11T03:20:36.509Z"
+}

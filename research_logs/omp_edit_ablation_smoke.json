@@ -1,0 +1,297 @@
+{
+  "config": {
+    "provider": "opencode-go",
+    "model": "opencode-go/deepseek-v4-flash",
+    "runsPerTask": 1,
+    "timeout": 120000,
+    "connectionTimeout": 30000,
+    "maxTurns": 30,
+    "taskConcurrency": 32,
+    "guided": false,
+    "maxAttempts": 1,
+    "noOpRetryLimit": 2,
+    "maxTimeoutRetries": 3,
+    "maxProviderFailureRetries": 3,
+    "mutationScopeWindow": 20,
+    "inProcess": true,
+    "earlyStopOnMatch": true,
+    "conversationDumpDir": "/Users/jairopolanco/Projects/oh-my-pi/research_logs/omp_edit_ablation_smoke.dump"
+  },
+  "tasks": [
+    {
+      "id": "access-remove-optional-chain-001",
+      "name": "Access Remove Optional Chain 001",
+      "files": [
+        "uuid.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "remove-optional-chain",
+          "mutationCategory": "access",
+          "difficultyScore": 4,
+          "tokens": {
+            "input": 15749,
+            "output": 253,
+            "reasoning": 7,
+            "total": 16002
+          },
+          "duration": 34939,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Line 5 now reads `if (globalThis.crypto?.getRandomValues) {` — the only change made.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 101
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 15749,
+        "output": 253,
+        "reasoning": 7,
+        "total": 16002
+      },
+      "duration": 34939,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 101
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    },
+    {
+      "id": "call-swap-call-args-001",
+      "name": "Call Swap Call Args 001",
+      "files": [
+        "html.ts"
+      ],
+      "runs": [
+        {
+          "runIndex": 0,
+          "success": true,
+          "patchApplied": true,
+          "verificationPassed": true,
+          "mutationType": "swap-call-args",
+          "mutationCategory": "call",
+          "difficultyScore": 5,
+          "tokens": {
+            "input": 14178,
+            "output": 280,
+            "reasoning": 24,
+            "total": 14458
+          },
+          "duration": 28435,
+          "indentScore": 0,
+          "formattedEquivalent": true,
+          "diffStats": {
+            "linesChanged": 0,
+            "charsChanged": 0
+          },
+          "agentResponse": "Done. Line 44 now reads `const entity = html.slice(index + 1, semicolonIndex);` — exactly the requested change, nothing else touched.",
+          "toolCalls": {
+            "read": 1,
+            "edit": 1,
+            "write": 0,
+            "editSuccesses": 1,
+            "editFailures": 0,
+            "editWarnings": 0,
+            "editAutocorrects": 0,
+            "totalInputChars": 121
+          },
+          "editFailures": [],
+          "editWarnings": [],
+          "editAutocorrectCount": 0,
+          "hashlineEditSubtypes": {
+            "PUT N.=N:": 1
+          },
+          "mutationIntentMatched": true,
+          "mutationIntentReason": "Target line exactly matches expected fixture.",
+          "earlyStopped": true,
+          "retryStats": {
+            "timeoutRetries": 0,
+            "zeroToolRetries": 0,
+            "providerFailureRetries": 0
+          }
+        }
+      ],
+      "bestRunIndex": 0,
+      "success": true,
+      "tokens": {
+        "input": 14178,
+        "output": 280,
+        "reasoning": 24,
+        "total": 14458
+      },
+      "duration": 28435,
+      "indentScore": 0,
+      "toolCalls": {
+        "read": 1,
+        "edit": 1,
+        "write": 0,
+        "editSuccesses": 1,
+        "editFailures": 0,
+        "editWarnings": 0,
+        "editAutocorrects": 0,
+        "totalInputChars": 121
+      },
+      "editSuccessRate": 1,
+      "autocorrectFreeSuccess": true,
+      "flakeSuccessRate": 1
+    }
+  ],
+  "summary": {
+    "successfulOneShotTasks": 2,
+    "totalOneShotSuccessTokens": {
+      "input": 29927,
+      "output": 533,
+      "reasoning": 31,
+      "total": 30460
+    },
+    "avgOneShotSuccessTokensPerTask": {
+      "input": 14964,
+      "output": 267,
+      "reasoning": 16,
+      "total": 15230
+    },
+    "medianOneShotSuccessTokensPerTask": {
+      "input": 14964,
+      "output": 267,
+      "reasoning": 16,
+      "total": 15230
+    },
+    "p1OneShotSuccessTokensPerTask": {
+      "input": 14194,
+      "output": 253,
+      "reasoning": 7,
+      "total": 14473
+    },
+    "p99OneShotSuccessTokensPerTask": {
+      "input": 15733,
+      "output": 280,
+      "reasoning": 24,
+      "total": 15987
+    },
+    "totalTasks": 2,
+    "totalRuns": 2,
+    "successfulRuns": 2,
+    "successfulTasks": 2,
+    "taskSuccessRate": 1,
+    "flakyTasks": 0,
+    "consistentlyPassingTasks": 2,
+    "totalTokens": {
+      "input": 29927,
+      "output": 533,
+      "reasoning": 31,
+      "total": 30460
+    },
+    "avgTokensPerTask": {
+      "input": 14964,
+      "output": 267,
+      "reasoning": 16,
+      "total": 15230
+    },
+    "medianTokensPerTask": {
+      "input": 14964,
+      "output": 267,
+      "reasoning": 16,
+      "total": 15230
+    },
+    "p1TokensPerTask": {
+      "input": 14194,
+      "output": 253,
+      "reasoning": 7,
+      "total": 14473
+    },
+    "p99TokensPerTask": {
+      "input": 15733,
+      "output": 280,
+      "reasoning": 24,
+      "total": 15987
+    },
+    "totalDuration": 63374,
+    "avgDurationPerTask": 31687,
+    "avgIndentScore": 0,
+    "totalToolCalls": {
+      "read": 2,
+      "edit": 2,
+      "write": 0,
+      "editSuccesses": 2,
+      "editFailures": 0,
+      "editWarnings": 0,
+      "editAutocorrects": 0,
+      "totalInputChars": 222
+    },
+    "avgToolCallsPerTask": {
+      "read": 1,
+      "edit": 1,
+      "write": 0,
+      "editSuccesses": 1,
+      "editFailures": 0,
+      "editWarnings": 0,
+      "editAutocorrects": 0,
+      "totalInputChars": 111
+    },
+    "editSuccessRate": 1,
+    "autocorrectFreeSuccessfulTasks": 2,
+    "autocorrectFreeSuccessRate": 1,
+    "autocorrectedBestRuns": 0,
+    "editAutocorrectRate": 0,
+    "timeoutRuns": 0,
+    "totalTimeoutRetries": 0,
+    "totalZeroToolRetries": 0,
+    "totalProviderFailureRetries": 0,
+    "ghostRuns": 0,
+    "transportFailureRuns": 0,
+    "mutationIntentMatchRate": 1,
+    "editFailureCategories": {
+      "range-continuation": 0,
+      "unified-diff": 0,
+      "no-change": 0,
+      "hash-mismatch": 0,
+      "other": 0
+    },
+    "hashlineEditSubtypes": {
+      "PUT N.=N:": 2
+    }
+  },
+  "startTime": "2026-08-11T03:02:01.206Z",
+  "endTime": "2026-08-11T03:02:36.172Z"
+}
