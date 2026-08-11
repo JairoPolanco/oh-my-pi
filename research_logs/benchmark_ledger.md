@@ -287,6 +287,23 @@ Verified both halves live:
 - REJECT: real trials file with failed heldout (overfit) → pairedGate PASS but heldout FAIL → verdict reject → ledger v1 (reject) → skill STAYS staged.
 
 Cost: $0 (pure decision + file moves; the real-model trial collection is the metaharness's job, wired via the same gates).
+## Full-stack cohesion probe (harmony-001, supervised)
+
+ONE task, 7 steps, each mapped to a different harness feature: capability-gated reads (gate), durable tasks, artifacts, verification contract, full-file read (Context VM), memory recall, harness ledger. A = stock (gates off, no mnemopi), B = full harness.
+
+| Arm | Calls | Tools | Tokens | Wall | Cost | Steps |
+|---|---|---|---|---|---|---|
+| A baseline | 7 | 15 | 170.5k | 108s | $0.0041 | 6/7 (failed memory — no backend) |
+| B harmony | 16 | 25 | 841.1k | 63s | $0.0088 | **7/7** |
+
+**Features COMPOSE — verified at the op level**: B's kernel event log shows every bridge op genuinely executed (2 tasks.create, 2 tasks.list, artifacts.put, contract.create+verify, harness.hypothesis+recordEvaluation, and memory.recall ×4 finding the exact fact). The gate authorized all 25 tool calls; the Context VM preserved the early finding (#ensureKernelTrajectoryTap) through a full 9,283-line file read. A failed ONLY step 6 (memory) because it had no memory backend — every other feature it attempted worked.
+
+**Two honest frictions, neither a feature failure:**
+1. **Token cost is task-driven, not harness overhead**: B read agent-session.ts FULLY in 13 chunked reads as the task demanded; the ~100k-token file sits in context and is resent across 16 model calls. The Context VM is a correct no-op under budget (cache-optimal — established in the everyday analysis), so it does not compress here. A shortcut the read (grep) and paid less. The cost delta is the task's thoroughness requirement, not harness bloat.
+2. **Memory adoption still shows probing**: B called memory.recall 4× in one program (different queries) instead of trusting the first result. The instruction fix ("use them; do not re-derive") reduced but did not eliminate the model's verification instinct. The feature worked — the fact was found — but the model distrusts single recalls.
+
+**Verdict: the harness features compose correctly and cohesively (7/7 with op-level proof). The residual frictions are (a) the honest cost of full-file reads on long tasks (Context VM correctly stays a no-op under budget) and (b) memory's remaining adoption gap (model probes multiple recalls).** No feature fights another; the seam audit found one real conflict (skill-probe memory pollution, fixed d38b396a9) and three safe-by-construction seams.
+
 ## Everyday-use optimization batch (Context VM + memory, 2026-08-11, traced)
 
 Deep trace of BOTH dimensions on real omjai sessions (the user asked: can we make them better in everyday use?):
