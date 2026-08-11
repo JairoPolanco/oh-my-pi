@@ -39,6 +39,7 @@ const governor = new ProviderContextGovernor();
 
 afterEach(() => {
 	delete Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV];
+	delete Bun.env["OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE"];
 });
 
 describe("ProviderContextGovernor", () => {
@@ -385,5 +386,31 @@ describe("ProviderContextGovernor", () => {
 		for (let index = 0; index < messages.length; index++) {
 			expect(result.messages[index]).toBe(messages[index]);
 		}
+	});
+
+	test("benchmark window override shrinks the budget only when the gate is open", async () => {
+		// 6 messages sized like real turns (≈200 tokens each): a 2000-window
+		// model (budget ~1500) keeps everything. Forcing a 400-window budget
+		// (~300) MUST evict the low-value middle of the transcript.
+		const messages = [
+			textMessage("developer", "d".repeat(800), 0), // mandatory
+			textMessage("user", "u".repeat(800), 1),
+			textMessage("assistant", "history ".repeat(100), 2),
+			textMessage("user", "v".repeat(800), 3),
+			textMessage("assistant", "older ".repeat(100), 4),
+			textMessage("user", "w".repeat(800), 5), // mandatory (CURRENT turn)
+		];
+		Bun.env["OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE"] = "400";
+		// Gate closed: override must be ignored (zero behavior change off-arm).
+		const passthrough = await governor.transform({ messages }, MODEL);
+		expect(passthrough.messages).toHaveLength(6);
+
+		// Gate open + override: forced small budget engages eviction.
+		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
+		const evicted = await governor.transform({ messages }, MODEL);
+		expect(evicted.messages.length).toBeLessThan(6);
+		// Developer instruction and the current message survive.
+		expect(evicted.messages[0].role).toBe("developer");
+		expect(evicted.messages.at(-1)?.role).toBe("user");
 	});
 });

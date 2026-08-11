@@ -1,0 +1,41 @@
+{
+ "experiment": "context-stress-pressure-001",
+ "agent": "opencode-go/deepseek-v4-flash",
+ "files": [
+  "packages/coding-agent/src/eval/kernel-bridge.ts",
+  "packages/coding-agent/src/runtime/provider-context-governor.ts",
+  "packages/coding-agent/src/session/agent-session.ts",
+  "packages/coding-agent/src/task/executor.ts",
+  "packages/coding-agent/src/task/structured-subagent.ts",
+  "packages/kernel/src/host.ts",
+  "packages/kernel/src/effects/broker.ts",
+  "packages/kernel/src/capabilities/registry.ts"
+ ],
+ "pressureWindow": 6000,
+ "results": [
+  {
+   "arm": "A_baseline",
+   "timedOut": false,
+   "modelCalls": 18,
+   "toolCalls": 64,
+   "tokens": 1441650,
+   "wallMs": 86160,
+   "cost": 0.015155560000000002,
+   "readToolCalls": 16,
+   "earlyEvidenceSurvived": true,
+   "success": true
+  },
+  {
+   "arm": "B_pressure",
+   "timedOut": false,
+   "modelCalls": 11,
+   "toolCalls": 10,
+   "tokens": 114882,
+   "wallMs": 27311,
+   "cost": 0.0016701188,
+   "readToolCalls": 10,
+   "earlyEvidenceSurvived": true,
+   "success": true
+  }
+ ]
+}

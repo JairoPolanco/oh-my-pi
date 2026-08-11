@@ -253,9 +253,18 @@ Every feature we built now has real-model or mechanism evidence: effect gate ✅
 - FinanceClaw failures-as-events: gate fail-closes to a block result, never throws upward (verified in `#beforeToolCall` catch path).
 - PrimeAgent/pi RLM programmatic surface: `__kernel__` namespaces now documented in eval.md so the model knows it exists.
 
-## Dead-code batch (dead-code-001, 48052173b)
+## Context VM under REAL budget pressure (context-stress-pressure-001, supervised)
 
-Three control-plane gaps closed — every built feature now has a PRODUCTION caller, not just a mechanism:
+The prior real-model run (context-stress-real-001) measured NON-REGRESSION — a real 128k window never engages on ~50k of history, so the VM's eviction never fired. This run forces REAL pressure with a benchmark-only window override (`OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE`, read only when the governance gate is open — plain omp never sees it; pinned by regression test). B arm: same 8-file read-chain task, forced 6k window → history budget ≈ 4.5k vs ~100k+ of history → the VM MUST evict ~90% of the transcript every turn.
+
+| Arm | Calls | Tools | Tokens | Wall | Cost | Reads | Evidence survived |
+|---|---|---|---|---|---|---|---|
+| A baseline (no VM) | 18 | 64 | 1.44M | 86s | $0.0152 | 16 (every file re-read) | ✓ |
+| B pressure (VM, 6k window) | 11 | 10 | 114.9k | 27s | $0.0017 | 10 | ✓ |
+
+**Verdict: evidence survives REAL eviction pressure with a REAL model.** The early file-1 finding (kernelHostFor) survived a ~90% forced eviction per turn; the task completed correctly. The VM kept the model on-task (10 targeted reads vs the baseline's 16 wandering re-reads), 12.5x fewer tokens, 3x faster, 9x cheaper. Note: A's absolute numbers are high run-to-run variance (prior run's A was 3 calls/46.9k — the ungoverned model re-reads opportunistically; same-day A/B comparison is valid). Combined with the synthetic probe (41.6% compression WITH evidence) and the byte-stability pin: **Context VM = PROMOTE candidate — the last unmeasured claim (real-pressure evidence survival) is now closed.**
+
+## Dead-code batch (dead-code-001, 48052173b) — every built feature now has a PRODUCTION caller, not just a mechanism:
 - **Gateway daemon**: `connectSessionToGateway` had zero production callers. Session gate hook now attaches the live runtime (session id + model) to the control plane when `OMP_KERNEL_GATEWAY_PROJECT_DIR` is set (same opt-in flag as the daemon); best-effort, missing broker never affects the turn.
 - **Trusted-verdict ledger**: `recordEvaluation` had no caller. New `__kernel__.harness.recordEvaluation` bridge op (same gate as promote — the candidate cannot self-certify), `harness.evaluated` event kind, operator-scoped `harness.recordEvaluation` gateway method on `KernelHost` (idempotent on the daemon-shared gateway), and metaharness `recordExperimentVerdict` mapping the optimizer's recommendation to the ledger. Verified end-to-end: propose → gateway verdict → promote applies → head advances.
 - **Skill promotion evidence gate**: `manage_skill`/`learn` writes became live instantly (the write was the promotion — the audit smell). Wired but OFF by default (`OMP_KERNEL_SKILL_PROMOTION_GATE=1`): writes land in `staging/` (invisible to discovery), only a `promote: true` write moves a skill live, `skill.promoted` fires only for live skills, staging/active added to the symlink trust boundary. Kept off until the sandbox→replay→heldout pipeline connects (paste-9 directive).

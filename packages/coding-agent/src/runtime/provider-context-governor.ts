@@ -37,6 +37,15 @@ import { messageToCandidate } from "./omp-context-engine";
 /** Benchmark gate env var; metaharness flips it per experiment arm. */
 export const KERNEL_CONTEXT_GOVERNANCE_ENV = "OMP_KERNEL_CONTEXT_GOVERNANCE";
 
+/**
+ * Benchmark-only window override: forces the effective model window (and thus
+ * the history budget) regardless of the model descriptor. ONLY read when the
+ * governance gate is open — plain omp never sees it. Used by the long-horizon
+ * stress benchmark to force REAL eviction pressure with a real model (a real
+ * 128k window never engages on ~50k of history).
+ */
+const WINDOW_OVERRIDE_ENV = "OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE";
+
 /** Default budget when the model reports no context window. */
 const DEFAULT_CONTEXT_WINDOW = 128_000;
 
@@ -138,7 +147,12 @@ export class ProviderContextGovernor {
 		if (context.messages.length === 0) return context;
 
 		// B_history = B_model − output − system/tools − provider overhead.
-		const window = model.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+		// Benchmark window override (governance gate open only): forces real
+		// eviction pressure on real tasks — the honest way to measure the VM
+		// under pressure when the real model window dwarfs the history.
+		const override = Number(Bun.env[WINDOW_OVERRIDE_ENV]);
+		const window =
+			Number.isFinite(override) && override > 0 ? override : (model.contextWindow ?? DEFAULT_CONTEXT_WINDOW);
 		const reserved =
 			Math.floor(window * OUTPUT_RESERVE_FRACTION) +
 			Math.floor(window * SYSTEM_TOOLS_OVERHEAD_FRACTION) +

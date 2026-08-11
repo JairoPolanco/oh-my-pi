@@ -11,6 +11,7 @@
 
 ### Changed
 
+- Benchmark-only context-window override (`OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE`): forces the effective model window (and history budget) for the long-horizon stress benchmark; read ONLY when the governance gate is open — plain omp never sees it. Pinned by regression test (gate-closed → ignored; gate-open → eviction engages).
 - Capability creation is host-owned: the RLM bridge has no `capabilities.grant` primitive (inspection via `capabilities.effective`, questions via `policy.authorize`); subagent capability ancestry is established synchronously before child execution, with a child ⊆ parent subset verification.
 - Managed-skill promotion evidence gate (wired, off by default): `OMP_KERNEL_SKILL_PROMOTION_GATE=1` routes `manage_skill`/`learn` writes into a `staging/` area where discovery never loads them; only a `promote: true` write (the trusted evaluator's final body) moves a skill live, and the `skill.promoted` event fires only for live skills. Off by default — the sandbox→replay→heldout pipeline is not connected, so arming it would strand skills.
 - RLM bridge `harness.recordEvaluation` op: records a trusted promote/reject verdict into the harness ledger (same capability gate as `harness.promote`; the candidate cannot self-certify); metaharness `recordExperimentVerdict` maps the optimizer's recommendation to that op.
