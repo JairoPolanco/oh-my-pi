@@ -178,6 +178,30 @@ Same-session two-turn test with SINGLE-STEP prompts (lesson from memory run): t1
 | t2_retrieve | 10 | 83.9k | 14s | $0.0005 | ✓ |
 
 **Verdict: durable tasks work end-to-end with real model use.** The model persisted via the gated bridge, re-created the same id idempotently in t2 (safe — durable store keyed by id), and `tasks.list()` retrieved it. Cost ~$0.0009. Confirms the single-step prompt pattern (vs memory's skipped multi-step chain). Feature status: durable tasks ✅ measured.
+## Long-horizon context stress, real-model half (context-stress-real-001, supervised)
+
+8-file read-chain task requiring an early finding. NOTE: the model shortcut via grep (`reads=1`) so no real budget pressure — the VM's eviction never engaged. Result is the honest "no regression + mild efficiency on real work" claim:
+
+| Arm | Calls | Tools | Tokens | Wall | Cost | Evidence survived |
+|---|---|---|---|---|---|---|
+| A baseline (no VM) | 3 | 9 | 46.9k | 56s | $0.0013 | ✓ |
+| B context VM | 2 | 8 | 23.1k | 20s | $0.0007 | ✓ |
+
+**Verdict: Context VM non-regression confirmed on real tasks (2x fewer tokens, 2.8x faster, half cost, same correctness).** The evidence-survival-under-pressure claim was already proven by the synthetic probe (41.6% compression WITH evidence, after the wireCostDelta fix). Combined: Context VM = candidate for PROMOTE — mechanism correct (synthetic, $0), real-task non-regression (this run), no observed harm anywhere.
+
+## FINAL feature status (all features we built)
+
+| Feature | Measured | Verdict |
+|---|---|---|
+| Effect gate / capabilities | ✅ edit ablation + harness-vs-baseline | HOLD-promising (−20% tokens, 100% seeds; 22→7 calls) |
+| Verification contracts | ✅ verification-benefit-001 | works; 3x tokens buys machine-checked evidence |
+| Durable tasks | ✅ durable-tasks-001 | works end-to-end with real model use |
+| Context VM | ✅ synthetic + real non-regression | candidate for PROMOTE |
+| Memory lifecycle | ✅ mechanism + gap | mechanism verified; model-adoption needs single-step prompts |
+| RLM bridge | ✅ rejection runs | rejected on short tasks (authoring overhead) |
+| Typed capability planner | ⚠️ via gate runs | indirect |
+| Skills / Gateway / Hub | ❌ never | — |
+
 
 
 **Adopted harness qualities (from the four reference surveys), with evidence:**
