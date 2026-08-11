@@ -377,4 +377,20 @@ describe("EffectBroker", () => {
 		// auto-inheritance, so no fs.read capability → denied.
 		expect(broker.allows("child", { tool: "read", args: { path: "repo/x.ts" } })).toBe(false);
 	});
+
+	test("a workspaceRoot RESOLVER is honored per authorize — no stale cwd drift (dogfooding finding)", () => {
+		const registry = new CapabilityRegistry();
+		registry.grant("agent", { id: "fs.read", scope: "repo/**", effect: "read" });
+		// The root is captured mid-flight: a session that moves cwd must not
+		// leave the verifier canonicalizing against the OLD root while the
+		// gate broker uses the new one.
+		let root = "/repo-a";
+		const broker = new EffectBroker(new PolicyEngine(registry), undefined, { workspaceRoot: () => root });
+		expect(broker.allows("agent", { tool: "read", args: { path: "/repo-a/src/x.ts" } })).toBe(true);
+		// Session moves: the SAME broker now canonicalizes against the new
+		// root — the old absolute path escapes and is denied.
+		root = "/repo-b";
+		expect(broker.allows("agent", { tool: "read", args: { path: "/repo-a/src/x.ts" } })).toBe(false);
+		expect(broker.allows("agent", { tool: "read", args: { path: "/repo-b/src/x.ts" } })).toBe(true);
+	});
 });

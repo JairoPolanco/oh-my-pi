@@ -67,7 +67,24 @@ const TRANSIENT_KERNEL_DIRS = new Set<string>();
  * the edit benchmark's verification flagged `.omp/kernel/*.db` as
  * unexpected files in the task tree).
  */
-async function kernelDirFor(session: ToolSession): Promise<string> {
+/**
+ * Minimal session surface `kernelHostFor` / `kernelDirFor` depend on
+ * (dogfooding finding): the gate hook in agent-session adapts its session to
+ * this exact shape — typed here so the adapter needs no `as never` hole, and
+ * any new member the host requires becomes a compile error at the adapter
+ * instead of a silent runtime undefined.
+ */
+export interface KernelSessionAdapter {
+	cwd: string;
+	hasUI?: boolean;
+	getSessionFile?(): string | null;
+	getSessionId?(): string | null | undefined;
+	getKernelSessionId?(): string | null | undefined;
+	getAgentId?(): string | null | undefined;
+	getArtifactsDir?(): string | null;
+}
+
+async function kernelDirFor(session: KernelSessionAdapter): Promise<string> {
 	const sessionFile = session.getSessionFile?.() ?? null;
 	if (sessionFile) return path.join(path.dirname(sessionFile), "kernel");
 	const artifactsDir = session.getArtifactsDir?.() ?? null;
@@ -204,7 +221,7 @@ function sessionLiveModel(session: ToolSession): { provider: string; model: stri
  * bridge and the board tool so tasks/artifacts/events from either surface
  * land in the same store and event log.
  */
-export async function kernelHostFor(session: ToolSession): Promise<KernelHost> {
+export async function kernelHostFor(session: KernelSessionAdapter): Promise<KernelHost> {
 	// The whole actor tree shares ONE kernel authority tree (paste-6 P0 #1):
 	// subagents inherit the root's kernel session id, so every descendant
 	// resolves the SAME KernelHost — never a fresh host per child that would
@@ -231,8 +248,12 @@ export async function kernelHostFor(session: ToolSession): Promise<KernelHost> {
 			bootstrapMain: isRoot,
 			// The authorization root is the session's WORKSPACE (cwd), never
 			// the kernel storage dir (paste-7 P0 #5) — verifier/bash resources
-			// canonicalize against the real workspace.
-			workspaceRoot: session.cwd,
+			// canonicalize against the real workspace. Passed as a LIVE
+			// RESOLVER (dogfooding finding): the verifier broker canonicalizes
+			// against the current session cwd at authorize time, matching the
+			// gate broker — never a stale construction-time snapshot if the
+			// session cwd changes mid-flight.
+			workspaceRoot: () => session.cwd,
 		});
 		await host.warm();
 		HOSTS.set(kernelKey, host);

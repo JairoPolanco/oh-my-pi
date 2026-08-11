@@ -64,7 +64,14 @@ export class KernelHost implements Kernel {
 	/** Workspace root for effect resource canonicalization (paste-7 P0 #5). */
 	readonly workspaceRoot: string;
 
-	constructor(dir: string, options: { mainPrincipal?: string; bootstrapMain?: boolean; workspaceRoot?: string } = {}) {
+	constructor(
+		dir: string,
+		options: {
+			mainPrincipal?: string;
+			bootstrapMain?: boolean;
+			workspaceRoot?: string | (() => string | undefined);
+		} = {},
+	) {
 		this.dir = dir;
 		// The main agent's canonical identity comes from the SESSION (OMP's
 		// MAIN_AGENT_ID is "Main", capital M) — never hard-coded "main" here,
@@ -77,7 +84,17 @@ export class KernelHost implements Kernel {
 		// verifier/bash resources against the storage dir would mark every
 		// real workspace path as `outside:` and deny it. The workspace root
 		// must be passed explicitly by the session host.
-		this.workspaceRoot = options.workspaceRoot ?? path.dirname(dir);
+		//
+		// The root may be a LIVE RESOLVER (dogfooding finding): the broker
+		// canonicalizes at authorize time, so a session cwd change mid-flight
+		// can never leave the verifier canonicalizing against a stale root
+		// while the gate broker uses the live one. `workspaceRoot` below
+		// remains the construction-time snapshot for introspection.
+		const workspaceRootOption = options.workspaceRoot;
+		this.workspaceRoot =
+			typeof workspaceRootOption === "function"
+				? (workspaceRootOption() ?? path.dirname(dir))
+				: (workspaceRootOption ?? path.dirname(dir));
 		// bootstrapMain is EXPLICITLY passed by every production caller
 		// (kernel-bridge passes `isRoot`). Never default from the environment:
 		// a test or embedding that constructs a KernelHost without the option
@@ -104,7 +121,12 @@ export class KernelHost implements Kernel {
 		});
 		this.memory = new InMemoryMemoryBackend();
 		this.policy = new PolicyEngine(this.capabilities);
-		this.effects = new EffectBroker(this.policy, undefined, { workspaceRoot: this.workspaceRoot });
+		// Pass the LIVE resolver (not the snapshot) so the broker canonicalizes
+		// against the current session cwd at authorize time — never a stale
+		// root if the cwd changed after construction (dogfooding finding).
+		this.effects = new EffectBroker(this.policy, undefined, {
+			workspaceRoot: workspaceRootOption,
+		});
 		this.models = new RuleBasedModelRegistry();
 		// Verification commands go through the session policy: the verifier has
 		// no independent execution authority. A `process.exec` capability must

@@ -305,12 +305,12 @@ export class EffectBroker {
 	#policy: PolicyEngine;
 	#mapper: ToolEffectMapper;
 	#denyUnknown: boolean;
-	#workspaceRoot: string | undefined;
+	#workspaceRoot: string | (() => string | undefined) | undefined;
 
 	constructor(
 		policy: PolicyEngine,
 		mapper: ToolEffectMapper = mapToolEffectToOperation,
-		options: { denyUnknown?: boolean; workspaceRoot?: string } = {},
+		options: { denyUnknown?: boolean; workspaceRoot?: string | (() => string | undefined) } = {},
 	) {
 		this.#policy = policy;
 		this.#mapper = mapper;
@@ -318,10 +318,19 @@ export class EffectBroker {
 		this.#workspaceRoot = options.workspaceRoot;
 	}
 
+	/** Resolve the workspace root at AUTHORIZE time — a resolver stays live
+	 *  if the session cwd changes mid-flight (dogfooding finding), so the
+	 *  verifier broker and the gate broker can never canonicalize against
+	 *  different roots. */
+	#resolveRoot(): string | undefined {
+		const root = this.#workspaceRoot;
+		return typeof root === "function" ? root() : root;
+	}
+
 	/** Authorize one tool effect for an actor. Default deny; ALL mapped
 	 *  operations must pass (paste-7 P0 #3). */
 	authorize(actor: PrincipalId, effect: ToolEffect): EffectDecision {
-		const mapped = this.#mapper(effect, this.#workspaceRoot);
+		const mapped = this.#mapper(effect, this.#resolveRoot());
 		if (!Array.isArray(mapped)) {
 			if (mapped === PURE_EFFECT) {
 				// Explicitly classified pure: no external side effect.

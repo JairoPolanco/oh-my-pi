@@ -108,6 +108,10 @@ import type { Settings, SkillsSettings } from "../config/settings";
 import { onAppendOnlyModeChanged, onModelRolesChanged } from "../config/settings";
 import { RawSseDebugBuffer } from "../debug/raw-sse-buffer";
 import { getFileSnapshotStore } from "../edit/file-snapshot-store";
+// Type-only import of the kernel host's minimal session surface — no runtime
+// edge, so it does NOT recreate the tools/learn → kernel-bridge → session
+// cycle the lazy import below exists to break.
+import type { KernelSessionAdapter } from "../eval/kernel-bridge";
 import type { PythonResult } from "../eval/py/executor";
 import type { BashResult } from "../exec/bash-executor";
 import type { TtsrManager } from "../export/ttsr";
@@ -3249,17 +3253,20 @@ export class AgentSession {
 		if (Bun.env.OMP_KERNEL_EFFECT_GATE === "1") {
 			const { authorizeToolEffect, kernelHostFor } = await import("../eval/kernel-bridge");
 			try {
-				// Minimal ToolSession-shaped adapter: the kernel dir resolves
-				// from the session file/cwd; everything else the broker needs
-				// is the tool name + args passed directly below.
-				const adapter = {
+				// Minimal session-shaped adapter for the kernel host: the
+				// kernel dir resolves from the session file/cwd; everything
+				// else the broker needs is the tool name + args passed
+				// directly below. TYPED as KernelSessionAdapter — a member
+				// the host needs becomes a compile error here, never a
+				// silent `as never` undefined.
+				const adapter: KernelSessionAdapter = {
 					cwd: this.sessionManager.getCwd(),
 					hasUI: false,
 					getSessionFile: () => this.sessionManager.getSessionFile() ?? null,
 					getSessionId: () => this.sessionId,
 					getKernelSessionId: () => this.getKernelSessionId(),
 					getAgentId: () => this.getAgentId(),
-				} as never;
+				};
 				const host = await kernelHostFor(adapter);
 				const gate = await authorizeToolEffect({
 					host,
