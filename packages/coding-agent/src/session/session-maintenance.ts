@@ -40,6 +40,7 @@ import {
 	shouldUseProviderNativeCompaction,
 } from "@oh-my-pi/pi-agent-core/compaction";
 import {
+	CONSUMED_READ_GROUP_MIN_TOKENS,
 	DEFAULT_PRUNE_CONFIG,
 	pruneSupersededToolResults,
 	pruneToolOutputs,
@@ -365,8 +366,8 @@ export class SessionMaintenance {
 	 * provider prompt cache.
 	 */
 	async #pruneStaleToolResults(): Promise<{ prunedCount: number; tokensSaved: number } | undefined> {
-		const { supersedeReads, dropUseless } = this.#host.settings.getGroup("compaction");
-		if (!supersedeReads && !dropUseless) return undefined;
+		const { supersedeReads, dropUseless, elideConsumedReads } = this.#host.settings.getGroup("compaction");
+		if (!supersedeReads && !dropUseless && !elideConsumedReads) return undefined;
 		const branchEntries = this.#host.sessionManager.getBranch();
 		const keepBoundaryId = getLatestCompactionEntry(branchEntries)?.firstKeptEntryId;
 		const result = pruneSupersededToolResults(
@@ -374,6 +375,7 @@ export class SessionMaintenance {
 			this.#withPlanProtection({
 				supersedeKey: supersedeReads ? readToolSupersedeKey : undefined,
 				pruneUseless: dropUseless,
+				consumedReadGroupMinTokens: elideConsumedReads ? CONSUMED_READ_GROUP_MIN_TOKENS : undefined,
 				protectedTools: [...DEFAULT_PRUNE_CONFIG.protectedTools],
 				// Never re-write summarized-away entries; only flush the whole sent
 				// region once the cache is genuinely cold (idle exceeds the 1h TTL).

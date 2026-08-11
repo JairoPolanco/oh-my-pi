@@ -45,14 +45,17 @@ const PROMPT = `Complete ALL of the following steps in order, using the eval too
 2. Via the kernel bridge: create a durable task with id "harmony-task-1", objective "full-stack cohesion probe".
 3. Via the kernel bridge: put the artifact text "harmony-probe-artifact" and note the returned id.
 4. Via the kernel bridge: create a verification contract id "harmony-contract-1" with check { kind: "fileExists", path: "package.json" }, then verify it and report the pass result.
-5. Read packages/coding-agent/src/session/agent-session.ts FULLY (no limit). While reading, note the exact name of the private method that attaches the kernel trajectory tap.
+5. Find the name of the private method in packages/coding-agent/src/session/agent-session.ts that attaches the kernel trajectory tap. Use grep for "ensureKernelTrajectoryTap" or a targeted read around the match — do NOT read the whole file.
 6. Via the kernel bridge: recall memory with query "kernel effect gate env var". Report the exact fact text if one comes back.
 7. Via the kernel bridge: propose a harness hypothesis (component "context-heuristic", observation "cohesion probe", hypothesis "harness features compose") and record evaluation "reject".
 
 FINISH with a numbered summary: for each of the 7 steps, one line — step, result, and the value you got.`;
 
 /** Verify each step's output has the required evidence. */
-function verify(last: string, _toolsUsed: string[]): { pass: boolean; steps: Record<number, boolean> } {
+function verify(
+	last: string,
+	reads: string[],
+): { pass: boolean; steps: Record<number, boolean>; wholeFileRead: boolean } {
 	const steps: Record<number, boolean> = {
 		1: /KernelHost/.test(last) && /EffectBroker/.test(last),
 		2: /harmony-task-1/.test(last),
@@ -62,7 +65,11 @@ function verify(last: string, _toolsUsed: string[]): { pass: boolean; steps: Rec
 		6: /OMP_KERNEL_EFFECT_GATE/.test(last),
 		7: /reject/.test(last),
 	};
-	return { pass: Object.values(steps).every(Boolean), steps };
+	// Cost guard: step 5 must be solved with grep/targeted reads, NOT by reading
+	// the whole 9,283-line file (that is the resend-tax pattern the elision pass
+	// exists for; the task must not force it).
+	const wholeFileRead = reads.some(p => p === "packages/coding-agent/src/session/agent-session.ts");
+	return { pass: Object.values(steps).every(Boolean), steps, wholeFileRead };
 }
 
 async function runArm(arm: string): Promise<Record<string, unknown>> {
@@ -70,6 +77,11 @@ async function runArm(arm: string): Promise<Record<string, unknown>> {
 		Bun.env.OMP_KERNEL_EFFECT_GATE = "1";
 		Bun.env.OMP_KERNEL_CONTEXT_GOVERNANCE = "1";
 		Bun.env.PI_CONFIG_FILES = OMAJI_CONFIG;
+		// Measure the VM's real eviction value: force a realistic window so the
+		// governor actually engages instead of being a no-op under a 1M window.
+		const windowOverride = Bun.env.HARMONY_WINDOW_OVERRIDE;
+		if (windowOverride) Bun.env.OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE = windowOverride;
+		else delete Bun.env.OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE;
 	} else {
 		delete Bun.env.OMP_KERNEL_EFFECT_GATE;
 		delete Bun.env.OMP_KERNEL_CONTEXT_GOVERNANCE;
@@ -124,7 +136,28 @@ async function runArm(arm: string): Promise<Record<string, unknown>> {
 				)
 				.map((p: { name: string }) => p.name);
 		});
-		const verification = verify(last, toolsUsed);
+		const reads = (session.messages ?? []).flatMap((m: unknown) => {
+			if (m === null || typeof m !== "object" || !("content" in m)) return [];
+			const content = m.content;
+			if (!Array.isArray(content)) return [];
+			return content
+				.filter(
+					(p: unknown) =>
+						p !== null &&
+						typeof p === "object" &&
+						"type" in p &&
+						p.type === "toolCall" &&
+						"name" in p &&
+						p.name === "read" &&
+						"arguments" in p &&
+						p.arguments !== null &&
+						typeof p.arguments === "object" &&
+						"path" in p.arguments &&
+						typeof p.arguments.path === "string",
+				)
+				.map((p: { arguments: { path: string } }) => p.arguments.path);
+		});
+		const verification = verify(last, reads);
 		const record = {
 			arm,
 			timedOut,
@@ -136,9 +169,10 @@ async function runArm(arm: string): Promise<Record<string, unknown>> {
 			...verification,
 			stepsPassed: Object.values(verification.steps).filter(Boolean).length,
 			toolsUsed,
+			reads,
 		};
 		console.log(
-			`${arm.padEnd(10)} ${timedOut ? "TIMEOUT" : "done  "} calls=${stats.assistantMessages} tools=${stats.toolCalls} tokens=${stats.tokens.total} wall=${Math.round(wallMs)}ms cost=$${stats.cost.toFixed(4)} steps=${record.stepsPassed}/7 success=${record.pass} tools=[${[...new Set(toolsUsed)].join(",")}]`,
+			`${arm.padEnd(10)} ${timedOut ? "TIMEOUT" : "done  "} calls=${stats.assistantMessages} tools=${stats.toolCalls} tokens=${stats.tokens.total} wall=${Math.round(wallMs)}ms cost=$${stats.cost.toFixed(4)} steps=${record.stepsPassed}/7 success=${record.pass} wholeFile=${record.wholeFileRead} tools=[${[...new Set(toolsUsed)].join(",")}]`,
 		);
 		return record;
 	} finally {
@@ -148,7 +182,9 @@ async function runArm(arm: string): Promise<Record<string, unknown>> {
 }
 
 const results: Array<Record<string, unknown>> = [];
-for (const arm of ["A_baseline", "B_harmony"]) {
+const onlyArm = Bun.env.HARMONY_ONLY_ARM;
+const arms = onlyArm ? [onlyArm] : ["A_baseline", "B_harmony"];
+for (const arm of arms) {
 	results.push(await runArm(arm));
 }
 await Bun.write(
@@ -156,3 +192,7 @@ await Bun.write(
 	`${JSON.stringify({ experiment: "harmony-001", agent: MODEL, results }, null, 1)}\n`,
 );
 console.log("\nrecord -> research_logs/harmony_001.jsonl");
+// Teardown (session.dispose/authStorage.close) can leave an open provider
+// keep-alive handle that keeps the process alive for minutes after the
+// measurement is done. The record is written — exit now.
+process.exit(0);

@@ -304,6 +304,24 @@ ONE task, 7 steps, each mapped to a different harness feature: capability-gated 
 
 **Verdict: the harness features compose correctly and cohesively (7/7 with op-level proof). The residual frictions are (a) the honest cost of full-file reads on long tasks (Context VM correctly stays a no-op under budget) and (b) memory's remaining adoption gap (model probes multiple recalls).** No feature fights another; the seam audit found one real conflict (skill-probe memory pollution, fixed d38b396a9) and three safe-by-construction seams.
 
+### Cost-lever follow-up (2026-08-11): why B was 5x, and what actually fixes it
+
+**Root cause quantified**: the model's window is 1M tokens, so EVERY harness cost mechanism is dormant — compaction triggers at ~85% of window (~890k), the Context VM is a no-op under budget (~750k optional), snapcompact never fires. The 92k-token full-file read entered context mid-session and was re-sent verbatim on ~9 subsequent calls = ~800k tokens = 98% of B's total. A shortcut the read (grep) → 170k. The read tool itself caps at 3000 lines/50KB per call, so files larger than that are ALWAYS read in chunks — the resend tax is an everyday pattern, not a probe artifact.
+
+**Measured levers (B arm, 7/7 all runs):**
+
+| Variant | Calls | Tokens | Wall | Cost |
+|---|---|---|---|---|
+| B original (forced full-file read) | 16 | 841k | 63s | $0.0088 |
+| B + forced 128k window (VM engages) | 10 | 568k | 80s | $0.0094 |
+| **B + honest task design (grep, no full read)** | **5** | **72k** | **34s** | **$0.0016** |
+
+The task design WAS the dominant cost driver: demanding a 9,283-line read forced 92k tokens into context no matter what. Fixing the probe (grep for `#ensureKernelTrajectoryTap` instead of "read FULLY") cut cost 5.5x and calls 3.2x while keeping 7/7. The window override engaged the VM (-32% tokens) but cannot beat not-loading-the-file in the first place.
+
+**Production fix shipped**: `compaction.elideConsumedReads` (default true) — consumed same-file read group elision in the per-turn supersede pass. Files over the read tool's single-call cap are always read in chunks; chunk selectors differ so the supersede key never collides them and the chunks accumulate (the resend tax). The new collector groups read results by base path and elides every member except the newest once the group exceeds 16k tokens, under the same cache guard as supersede (small suffix or idle — mid-session warm-prefix mutation is never worth it). 6 regression tests in `supersede-prune.test.ts`. The probe now also asserts `wholeFileRead === false` (cost guard on step 5).
+
+**Honest cache economics**: with provider prompt caching, mid-session elision of a large warm read is a net LOSS (suffix cacheWrite premium > discounted resend savings) — the existing guard is correct. Group elision's value is long sessions that accumulate chunked reads and flush them at idle/compaction, plus token-count/rate-limit/latency savings on every resend.
+
 ## Everyday-use optimization batch (Context VM + memory, 2026-08-11, traced)
 
 Deep trace of BOTH dimensions on real omjai sessions (the user asked: can we make them better in everyday use?):

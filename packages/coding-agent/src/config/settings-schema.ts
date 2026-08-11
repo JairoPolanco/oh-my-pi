@@ -2366,6 +2366,18 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"compaction.elideConsumedReads": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "context",
+			group: "Compaction",
+			label: "Elide Consumed Read Groups",
+			description:
+				"Prune older chunked reads of the same file once the group is large (files over the single-call line/byte cap are always read in chunks; without this they accumulate and are re-sent on every later call). Cache-aware: fires at idle or on a small suffix",
+		},
+	},
+
 	// Experimental: snapcompact inline imaging (transient, per-request; never persisted)
 	"snapcompact.systemPrompt": {
 		type: "enum",
@@ -5692,6 +5704,7 @@ export interface CompactionSettings {
 	idleTimeoutSeconds: number;
 	supersedeReads: boolean;
 	dropUseless: boolean;
+	elideConsumedReads: boolean;
 }
 
 export interface RecapSettings {

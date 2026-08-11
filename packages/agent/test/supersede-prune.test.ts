@@ -655,3 +655,121 @@ describe("cache-stable boundary — warm prefix protection", () => {
 		expect(resultMessage(result2).prunedAt).toBeDefined(); // at/after boundary, in tail -> pruned
 	});
 });
+
+describe("consumed read group elision (harmony: chunked-read resend tax)", () => {
+	// The read tool caps single calls at DEFAULT_MAX_LINES/DEFAULT_MAX_BYTES, so a
+	// file larger than the cap is ALWAYS read in chunks. Chunk selectors differ
+	// (`:1-800` vs `:801-1600`), so the supersede key never collides them and the
+	// chunks accumulate in the transcript, re-sent verbatim on every later call.
+	// Group elision prunes every member except the newest once the group is large.
+	const CHUNK = "const chunkValue = computeSomething(123456789);\n".repeat(600); // ~17k tokens
+	const GROUP_MIN = 16_000;
+
+	/** Three chunked reads of one file with distinct selectors + a tail message. */
+	function chunkedSession(tail = true): { entries: SessionEntry[]; results: SessionMessageEntry[] } {
+		const results: SessionMessageEntry[] = [];
+		const entries: SessionEntry[] = [];
+		for (let i = 0; i < 3; i++) {
+			const [call, result] = readPair(`src/big.ts:${i * 800 + 1}-${(i + 1) * 800}`, CHUNK, T0 + i * 1_000);
+			entries.push(call, result);
+			results.push(result);
+		}
+		if (tail) entries.push(textEntry(BIG_TEXT, T0 + 3_000));
+		return { entries, results };
+	}
+
+	test("idle flush prunes all but the newest chunk of a large same-file group", () => {
+		const { entries, results } = chunkedSession();
+		const result = pruneSupersededToolResults(
+			entries,
+			cfg({
+				consumedReadGroupMinTokens: GROUP_MIN,
+				suffixTokenLimit: 0, // warm-tail path blocked; only idle can fire
+				idleFlushMs: 30 * 60_000,
+				now: T0 + 3_000 + 31 * 60_000,
+			}),
+		);
+
+		expect(result.prunedCount).toBe(2);
+		expect(resultText(results[0])).toBe("[Consumed reads of src/big.ts elided — re-read on demand]");
+		expect(resultText(results[1])).toBe("[Consumed reads of src/big.ts elided — re-read on demand]");
+		expect(resultMessage(results[0]).prunedAt).toBeDefined();
+		expect(resultMessage(results[1]).prunedAt).toBeDefined();
+		// Newest chunk kept as the model's working copy.
+		expect(resultText(results[2])).toBe(CHUNK);
+		expect(resultMessage(results[2]).prunedAt).toBeUndefined();
+	});
+
+	test("warm suffix blocks group elision (cache guard) — no mid-session mutation", () => {
+		const { entries, results } = chunkedSession();
+		// BIG_TEXT tail pushes every chunk's suffix past the limit; no idle gap.
+		const result = pruneSupersededToolResults(
+			entries,
+			cfg({ consumedReadGroupMinTokens: GROUP_MIN, suffixTokenLimit: 200, now: T0 + 3_000 }),
+		);
+
+		expect(result.prunedCount).toBe(0);
+		expect(resultText(results[0])).toBe(CHUNK);
+		expect(resultText(results[1])).toBe(CHUNK);
+		expect(resultText(results[2])).toBe(CHUNK);
+		expect(results.every(r => resultMessage(r).prunedAt === undefined)).toBe(true);
+	});
+
+	test("suffix below the limit prunes older group members without idle", () => {
+		const { entries, results } = chunkedSession(false); // no tail message
+		// Wide suffix limit: member 0's suffix (chunks 1+2 ≈ 34k) and member 1's
+		// (chunk 2 ≈ 17k) both fit, so the tail path fires — no idle needed.
+		const result = pruneSupersededToolResults(
+			entries,
+			cfg({ consumedReadGroupMinTokens: GROUP_MIN, suffixTokenLimit: 100_000, now: T0 + 3_000 }),
+		);
+
+		expect(result.prunedCount).toBe(2);
+		expect(resultMessage(results[0]).prunedAt).toBeDefined();
+		expect(resultMessage(results[1]).prunedAt).toBeDefined();
+		expect(resultText(results[2])).toBe(CHUNK);
+	});
+
+	test("groups under the token floor are untouched", () => {
+		const [call1, result1] = readPair("src/small.ts:1-100", FILE_CONTENT, T0);
+		const [call2, result2] = readPair("src/small.ts:101-200", FILE_CONTENT, T0 + 1_000);
+		const [call3, result3] = readPair("src/small.ts:201-300", FILE_CONTENT, T0 + 2_000);
+		const entries: SessionEntry[] = [call1, result1, call2, result2, call3, result3];
+
+		// Combined content is ~1.5k tokens — far below the 16k floor.
+		const result = pruneSupersededToolResults(
+			entries,
+			cfg({ consumedReadGroupMinTokens: GROUP_MIN, idleFlushMs: 30 * 60_000, now: T0 + 3_000 + 31 * 60_000 }),
+		);
+
+		expect(result.prunedCount).toBe(0);
+		expect(resultText(result1)).toBe(FILE_CONTENT);
+		expect(resultText(result3)).toBe(FILE_CONTENT);
+	});
+
+	test("disabled by default when the config omits the floor", () => {
+		const { entries, results } = chunkedSession(false);
+		const result = pruneSupersededToolResults(
+			entries,
+			cfg({ idleFlushMs: 30 * 60_000, now: T0 + 3_000 + 31 * 60_000 }),
+		);
+		expect(result.prunedCount).toBe(0);
+		expect(resultText(results[0])).toBe(CHUNK);
+	});
+
+	test("superseded results win over group elision (no double counting)", () => {
+		const [call1, result1] = readPair("src/foo.ts:1-800", CHUNK, T0);
+		const [call2, result2] = readPair("src/foo.ts", CHUNK, T0 + 1_000); // bare-path read supersedes selector reads
+		const entries: SessionEntry[] = [call1, result1, call2, result2];
+
+		const result = pruneSupersededToolResults(
+			entries,
+			cfg({ consumedReadGroupMinTokens: GROUP_MIN, suffixTokenLimit: 100_000, now: T0 + 1_000 }),
+		);
+
+		expect(result.prunedCount).toBe(1);
+		// Superseded notice (fresher bare-path read), not the group notice.
+		expect(resultText(result1)).toBe(SUPERSEDED_NOTICE);
+		expect(resultText(result2)).toBe(CHUNK);
+	});
+});

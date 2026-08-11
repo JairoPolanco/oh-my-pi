@@ -3,50 +3,13 @@
  "agent": "opencode-go/deepseek-v4-flash",
  "results": [
   {
-   "arm": "A_baseline",
-   "timedOut": false,
-   "modelCalls": 7,
-   "toolCalls": 15,
-   "tokens": 170476,
-   "wallMs": 108233,
-   "cost": 0.004099390400000001,
-   "pass": false,
-   "steps": {
-    "1": true,
-    "2": true,
-    "3": true,
-    "4": true,
-    "5": true,
-    "6": false,
-    "7": true
-   },
-   "stepsPassed": 6,
-   "toolsUsed": [
-    "read",
-    "read",
-    "eval",
-    "eval",
-    "eval",
-    "read",
-    "grep",
-    "bash",
-    "eval",
-    "eval",
-    "read",
-    "read",
-    "read",
-    "eval",
-    "read"
-   ]
-  },
-  {
    "arm": "B_harmony",
    "timedOut": false,
-   "modelCalls": 16,
-   "toolCalls": 25,
-   "tokens": 841073,
-   "wallMs": 63023,
-   "cost": 0.0088448472,
+   "modelCalls": 5,
+   "toolCalls": 6,
+   "tokens": 72109,
+   "wallMs": 34481,
+   "cost": 0.0015710884000000001,
    "pass": true,
    "steps": {
     "1": true,
@@ -57,33 +20,19 @@
     "6": true,
     "7": true
    },
+   "wholeFileRead": false,
    "stepsPassed": 7,
    "toolsUsed": [
     "read",
     "read",
-    "eval",
-    "eval",
-    "eval",
-    "eval",
-    "eval",
-    "read",
-    "bash",
     "grep",
-    "read",
-    "read",
-    "read",
-    "read",
-    "read",
-    "read",
-    "read",
-    "read",
-    "read",
-    "read",
-    "read",
-    "read",
     "eval",
     "eval",
     "eval"
+   ],
+   "reads": [
+    "packages/kernel/src/host.ts",
+    "packages/kernel/src/effects/broker.ts"
    ]
   }
  ]

@@ -70,6 +70,12 @@ export const SUPERSEDED_NOTICE = "[Superseded by a newer read of this file]";
 export const USELESS_NOTICE = "[Uneventful result elided]";
 
 /**
+ * Notice prefix for elided members of a consumed same-file read group. The
+ * full notice carries the base path so the model can re-read on demand.
+ */
+export const CONSUMED_READ_GROUP_NOTICE_PREFIX = "[Consumed reads of ";
+
+/**
  * Maps a tool call to a supersede key. Results sharing a key form a group in
  * which every result except the newest is a supersede candidate. A key `K`
  * additionally supersedes keys with prefix `K + "\u0000"` (selector-free read
@@ -83,8 +89,23 @@ export interface SupersedePruneConfig {
 	supersedeKey?: SupersedeKeyFn;
 	/** Also prune results flagged useless by their tool. Default false. */
 	pruneUseless?: boolean;
-	/** Prune a candidate now when all messages after it total at most this many estimated tokens. Default 8 000. */
+	/**
+	 * Prune a candidate now when all messages after it total at most this many estimated tokens. Default 8 000.
+	 */
 	suffixTokenLimit?: number;
+	/**
+	 * Elide older members of a same-file read group (chunked reads of one file)
+	 * once the group is this large. The read tool caps single calls at
+	 * `DEFAULT_MAX_LINES`/`DEFAULT_MAX_BYTES`, so files larger than that are
+	 * ALWAYS read in chunks; without this rule those chunks accumulate in the
+	 * transcript and are re-sent verbatim on every later call (the resend tax).
+	 * Members share the base path (selector stripped); the newest member is kept
+	 * as the model's working copy. Group elision fires under the same cache
+	 * guard as supersede (small suffix or idle) — mid-session mutation of a
+	 * warm prefix is never worth it. Default 16 000 (a ~1600-line file read
+	 * fully, or two+ reads of an 800-line file).
+	 */
+	consumedReadGroupMinTokens?: number;
 	/**
 	 * Prune all candidates when the last message is at least this old: the
 	 * provider prompt cache is then cold, so re-writing it is free. MUST exceed
@@ -107,6 +128,16 @@ export interface SupersedePruneConfig {
 
 const DEFAULT_SUFFIX_TOKEN_LIMIT = 8_000;
 const DEFAULT_IDLE_FLUSH_MS = 30 * 60_000;
+
+/**
+ * Combined-token floor for a same-file read group before its older members
+ * become elision candidates. The read tool's single-call cap is
+ * `DEFAULT_MAX_LINES`/`DEFAULT_MAX_BYTES` (~3000 lines / 50KB ≈ 12k tokens),
+ * so a file read fully in chunks accumulates at least ~12k tokens of content
+ * per chunk; a group under this floor is too small for elision to matter.
+ * Matches the spirit of `MIN_TOOL_RESULT_TOKENS` in snapcompact.
+ */
+export const CONSUMED_READ_GROUP_MIN_TOKENS = 16_000;
 
 function createPrunedNotice(tokens: number): string {
 	return `[Output truncated - ${tokens} tokens]`;
@@ -238,6 +269,62 @@ function collectUselessResults(
 }
 
 /**
+ * Collect older members of consumed same-file read groups. The read tool caps
+ * single calls at `DEFAULT_MAX_LINES`/`DEFAULT_MAX_BYTES`, so files larger
+ * than that are ALWAYS read in chunks; the supersede key includes the selector
+ * (`path\u00001-800` vs `path\u0000801-1600`), so chunked reads never collide
+ * with each other and accumulate in the transcript — re-sent verbatim on every
+ * later call (the resend tax). This pass groups results by base path and
+ * elides every member except the newest (the model's working copy) once the
+ * group is large enough. Candidates flow through the SAME cache guard as
+ * supersede (small suffix or idle) — mutating a warm, already-sent prefix is
+ * never worth it; the flush happens when the provider cache is cold anyway.
+ * Returned in message order.
+ */
+function collectConsumedReadGroups(
+	entries: readonly SessionEntry[],
+	toolCallsById: ReadonlyMap<string, AgentToolCall>,
+	protectedTools: readonly ProtectedToolMatcher[],
+	minGroupTokens: number,
+): SupersedeCandidate[] {
+	const groups = new Map<string, SupersedeCandidate[]>();
+	for (let i = 0; i < entries.length; i++) {
+		const entry = entries[i];
+		const message = getToolResultMessage(entry);
+		if (!message || message.prunedAt !== undefined || message.isError === true) continue;
+		const toolCall = toolCallsById.get(message.toolCallId);
+		if (!toolCall) continue;
+		const key = readToolSupersedeKey(toolCall.name, toolCall.arguments as Record<string, unknown>);
+		if (key === undefined) continue;
+		if (isProtectedToolResult(message, toolCall, protectedTools)) continue;
+		const separator = key.indexOf("\u0000");
+		const base = separator >= 0 ? key.slice(0, separator) : key;
+		const tokens = estimateTokens(message as AgentMessage);
+		if (tokens < MIN_PRUNE_TOKENS) continue;
+		let group = groups.get(base);
+		if (!group) {
+			group = [];
+			groups.set(base, group);
+		}
+		group.push({
+			entry: entry as SessionMessageEntry,
+			message,
+			index: i,
+			tokens,
+			notice: `${CONSUMED_READ_GROUP_NOTICE_PREFIX}${base} elided — re-read on demand]`,
+		});
+	}
+	const candidates: SupersedeCandidate[] = [];
+	for (const group of groups.values()) {
+		const combined = group.reduce((sum, candidate) => sum + candidate.tokens, 0);
+		if (group.length < 2 || combined < minGroupTokens) continue;
+		// Keep the newest member as the working copy; elide the rest.
+		candidates.push(...group.slice(0, -1));
+	}
+	return candidates;
+}
+
+/**
  * Prune superseded tool results (e.g. stale `read` outputs replaced by a newer
  * read of the same file) and, when `pruneUseless` is set, results their tool
  * flagged contextually useless. Cheap, incremental, and prompt-cache-aware: a
@@ -251,6 +338,19 @@ export function pruneSupersededToolResults(entries: SessionEntry[], config: Supe
 	const candidates = config.supersedeKey
 		? collectSupersededResults(entries, toolCallsById, config.supersedeKey, config.protectedTools)
 		: [];
+	if (config.consumedReadGroupMinTokens !== undefined) {
+		const exclude = new Set(candidates.map(candidate => candidate.message));
+		const groups = collectConsumedReadGroups(
+			entries,
+			toolCallsById,
+			config.protectedTools,
+			config.consumedReadGroupMinTokens,
+		);
+		// Superseded results win over group elision (a fresher read already
+		// replaced them); never double-count the same message.
+		candidates.push(...groups.filter(candidate => !exclude.has(candidate.message)));
+		candidates.sort((a, b) => a.index - b.index);
+	}
 	if (config.pruneUseless) {
 		const exclude = new Set(candidates.map(candidate => candidate.message));
 		candidates.push(...collectUselessResults(entries, toolCallsById, config.protectedTools, exclude));

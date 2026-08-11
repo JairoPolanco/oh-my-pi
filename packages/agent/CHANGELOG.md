@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Consumed same-file read group elision (`compaction.elideConsumedReads`, default on): the read tool caps single calls at `DEFAULT_MAX_LINES`/`DEFAULT_MAX_BYTES`, so files larger than the cap are always read in chunks. Chunk selectors differ (`:1-800` vs `:801-1600`), so the supersede key never collides them and the chunks accumulate in the transcript — re-sent verbatim on every later call (the resend tax, measured at 98% of a cohesion-probe session's tokens). The per-turn supersede pass now groups read results by base path and elides every member except the newest once the group exceeds 16k tokens, under the same cache guard as supersede (small suffix or idle — mid-session warm-prefix mutation is never worth it). Pinned by 6 regression tests.
+
 ## [17.2.10] - 2026-08-06
 
 ### Fixed
