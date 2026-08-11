@@ -231,6 +231,13 @@ Same capability-audit task, gates OFF vs ON (with production trajectory tap + li
 
 **SECURITY.md trust model** (hermes quality, c1b5f618b): OS isolation is the only real boundary; effect gate / verifier gate / gateway auth / redaction / approval modes declared in-process heuristics (non-boundaries); out-of-scope taxonomy published (prompt injection per se, approval-regex bypass, same-privilege local attacker, model exfiltration of previously-visible data) so reports are triaged against the model.
 
+## Mnemopi analysis + wiring (mnemopi-001, live verification)
+
+**Analysis:** `memory.backend` defaults `"off"` — the model-facing memory surface (recall/retain/reflect tools, `<memories>` context blocks, autoRecall+autoRetain lifecycle) exists but never runs. mnemopi is the MATURE backend: SQLite store + embeddings + FTS + consolidation + autoRetain from completed turns, `llmMode: smol` (small-model cost), and the RLM `__kernel__.memory.*` bridge routes to it when present (shared store, no split-brain). Our kernel-store lifecycle memory is the correct FALLBACK for no-mnemopi sessions — never both.
+
+**Decision: mnemopi ON in omjai** (config overlay `~/.omp/omjai-config.yml` via `PI_CONFIG_FILES`; plain `omp` never reads it). Added `modelRoles.smol` (was unresolvable → mnemopi warned "continuing without LLM").
+
+**Verified live:** substantive turn on `requireCapability` → 3 facts auto-retained in mnemopi SQLite, including the durable gate knowledge the benchmark showed missing. The model-facing memory the surveys wanted (Hermes curator/PrimeAgent refine pattern, done properly) is now active under omjai. Kernel lifecycle memory stays as fallback.
 ## All-feature coverage (complete)
 
 Every feature we built now has real-model or mechanism evidence: effect gate ✅, typed planner ✅ (indirect), Context VM ✅ (synthetic + real), RLM bridge ✅, verification contracts ✅, durable tasks ✅, durable authority ✅ (unit), memory ✅ (mechanism), kernel bridge read-side ✅ (profile/caps/routing/harness/actors/events/gateway), skills ✅ (via gate runs), gateway ✅, hub/actors ✅ (actors.list). Remaining unbenchmarked: none of the kernel surfaces — only model-adoption tuning (single-step prompts for memory) and the never-swept write-side of actors (actors.send/abort, needs a live peer registry).
