@@ -208,19 +208,32 @@ export class ProviderContextGovernor {
 			// (paste-6 P0 #4): the span is included whole or dropped — a
 			// truncated span would be accounted at 18 tokens but passed to the
 			// provider at its full ~1000-token size.
+			//
+			// The candidate charges the FULL wire cost via `wireCostDelta`
+			// (dogfooding, context-stress probe): text-only accounting
+			// undercounts spans with big tool-call payloads (~66% here), so
+			// the materializer over-selects and the final hard-budget pass
+			// then evicts oldest-first to close the gap — silently dropping
+			// the EARLIEST spans, often exactly the early evidence a long
+			// task needs later. Selection and eviction share one cost model.
 			const spanText = [];
 			for (let i = unit.start; i <= unit.end; i++) spanText.push(messageText(messages[i]!));
 			const text = spanText.join("\n");
+			let wireDelta = 0;
+			for (let i = unit.start; i <= unit.end; i++) {
+				wireDelta += messageTokenCost(messages[i]!) - estimateTokens(messageText(messages[i]!));
+			}
 			candidates.push({
 				id: `span:${unitIndex}`,
 				kind: "trajectory",
 				level: "episodic",
-				tokens: estimateTokens(text),
+				tokens: estimateTokens(text) + wireDelta,
 				impact: 0.5,
 				information: 0.6,
 				reliability: 1,
 				content: text,
 				truncatable: false,
+				wireCostDelta: wireDelta,
 			});
 			candidateUnitOf.set(`span:${unitIndex}`, unitIndex);
 		});

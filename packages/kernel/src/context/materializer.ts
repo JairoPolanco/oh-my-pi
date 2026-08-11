@@ -249,7 +249,12 @@ export class ContextMaterializer {
 			return { item: this.#toItem(candidate, candidate.tokens), cost: candidate.tokens };
 		}
 		const content = candidate.content ?? "";
-		const measured = estimateTokens(content);
+		// FULL wire cost: measured text + structural extras the provider will
+		// consume (toolCall JSON, images — paste-8 dogfooding). Charging only
+		// text lets selection over-commit, then the final hard-budget pass
+		// evicts the EARLIEST spans to close the gap.
+		const delta = candidate.wireCostDelta ?? 0;
+		const measured = estimateTokens(content) + delta;
 		if (measured <= available) {
 			return { item: this.#toItem(candidate, measured), cost: measured };
 		}
@@ -258,11 +263,12 @@ export class ContextMaterializer {
 		// all-or-nothing. Only truncatable candidates get their content cut.
 		if (candidate.truncatable === false) return null;
 		// Truncate the CONTENT to the affordable size and re-measure the
-		// truncated representation (4 chars ≈ 1 token).
-		const truncationTokens = Math.max(0, available);
-		if (truncationTokens <= 0) return null;
-		const truncated = truncateChars(content, truncationTokens * 4);
-		const truncatedMeasured = estimateTokens(truncated);
+		// truncated representation (4 chars ≈ 1 token). The wire delta is
+		// structural and cannot be truncated away — it still counts.
+		const contentTokens = Math.max(0, available - delta);
+		if (contentTokens <= 0) return null;
+		const truncated = truncateChars(content, contentTokens * 4);
+		const truncatedMeasured = estimateTokens(truncated) + delta;
 		if (truncatedMeasured <= 0) return null;
 		return { item: this.#toItem({ ...candidate, content: truncated }, truncatedMeasured), cost: truncatedMeasured };
 	}

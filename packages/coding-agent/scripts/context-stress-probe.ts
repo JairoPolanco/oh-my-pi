@@ -16,7 +16,7 @@
  * No model calls — pure mechanism measurement.
  */
 import { ContextOverflowError } from "@oh-my-pi/pi-kernel";
-import { ProviderContextGovernor, KERNEL_CONTEXT_GOVERNANCE_ENV } from "../src/runtime/provider-context-governor";
+import { KERNEL_CONTEXT_GOVERNANCE_ENV, ProviderContextGovernor } from "../src/runtime/provider-context-governor";
 
 const SMALL_MODEL = { contextWindow: 32_000 } as never;
 
@@ -93,7 +93,9 @@ function buildTranscript(): Msg[] {
 	}
 	// Final turn: the answer requires the early evidence.
 	messages.push(text("user", "What is the root cause and where?", i++));
-	messages.push(toolCall(i++, "edit", { path: "services/planner.ts", old_string: "budget", new_string: "budget ?? 0" }));
+	messages.push(
+		toolCall(i++, "edit", { path: "services/planner.ts", old_string: "budget", new_string: "budget ?? 0" }),
+	);
 	messages.push(toolResult(i++, "edit applied"));
 	messages.push(
 		text(
@@ -140,28 +142,39 @@ function spansAtomic(messages: Msg[]): boolean {
 const transcript = buildTranscript();
 const rawTokens = countTokens(transcript);
 const earlyEvidence = evidenceSurvives(transcript);
-console.log(`raw transcript: ${transcript.length} messages, ~${rawTokens} tokens, early evidence present: ${earlyEvidence}`);
+console.log(
+	`raw transcript: ${transcript.length} messages, ~${rawTokens} tokens, early evidence present: ${earlyEvidence}`,
+);
 
 // OFF (baseline): governor disabled — byte-identical pass-through.
 Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "0";
 const offGovernor = new ProviderContextGovernor();
 const off = await offGovernor.transform({ messages: transcript as never }, SMALL_MODEL as never);
 const offTokens = countTokens(off.messages as Msg[]);
-console.log(`\nGOV OFF: sent ${off.messages.length} msgs, ~${offTokens} tokens, evidence: ${evidenceSurvives(off.messages as Msg[])}`);
+console.log(
+	`\nGOV OFF: sent ${off.messages.length} msgs, ~${offTokens} tokens, evidence: ${evidenceSurvives(off.messages as Msg[])}`,
+);
 
 // ON: governance engages, 32k window → historyBudget ≈ 24k.
 Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
 const onGovernor = new ProviderContextGovernor();
-let on;
+let on: { messages: unknown[] } | undefined;
 try {
-	on = await onGovernor.transform({ messages: transcript as never }, SMALL_MODEL as never);
-	const onTokens = countTokens(on.messages as Msg[]);
-	console.log(`GOV ON : sent ${on.messages.length} msgs, ~${onTokens} tokens, evidence: ${evidenceSurvives(on.messages as Msg[])}`);
+	const onView = await onGovernor.transform({ messages: transcript as never }, SMALL_MODEL as never);
+	on = onView;
+	const onTokens = countTokens(onView.messages as Msg[]);
+	console.log(
+		`GOV ON : sent ${onView.messages.length} msgs, ~${onTokens} tokens, evidence: ${evidenceSurvives(onView.messages as Msg[])}`,
+	);
 	console.log(`compression: ${(100 * (1 - onTokens / rawTokens)).toFixed(1)}% fewer tokens`);
-	console.log(`spans atomic (no orphans): ${spansAtomic(on.messages as Msg[])}`);
-	console.log(`E_context proxy (evidence/tokens): ${evidenceSurvives(on.messages as Msg[]) ? (1 / onTokens).toExponential(2) : "0 (evidence lost)"}`);
+	console.log(`spans atomic (no orphans): ${spansAtomic(onView.messages as Msg[])}`);
+	console.log(
+		`E_context proxy (evidence/tokens): ${evidenceSurvives(onView.messages as Msg[]) ? (1 / onTokens).toExponential(2) : "0 (evidence lost)"}`,
+	);
 } catch (error) {
-	console.log(`GOV ON : THREW ${error instanceof ContextOverflowError ? "ContextOverflowError" : (error as Error).constructor.name}: ${(error as Error).message.slice(0, 120)}`);
+	console.log(
+		`GOV ON : THREW ${error instanceof ContextOverflowError ? "ContextOverflowError" : (error as Error).constructor.name}: ${(error as Error).message.slice(0, 120)}`,
+	);
 }
 
 // Emit a JSONL record for the ledger.
@@ -170,8 +183,17 @@ const record = {
 	rawTokens,
 	rawMessages: transcript.length,
 	govOff: { tokens: offTokens, evidence: evidenceSurvives(off.messages as Msg[]) },
-	govOn: on ? { tokens: countTokens(on.messages as Msg[]), evidence: evidenceSurvives(on.messages as Msg[]), atomic: spansAtomic(on.messages as Msg[]) } : null,
+	govOn: on
+		? {
+				tokens: countTokens(on.messages as Msg[]),
+				evidence: evidenceSurvives(on.messages as Msg[]),
+				atomic: spansAtomic(on.messages as Msg[]),
+			}
+		: null,
 	threw: !on,
 };
-await Bun.write(new URL("../../../research_logs/context_stress_probe_001.jsonl", import.meta.url), JSON.stringify(record) + "\n");
+await Bun.write(
+	new URL("../../../research_logs/context_stress_probe_001.jsonl", import.meta.url),
+	JSON.stringify(record) + "\n",
+);
 console.log("\nrecord -> research_logs/context_stress_probe_001.jsonl");

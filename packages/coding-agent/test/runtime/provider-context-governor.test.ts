@@ -312,4 +312,54 @@ describe("ProviderContextGovernor", () => {
 		];
 		await expect(governor.transform({ messages }, tiny)).rejects.toBeInstanceOf(ContextOverflowError);
 	});
+
+	test("tool spans charge FULL wire cost (toolCall JSON), so early spans are not silently evicted (dogfooding)", async () => {
+		// Regression from the context-stress probe: span candidates declared
+		// text-only token counts, so the materializer over-selected, then the
+		// final hard-budget pass evicted OLDEST-FIRST to close the gap —
+		// dropping the earliest spans (often exactly the early evidence a long
+		// task needs later). Selection and eviction must share one cost model.
+		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
+		const tight = { contextWindow: 2_000 } as unknown as Model; // historyBudget 1500
+		const messages = [
+			textMessage("developer", "investigate", 0),
+			// Early evidence span: a read with a BIG toolCall payload, then its
+			// result. The evidence text is what the final turn needs.
+			{
+				role: "assistant",
+				content: [
+					{ type: "text", text: "read module" },
+					{ type: "toolCall", id: "c0", name: "read", arguments: { payload: "x".repeat(1500) } },
+				],
+				api: "openai",
+				provider: "anthropic",
+				model: "claude-4",
+				usage: {},
+				stopReason: "tool_use",
+				timestamp: 1,
+			} as unknown as Message,
+			toolResultMessage(2, "EVIDENCE: root cause is services/planner.ts line 412"),
+			// A few more spans so the budget is actually tight.
+			toolCallMessage("more work", 3),
+			toolResultMessage(4, "result 4 ".repeat(80)),
+			toolCallMessage("even more", 5),
+			toolResultMessage(6, "result 6 ".repeat(80)),
+			textMessage("user", "what is the root cause?", 7),
+			{
+				role: "assistant",
+				content: [{ type: "text", text: "the root cause is services/planner.ts line 412" }],
+				api: "openai",
+				provider: "anthropic",
+				model: "claude-4",
+				usage: {},
+				stopReason: "stop",
+				timestamp: 8,
+			} as unknown as Message,
+		];
+		const result = await governor.transform({ messages }, tight);
+		// The early evidence survived — the wire-cost charge prevents the
+		// over-selection that used to force oldest-first eviction.
+		const sent = result.messages.map(m => JSON.stringify(m.content)).join("\n");
+		expect(sent).toContain("EVIDENCE: root cause is services/planner.ts");
+	});
 });

@@ -95,6 +95,15 @@ export interface CandidateItem {
 	 * reintroduce the accounting-vs-representation mismatch.
 	 */
 	truncatable?: boolean;
+	/**
+	 * Tokens the provider consumes BEYOND the inline content's measured text
+	 * (paste-8 dogfooding, context-stress probe): tool-call argument JSON,
+	 * image allowances. Selection must charge the FULL wire cost — accounting
+	 * and eviction use the same cost model, otherwise the materializer
+	 * over-selects at text-only cost and the final hard-budget pass evicts
+	 * the EARLIEST spans (often the early evidence a long task needs later).
+	 */
+	wireCostDelta?: number;
 	ref?: ArtifactRef;
 	content?: string;
 }

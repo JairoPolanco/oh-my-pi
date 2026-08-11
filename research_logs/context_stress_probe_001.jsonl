@@ -1,1 +1,1 @@
-{"experiment":"context-stress-probe-001","rawTokens":40841,"rawMessages":165,"govOff":{"tokens":40841,"evidence":true},"govOn":{"tokens":23861,"evidence":false,"atomic":true},"threw":false}
+{"experiment":"context-stress-probe-001","rawTokens":40841,"rawMessages":165,"govOff":{"tokens":40841,"evidence":true},"govOn":{"tokens":23789,"evidence":true,"atomic":true},"threw":false}

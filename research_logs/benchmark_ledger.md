@@ -60,3 +60,13 @@ Synthetic ~41k-token transcript (40 read/grep cycles, one early evidence fact ne
 **Decision: HOLD, with a flagged weakness.** The VM must either (a) weight older evidence-bearing spans by fact-importance rather than pure recency-independent value, or (b) expose re-fetch pressure so the model can detect the gap. Until one of those exists, governance-on for long horizons risks lost-evidence failures that baseline never had. Cost of this probe: $0 (no API calls).
 
 Next probe (still zero-usage): does a higher value score (impact/information/reliability) on the evidence span protect it from eviction? That tests whether the loss is a value-ranking gap or an eviction-policy gap.
+## Discrimination probe result (context-stress-003, zero usage)
+
+Boosting the evidence span's value score did NOT change the outcome — the loss was never a value-ranking gap. Root cause found and FIXED:
+
+- **Cause**: span candidates declared text-only token counts (`estimateTokens(text)`), but the final hard-budget pass counts `messageTokenCost` (text + toolCall argument JSON). Tool-call payloads added ~66% unaccounted cost per span → the materializer over-selected at declared cost → the final pass evicted OLDEST-FIRST to close the gap → the earliest spans (often the early evidence a long task needs) silently died.
+- **Fix**: `CandidateItem.wireCostDelta` — selection now charges the full wire cost (structural extras: toolCall JSON, image allowances) so accounting and eviction share ONE cost model. Governor sets it per span; materializer fit/truncation respects it.
+- **Verified**: same 41k-token transcript, 32k window: GOV ON now sends 123 msgs at ~23.8k tokens (−41.8%) WITH the early evidence surviving, spans still atomic. Before the fix: evidence lost. Regression test added (`provider-context-governor.test.ts`).
+
+**Decision: Context VM HOLD → candidate for PROMOTE on long-horizon** (accounting gap closed; the mechanism now compresses without the evidence-loss failure mode). Full real-task long-horizon benchmark still pending — the synthetic probe validated the mechanism, not the model-facing behavior.
+
