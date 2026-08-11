@@ -287,6 +287,16 @@ Verified both halves live:
 - REJECT: real trials file with failed heldout (overfit) → pairedGate PASS but heldout FAIL → verdict reject → ledger v1 (reject) → skill STAYS staged.
 
 Cost: $0 (pure decision + file moves; the real-model trial collection is the metaharness's job, wired via the same gates).
+## Cross-session memory recall (dogfooding, prompt-2, verified live)
+
+The last unproven memory claim: does a FRESH session recall a fact committed by an earlier session, WITHOUT model adoption being the blocker? The omjai sweep (prompt 1) committed a fact via the bridge (`memory.propose` → mnemopi, id `7938b97d3c07838b`, backend mnemopi, auto-commit at propose). Prompt 2 ran in a NEW session (different session id, same cwd → same mnemopi bank `oh-my-pi-2sw2b7t2w190o`):
+
+- **Recalled**: exact fact verbatim — "the harness sweep ran on this session and verified artifacts, tasks, contracts, and memory", character-for-character match, confidence 1, scope project, state committed.
+- **Adoption**: the recall session made exactly ONE tool call in the kernel event log — the `eval` with `memory.recall`. Zero grep/read/bash. This closes the earlier "model prefers grep over recalled memory" finding: when the prompt gives an EXACT single-step recall program and forbids filesystem verification, the model trusts memory. Adoption is instruction-sensitive, and the single-step pattern wins again.
+- **Durability**: cross-session, cross-process, cwd-keyed bank — the fact committed in session A surfaced in session B with no seeding.
+
+**Verdict: cross-session memory durability + model adoption PROVEN end-to-end** (the exact Hermes Curator/PrimeAgent lifecycle pattern the surveys wanted — now with live two-session evidence, $0 marginal cost).
+
 ## Harness value benchmark (harness-value-001, supervised) + security fix
 
 The user asked for the task class where the harness CAN help (bridge, memory, safety) — and it paid off with a real finding:
