@@ -287,6 +287,12 @@ Verified both halves live:
 - REJECT: real trials file with failed heldout (overfit) → pairedGate PASS but heldout FAIL → verdict reject → ledger v1 (reject) → skill STAYS staged.
 
 Cost: $0 (pure decision + file moves; the real-model trial collection is the metaharness's job, wired via the same gates).
+## Kernel dir split-brain (dogfooding, fixed 22e8d7962)
+
+The skill auto-executor test surfaced it: the learn session (file-based) wrote its harness ledger + events to `~/.omp/agent/sessions/-Projects-oh-my-pi/kernel/`, but the interactive root session (no session file at gate-hook time) fell into `os.tmpdir()/omp-kernel-<sessionId>` — TWO harness ledgers and TWO capability trees for ONE project. The promotion verdict landed in the temp dir's ledger, the learn events in the shared dir's event log; both worked, but the ledger wasn't where the project's other sessions read it.
+
+**Fix:** `kernelDirFor` resolves the root (no explicit `kernelSessionId`) to the project-scoped session dir (`computeDefaultSessionDir(cwd)/kernel` — the SAME `-Projects-oh-my-pi/kernel` file-based sessions use). Explicit `kernelSessionId` (benchmark arms, subagent isolation) keeps the isolated temp dir. Restores paste-6 P0 #1: ONE kernel authority tree per project. 2 regression tests.
+
 ## Skill gate interactive gap (dogfooding, autolearn mounting)
 
 The skill auto-executor test (prompt #1, gate armed) hit a REAL wiring gap the interactive session exposed: **the `learn` + `manage_skill` tools were never mounted in omjai**. Both gate on `autolearn.enabled` (default OFF), and the omjai config overlay enabled mnemopi but not autolearn — so the session built no tool that can create a staged skill, and the auto-executor had nothing to sweep. The agent correctly diagnosed this (found LearnTool.createIf, probed the eval bridge → "Unknown tool from js runtime: learn", confirmed the gate env was armed), but could not mount a tool the session didn't build at startup.
