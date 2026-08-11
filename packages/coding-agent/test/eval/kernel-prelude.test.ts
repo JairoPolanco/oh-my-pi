@@ -48,6 +48,34 @@ describe("kernel prelude globals (JS worker)", () => {
 		tempDir[Symbol.dispose]();
 	});
 
+	it("un-awaited helper results render an await hint, not garbage (deep-debug: RLM burned 7 probes)", async () => {
+		// The model wasted 6+ eval programs discovering the helpers are async:
+		// un-awaited calls rendered `[object Promise]`/`{}` with no signal.
+		// Now every representation says "await me" — the first probe reveals
+		// the contract.
+		const session = makeSession(tempDir.path(), {
+			name: "glob",
+			execute: async () => ({
+				content: [{ type: "text", text: "a.ts\nb.ts" }],
+				details: { files: ["a.ts", "b.ts"], fileCount: 2 },
+			}),
+		} as unknown as AgentTool);
+		const code = `
+			const unawaited = globFiles("x/**/*.ts");
+			const asString = String(unawaited);
+			const asJson = JSON.stringify(unawaited);
+			const awaited = await globFiles("x/**/*.ts");
+			return JSON.stringify({ asString, asJson, awaited, tag: Object.prototype.toString.call(unawaited) });
+		`;
+		const result = await executeJs(code, { cwd: tempDir.path(), sessionId, session });
+		expect(result.exitCode).toBe(0);
+		const parsed = JSON.parse(result.output.trim());
+		expect(parsed.awaited).toEqual(["a.ts", "b.ts"]); // still fully awaitable
+		expect(parsed.asString).toContain("await");
+		expect(parsed.asJson).toContain("await");
+		expect(parsed.tag).toContain("await");
+	});
+
 	it("readText/globFiles/bashOut unwrap gated tool envelopes (dogfooding, rlm-model-calls-002)", async () => {
 		// Stub tools return REAL AgentToolResult envelopes; the helpers must
 		// unwrap to plain documented values — the model previously burned

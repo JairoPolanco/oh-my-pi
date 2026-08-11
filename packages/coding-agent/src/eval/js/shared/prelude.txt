@@ -95,22 +95,47 @@ if (!globalThis.__omp_js_prelude_loaded__) {
 		}
 		return "";
 	};
-	const readText = async (path, opts, ...rest) => {
+
+	// RLM ergonomics, part 2 (deep-debug finding): the model burned 6+ eval
+	// programs reverse-engineering whether the helpers are async — un-awaited
+	// calls rendered as `[object Promise]` / `{}` / `[object Array]`, zero
+	// signal. Every representation of an un-awaited helper result now says
+	// "await me", so the FIRST probe reveals the contract instead of the
+	// seventh.
+	const AWAIT_HINT = "did you forget await? — these helpers are async: use `await globFiles(...)` / `await readText(...)` / `await bashOut(...)`";
+	class AwaitablePromise extends Promise {
+		get [Symbol.toStringTag]() {
+			return `Promise (${AWAIT_HINT})`;
+		}
+		toString() {
+			return `[object Promise — ${AWAIT_HINT}]`;
+		}
+		toJSON() {
+			return { __awaitHint: AWAIT_HINT };
+		}
+	}
+	// Wrap an async function so its promise is an AwaitablePromise. Still
+	// fully awaitable; only the RENDERING changes.
+	const awaitable = fn => (...args) =>
+		new AwaitablePromise((resolve, reject) => {
+			fn(...args).then(resolve, reject);
+		});
+	const readText = awaitable(async (path, opts, ...rest) => {
 		const o = optionsArg("readText", opts, rest, ["offset", "limit"], "{ offset, limit }");
 		const res = await globalThis.__omp_call_tool__("read", { path, ...o });
 		return resultText(res);
-	};
-	const bashOut = async (command, opts, ...rest) => {
+	});
+	const bashOut = awaitable(async (command, opts, ...rest) => {
 		const o = optionsArg("bashOut", opts, rest, ["cwd"], "{ cwd }");
 		const res = await globalThis.__omp_call_tool__("bash", { command, ...o });
 		return resultText(res);
-	};
-	const globFiles = async (pattern, opts, ...rest) => {
+	});
+	const globFiles = awaitable(async (pattern, opts, ...rest) => {
 		const o = optionsArg("globFiles", opts, rest, ["limit", "gitignore", "hidden"], "{ limit, gitignore, hidden }");
 		const res = await globalThis.__omp_call_tool__("glob", { path: pattern, ...o });
 		const details = res && typeof res === "object" ? res.details : undefined;
 		return details && Array.isArray(details.files) ? details.files : [];
-	};
+	});
 
 	// RLM host bridge (blueprint §16, §84): programmatic kernel access.
 	const kernelNamespace = ns =>

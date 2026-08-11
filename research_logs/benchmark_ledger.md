@@ -207,6 +207,17 @@ Same-session two-turn test with SINGLE-STEP prompts (lesson from memory run): t1
 | Gateway daemon (gateway.status) | ✅ bridge-read-sweep (gateway added) | executes through gated bridge — real runtimes/methods, 2 calls / 15.7k tokens / $0.0001 |
 | Skills (manage_skill / learn) | ✅ via gate runs (manage_skill is an OMP TOOL, not a kernel namespace — authorized by skill.write/read in the main baseline, exercised in every gate-on run) | works; not a `__kernel__` surface |
 
+## RLM deep-debug (rlm-debug-001, supervised)
+
+Traced a real omjai RLM session (task: count bun:sqlite imports + deepseek providers via ONE eval program).
+
+**Finding 1 — JS await contract (FIXED):** the earlier rejection run burned 7 programs reverse-engineering that `globFiles`/`readText`/`bashOut` are async — un-awaited calls rendered `[object Promise]`/`{}` with zero signal. Fix: helpers now return an `AwaitablePromise` whose String/JSON/toStringTag ALL render "did you forget await?" — the first probe reveals the contract. Pinned by test (10/10 prelude). 
+
+**Finding 2 — the fix's target is JS; the model dodges it by choosing Python** (this run: all 8 evals `language:"py"`, where the helpers are sync and work). So the await fix protects the JS path; Python was already ergonomic.
+
+**Finding 3 — the real iteration driver was JSON5 task difficulty, not harness:** `models.json` is JSON5 (comments/trailing commas), `json.loads` fails, the model worked around via `bashOut('bun -e ...')`, probed structure, converged. All 8 evals completed `ok: True`. This is a data-shape learning cost, not a broken contract — but it IS the class of friction the audit wants removed (an eval helper that could read JSON5 directly would have saved 6 programs). Candidate future helper: `readJson5(path)`.
+
+**Net: RLM is not fundamentally broken — the short-task rejection stands (authoring overhead > savings on small gathers), and the JS await trap is now self-documenting.** The remaining cost driver on real tasks is per-file-shape probing, which generic helpers can't fully remove.
 ## Final harness benchmark (harness-final-001, supervised, post-fixes)
 
 Same capability-audit task, gates OFF vs ON (with production trajectory tap + lifecycle memory + security model):
