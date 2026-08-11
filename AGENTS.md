@@ -14,10 +14,15 @@ This repo contains multiple packages, but **`packages/coding-agent/`** is the pr
 | `packages/catalog`      | Model catalog: bundled models.json, provider descriptors, model identity/classification |
 | `packages/agent`        | Agent runtime with tool calling and state management                                    |
 | `packages/coding-agent` | Main CLI application (primary focus)                                                    |
+| `packages/kernel`       | Constitutional kernel: events/artifacts/capabilities/context/verification/workflow/memory/models/gateway |
+| `packages/metaharness`  | Repository benchmark manager: experiment → run → trace, SQLite store, dashboard          |
 | `packages/tui`          | Terminal UI library with differential rendering                                         |
 | `packages/natives`      | Bindings for native text/image/grep operations                                          |
 | `packages/stats`        | Local observability dashboard (`omp stats`)                                             |
 | `packages/omptype`      | ArkType-compatible schema validation with a lazy JIT runtime                            |
+| `packages/mnemopi`      | Semantic memory backend (facts recall)                                                  |
+| `packages/snapcompact`  | Provider-context rasterization (image frames)                                           |
+| `packages/wire`         | Wire protocol types shared across the repo                                              |
 | `packages/utils`        | Shared utilities (logger, streams, temp files)                                          |
 | `crates/pi-natives`     | Rust crate for performance-critical text/grep ops                                       |
 

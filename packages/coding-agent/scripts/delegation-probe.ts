@@ -32,7 +32,7 @@ async function runArm(arm: string): Promise<Record<string, unknown>> {
 					"",
 					"# Delegation mode",
 					"You have a task tool that spawns ONE subagent. Delegate the file inspection to a single subagent",
-					"using the task tool with agent \"task\", then report the subagent's findings as your answer.",
+					'using the task tool with agent "task", then report the subagent\'s findings as your answer.',
 					"Use at most one task spawn — do not fan out.",
 				].join("\n")
 			: undefined;

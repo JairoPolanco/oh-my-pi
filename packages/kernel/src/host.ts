@@ -78,7 +78,12 @@ export class KernelHost implements Kernel {
 		// real workspace path as `outside:` and deny it. The workspace root
 		// must be passed explicitly by the session host.
 		this.workspaceRoot = options.workspaceRoot ?? path.dirname(dir);
-		const bootstrapMain = options.bootstrapMain ?? Bun.env.OMP_KERNEL_EFFECT_GATE === "1";
+		// bootstrapMain is EXPLICITLY passed by every production caller
+		// (kernel-bridge passes `isRoot`). Never default from the environment:
+		// a test or embedding that constructs a KernelHost without the option
+		// must get the same behavior regardless of ambient env vars
+		// (AGENTS.md: tests must be full-suite safe; dogfooding finding).
+		const bootstrapMain = options.bootstrapMain ?? false;
 		this.artifacts = new ArtifactStore(path.join(dir, "artifacts"));
 		this.tasks = new SqliteTaskStore(path.join(dir, "tasks.db"));
 		this.contracts = new SqliteContractStore(path.join(dir, "contracts.db"));

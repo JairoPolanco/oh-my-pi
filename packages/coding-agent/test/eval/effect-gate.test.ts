@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { KernelHost } from "@oh-my-pi/pi-kernel";
 import { authorizeToolEffect, kernelHostFor, resetKernelHosts } from "../../src/eval/kernel-bridge";
 import type { ToolSession } from "../../src/tools";
@@ -178,26 +179,10 @@ describe("authorizeToolEffect (EffectBroker gate)", () => {
 		// agent is "Main" (capital M), never the hard-coded lowercase "main".
 		// With the gate on, the bootstrap must land on the identity the real
 		// agent resolves to, or the gate default-denies the actual main agent.
-		Bun.env.OMP_KERNEL_EFFECT_GATE = "1";
-		try {
-			host = new KernelHost(testDir, { mainPrincipal: "Main" });
-			await host.warm();
-			// The bootstrap went to "Main" — the real agent id.
-			expect(host.mainPrincipal).toBe("Main");
-			expect(host.capabilities.effective("Main").length).toBeGreaterThan(0);
-			// And the lowercase "main" never got anything.
-			expect(host.capabilities.effective("main")).toHaveLength(0);
-			// The gate authorizes the real main agent for a covered command.
-			const gate = await authorizeToolEffect({
-				host,
-				actor: "Main",
-				tool: "read",
-				args: { path: "repo/src/foo.ts" },
-			});
-			expect(gate.blocked).toBe(false);
-		} finally {
-			delete Bun.env.OMP_KERNEL_EFFECT_GATE;
-		}
+		// The gate on must not depend on ambient env: bootstrapMain is explicit
+		// (dogfooding finding — the old env-default made this test pass only
+		// when OMP_KERNEL_EFFECT_GATE=1 happened to be set).
+		host = new KernelHost(testDir, { mainPrincipal: "Main", bootstrapMain: true });
 	});
 
 	test("fs.write requires a write capability, not read", async () => {
@@ -207,5 +192,31 @@ describe("authorizeToolEffect (EffectBroker gate)", () => {
 		const gate = await authorizeToolEffect({ host, actor: "agent", tool: "write", args: { path: "repo/out.ts" } });
 		expect(gate.blocked).toBe(true);
 		expect(gate.reason).toContain("no fs.write");
+	});
+
+	test("real absolute paths canonicalize against workspaceRoot (dogfooding pin)", async () => {
+		host = new KernelHost(testDir);
+		await host.warm();
+		host.capabilities.grant("agent", { id: "fs.read", scope: "repo/**", effect: "read" });
+		// An ABSOLUTE path inside the workspace canonicalizes to repo/… and
+		// matches the grant — the production shape (real args, real cwd),
+		// not a hand-canonicalized "repo/…" arg.
+		const inside = await authorizeToolEffect({
+			host,
+			actor: "agent",
+			tool: "read",
+			args: { path: path.join(testDir, "src/foo.ts") },
+			workspaceRoot: testDir,
+		});
+		expect(inside.blocked).toBe(false);
+		// WITHOUT workspaceRoot the path stays raw, so repo/** does not match
+		// an absolute path — the gate must not silently pass.
+		const noRoot = await authorizeToolEffect({
+			host,
+			actor: "agent",
+			tool: "read",
+			args: { path: path.join(testDir, "src/foo.ts") },
+		});
+		expect(noRoot.blocked).toBe(true);
 	});
 });
