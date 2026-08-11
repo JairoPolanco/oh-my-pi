@@ -201,6 +201,10 @@ Same-session two-turn test with SINGLE-STEP prompts (lesson from memory run): t1
 | RLM bridge | ✅ rejection runs | rejected on short tasks (authoring overhead) |
 | Typed capability planner | ⚠️ via gate runs | indirect |
 | Skills / Gateway / Hub | ❌ never | — |
+| Kernel bridge read-side (security.profile / capabilities / routing.stats / harness.versions / actors.list / events.query) | ✅ bridge-read-sweep-001 | works — real values through the gated bridge, 2 calls / 15.9k tokens / $0.00016 (measurement artifact in record: ok:[] is a toolResult-extraction bug; console trace proves execution) |
+| Gateway daemon (gateway.status) | ❌ not swept | — |
+| Skills (manage_skill / learn) | ❌ not swept | — |
+
 | Memory lifecycle (re-run, single-step) | mechanism verified at $0; model adoption varies run-to-run (skipped eval once, executed another) | HOLD - feature works, prompt-following inconsistent |
 
 
