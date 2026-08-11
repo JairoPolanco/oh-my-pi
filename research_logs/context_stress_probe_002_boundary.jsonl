@@ -1,0 +1,1 @@
+{"experiment":"context-stress-probe-002","metric":"evidence-survival-boundary","window":32000,"cycles":40,"survives":{"c2":false,"c5":false,"c10":true,"c15":true,"c20":true,"c25":true,"c30":true,"c35":true,"c38":true},"finding":"oldest-first eviction drops the first ~20% of transcript; evidence there is lost (would require re-fetch), later evidence survives"}

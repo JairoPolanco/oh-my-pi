@@ -43,3 +43,20 @@ Model `opencode-go/deepseek-v4-flash` at $0.07/1M in / $0.14/1M out (listed "2x 
 1. **Long-horizon context stress (loop 2)** — a handful of tasks (3–5, not 22) with 50k–150k raw history, A vs B only (isolate Context VM). First-class metrics: `E_context = success/input-tokens`, re-fetch rate, lost-evidence failures.
 2. **RLM model-call reduction (loop 3)** — N_model_calls/task, the RLM thesis: deterministic coordination without inference.
 3. Delegation threshold study only after 1–2.
+
+## Context stress probe (loop 2, zero-usage mechanism test)
+
+Synthetic ~41k-token transcript (40 read/grep cycles, one early evidence fact needed at the end), 32k simulated window (historyBudget ≈ 24k), governance ON vs OFF — no model calls, pure mechanism.
+
+| Metric | GOV OFF | GOV ON |
+|---|---|---|
+| Messages sent | 165/165 | 113/165 |
+| Tokens | 40,841 | 23,861 (−41.6%) |
+| Tool spans atomic | — | yes (no orphans) |
+| Early evidence (cycle 2) survives | **yes** | **NO — lost** |
+
+**Finding (context-stress-001/002): the VM's oldest-first eviction drops the first ~20% of the transcript.** Evidence at cycles 2–5 is evicted (lost-evidence failure → would force a re-fetch or wrong answer); from cycle 10 on it survives. Compression and atomicity work as designed; the cost is that OLD early evidence — often exactly the "important early evidence needed late" the audit cares about — is the first thing evicted.
+
+**Decision: HOLD, with a flagged weakness.** The VM must either (a) weight older evidence-bearing spans by fact-importance rather than pure recency-independent value, or (b) expose re-fetch pressure so the model can detect the gap. Until one of those exists, governance-on for long horizons risks lost-evidence failures that baseline never had. Cost of this probe: $0 (no API calls).
+
+Next probe (still zero-usage): does a higher value score (impact/information/reliability) on the evidence span protect it from eviction? That tests whether the loss is a value-ranking gap or an eviction-policy gap.
