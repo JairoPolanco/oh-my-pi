@@ -362,4 +362,28 @@ describe("ProviderContextGovernor", () => {
 		const sent = result.messages.map(m => JSON.stringify(m.content)).join("\n");
 		expect(sent).toContain("EVIDENCE: root cause is services/planner.ts");
 	});
+
+	test("under-budget governance is byte-stable: message objects pass through BY REFERENCE (prompt-cache invariant, hermes quality)", async () => {
+		// Hermes's load-bearing invariant: nothing may mutate past context
+		// (only compression may). Our gate-closed path returns the SAME
+		// context object; the gate-OPEN path under budget must also preserve
+		// message object identity — a rebuilt copy would re-serialize bytes
+		// and bust the provider's cached prefix on every turn. Only deliberate
+		// eviction/truncation may rewrite.
+		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
+		const roomy = { contextWindow: 100_000 } as unknown as Model; // everything fits
+		const messages = [
+			textMessage("developer", "rules", 0),
+			toolCallMessage("work", 1),
+			toolResultMessage(2, "result 2"),
+			textMessage("user", "finish", 3),
+		];
+		const result = await governor.transform({ messages }, roomy);
+		expect(result.messages).toHaveLength(4);
+		// Object identity preserved for EVERY message — byte-identical, so the
+		// provider cache prefix survives this turn's transform.
+		for (let index = 0; index < messages.length; index++) {
+			expect(result.messages[index]).toBe(messages[index]);
+		}
+	});
 });

@@ -40,6 +40,21 @@ log(message) → None         phase(title) → None
 budget → {{#if py}}`budget.total` (ceiling or None), `budget.spent()`, `budget.remaining()`{{/if}}{{#if js}}`await budget.total()`, `await budget.spent()`, `await budget.remaining()`{{/if}}{{#if rb}}`budget.total`, `budget.spent`, `budget.remaining`{{/if}}{{#if jl}}`budget.total`, `budget.spent()`, `budget.remaining()`{{/if}}; ceiling `+Nk` advisory, `+Nk!` hard.
 ```
 </prelude>
+
+<kernel-bridge>
+The constitutional kernel is exposed as namespaced async helpers (JS `await`, Python `await`). Every call is capability-gated — you can only touch what your session was granted. Prefer these over ad-hoc shell/file work when the operation maps to one:
+- `ctx.materialize({ tokenBudget, objective?, candidates })` → ContextView. Token-budgeted selection over candidates (value-ranked, atomic spans, hard overflow).
+- `artifacts.put({ text, kind? })` → `{ id, bytes }` (content-addressed, dedup). `artifacts.read({ id })` → `{ id, text }`. `artifacts.has({ id })` → bool.
+- `tasks.create({ id, objective, dependencies?, assignee? })` → task. `tasks.transition({ id, to })`. `tasks.list({ state? })`. `tasks.ready()`.
+- `events.query({ kind?, limit? })` → recent kernel events (the canonical session log).
+- `memory.propose({ fact, confidence?, scope? })` → `{ id, state }` (staged). `memory.commit({ id })`, `memory.reject({ id })`, `memory.stale({ id })`, `memory.recall({ query?, scope? })`.
+- `actors.status({ id? })`, `actors.list()`, `actors.send({ to, kind, payload? })` (peer message), `actors.park({ id })`, `actors.revive({ id })`, `actors.abort({ id })`.
+- `contract.create({ id, objective, requirements?, checks?, requiredEvidence?, verificationLevel? })`, `contract.verify({ id, evidence?, reviewerModel? })` → verification report (V1–V4).
+- `routing.resolve({ role, taskComplexity?, … })`, `routing.register({ role, provider, model })`, `routing.stats()`.
+- `policy.authorize({ id, effect, resource, actor? })` → `{ allow, reason? }`. `security.profile({ actor? })` → tier + effective capabilities.
+- `harness.hypothesis({ component, observation, hypothesis, prediction?, change?, evaluationSlice? })` → version. `harness.promote({ version })` (applies a TRUSTED verdict only). `harness.versions()`.
+- `gateway.status()` → control-plane runtimes + methods.
+</kernel-bridge>
 {{#if spawns}}
 <dag>
 Acyclic waves via `agent(…, handle=true)` + `pipeline`/`parallel`:

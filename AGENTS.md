@@ -6,6 +6,17 @@ This repo contains multiple packages, but **`packages/coding-agent/`** is the pr
 
 **Terminology**: When the user says "agent" or asks "why is agent doing X", they mean the **coding-agent package implementation**, not you (the assistant). The coding-agent is a CLI tool — questions about its behavior refer to code in `packages/coding-agent/`, not your current session.
 
+## Constitutional Kernel Harness
+
+This repo carries a constitutional kernel (`packages/kernel/`) that governs effects, context, and durable state. When the harness gates are on (`OMP_KERNEL_EFFECT_GATE=1`, `OMP_KERNEL_CONTEXT_GOVERNANCE=1` — the `omjai` launcher sets both), you operate under them and SHOULD leverage the surfaces they enable:
+
+- **Effect gate** (`OMP_KERNEL_EFFECT_GATE`): every tool call is authorized by the kernel capability broker before OMP's own approval machinery — default deny. Your session's main principal is bootstrapped with the full workspace baseline (read/write/exec within the repo, network, typed agent/task/memory/skill/session/goal/computer capabilities). A `kernel policy denied` block means the operation genuinely needs a capability the session lacks — do not retry the same call, find a sanctioned path or ask. Fail-closed: a broker error blocks, never passes through.
+- **Context VM** (`OMP_KERNEL_CONTEXT_GOVERNANCE`): provider history is token-budgeted by the kernel — optional units (old tool spans) are evicted whole, current turn + developer + immediate unresolved exchange always survive, and the request never exceeds the model's history budget (overflow throws). Early findings you need later SHOULD be recorded in durable state (below) rather than relied on to survive eviction.
+- **Durable kernel state via the eval bridge** (`__kernel__`, available inside the eval tool's JS/Python runtime): content-addressed `artifacts`, SQLite `tasks` (durable work graph with leases), `events` (canonical session log), staged `memory` facts, `contracts` (completion contracts with V1–V4 verification), `routing` registry, `harness` version ledger (propose/promote — promote applies only TRUSTED verdicts), and `gateway` status. Every bridge call is capability-gated like a tool. Use `artifacts`/`tasks`/`contracts` for anything that must survive compaction or a later turn — do not rely on long context alone.
+- **Verification**: completion contracts (`__kernel__.contract.create`/`verify`) give you evidence-first, deterministic checks (file exists / pattern / json / command with the SAME capability gate as bash). Use them for deliverables with checkable outcomes; level ≥3 mandates an independent reviewer.
+
+Rule of thumb: **short-lived working context lives in the conversation; anything load-bearing (evidence, task state, findings you'll need after eviction) goes into the kernel's durable surfaces.**
+
 ### Package Structure
 
 | Package                 | Description                                                                             |
