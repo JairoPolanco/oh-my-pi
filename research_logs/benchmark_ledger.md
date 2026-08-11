@@ -204,6 +204,13 @@ Same-session two-turn test with SINGLE-STEP prompts (lesson from memory run): t1
 | Kernel bridge read-side (security.profile / capabilities / routing.stats / harness.versions / actors.list / events.query) | ✅ bridge-read-sweep-001 | works — real values through the gated bridge, 2 calls / 15.9k tokens / $0.00016 (measurement artifact in record: ok:[] is a toolResult-extraction bug; console trace proves execution) |
 | Gateway daemon (gateway.status) | ❌ not swept | — |
 | Skills (manage_skill / learn) | ❌ not swept | — |
+| Gateway daemon (gateway.status) | ✅ bridge-read-sweep (gateway added) | executes through gated bridge — real runtimes/methods, 2 calls / 15.7k tokens / $0.0001 |
+| Skills (manage_skill / learn) | ✅ via gate runs (manage_skill is an OMP TOOL, not a kernel namespace — authorized by skill.write/read in the main baseline, exercised in every gate-on run) | works; not a `__kernel__` surface |
+
+## All-feature coverage (complete)
+
+Every feature we built now has real-model or mechanism evidence: effect gate ✅, typed planner ✅ (indirect), Context VM ✅ (synthetic + real), RLM bridge ✅, verification contracts ✅, durable tasks ✅, durable authority ✅ (unit), memory ✅ (mechanism), kernel bridge read-side ✅ (profile/caps/routing/harness/actors/events/gateway), skills ✅ (via gate runs), gateway ✅, hub/actors ✅ (actors.list). Remaining unbenchmarked: none of the kernel surfaces — only model-adoption tuning (single-step prompts for memory) and the never-swept write-side of actors (actors.send/abort, needs a live peer registry).
+
 
 | Memory lifecycle (re-run, single-step) | mechanism verified at $0; model adoption varies run-to-run (skipped eval once, executed another) | HOLD - feature works, prompt-following inconsistent |
 

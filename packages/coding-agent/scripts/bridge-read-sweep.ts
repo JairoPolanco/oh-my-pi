@@ -64,6 +64,7 @@ out.routing = await routing.stats()
 out.versions = await harness.versions()
 out.actors = await actors.list()
 out.events = await events.query({ limit: 3 })
+out.gateway = await gateway.status()
 out
 Then reply with a JSON summary of what each key returned (a few chars each).`,
 				{ expandPromptTemplates: false },
@@ -86,7 +87,7 @@ Then reply with a JSON summary of what each key returned (a few chars each).`,
 		})
 		.join(" ");
 	// Which surfaces produced real values (not errors)?
-	const surfaces = ["profile", "caps", "routing", "versions", "actors", "events"];
+	const surfaces = ["profile", "caps", "routing", "versions", "actors", "events", "gateway"];
 	const ok = surfaces.filter(name => results.includes(name) && !/Error|denied|undefined is not/.test(results));
 	console.log(
 		`${timedOut ? "TIMEOUT" : "done  "} calls=${stats.assistantMessages} tools=${stats.toolCalls} tokens=${stats.tokens.total} wall=${Math.round(wallMs)}ms cost=$${stats.cost.toFixed(4)}`,
