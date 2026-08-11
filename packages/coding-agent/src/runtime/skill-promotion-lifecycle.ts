@@ -42,10 +42,23 @@ import {
 	promoteManagedSkill,
 	stagedSkillSourceFile,
 } from "../autolearn/managed-skills";
+import { Settings, type Settings as SettingsType } from "../config/settings";
 import type { AgentSession, AgentSessionEvent } from "../session/agent-session";
 
 /** Sweep cadence: at most one staged skill evaluated per N turn ends. */
 const SWEEP_EVERY_N_TURNS = 3;
+
+/**
+ * Settings for the auto-executor's internal probe sessions. The probe
+ * sessions are EVALUATION, not user turns: they must not retain episodes
+ * into the shared memory bank (harmony seam — the auto-executor's probes
+ * were auto-retaining "continue"/usability turns as mnemopi episodes,
+ * polluting recall with harness noise). In-memory override keeps the parent
+ * config otherwise intact, disabling only retention.
+ */
+function probeSessionSettings(): SettingsType {
+	return Settings.isolated({ "mnemopi.autoRetain": false });
+}
 /** Replay session timeout (supervised abort cap — never runaway). */
 const REPLAY_TIMEOUT_MS = 90_000;
 
@@ -173,6 +186,13 @@ export class SkillPromotionLifecycle {
 				model: session.model,
 				authStorage: session.modelRegistry.authStorage,
 				modelRegistry: session.modelRegistry,
+				// Internal evaluation session: MUST NOT retain into the shared
+				// memory bank (harmony seam — the auto-executor's probes were
+				// auto-retaining "continue"/usability turns as episodes,
+				// polluting mnemopi recall with harness noise). In-memory
+				// settings override keeps everything else from the parent
+				// config but disables retention.
+				settings: probeSessionSettings(),
 				sessionManager: SessionManager.inMemory(session.sessionManager.getCwd()),
 				agentRegistry: new AgentRegistry(),
 				hasUI: false,
@@ -227,6 +247,8 @@ export class SkillPromotionLifecycle {
 				model: session.model,
 				authStorage: session.modelRegistry.authStorage,
 				modelRegistry: session.modelRegistry,
+				// Internal evaluation session: no retention into shared memory.
+				settings: probeSessionSettings(),
 				sessionManager: SessionManager.inMemory(session.sessionManager.getCwd()),
 				agentRegistry: new AgentRegistry(),
 				hasUI: false,

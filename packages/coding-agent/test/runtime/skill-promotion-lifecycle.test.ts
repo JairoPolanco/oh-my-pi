@@ -82,11 +82,16 @@ describe("SkillPromotionLifecycle", () => {
 	test("staged skill with passing replay + heldout arms is promoted and recorded in the ledger", async () => {
 		await stageSkill("good-skill", "# Good\n\nTeaches the right way.");
 		// The replay session answers the source task substantively; the heldout
-		// session references the skill name (proves it loaded).
-		vi.spyOn(sdkModule, "createAgentSession").mockResolvedValue({
-			session: fakeReplaySession("I completed the task using good-skill guidance."),
-			modelFallbackMessage: undefined,
-		} as unknown as CreateAgentSessionResult);
+		// session references the skill name (proves it loaded). Capture the
+		// settings each probe session receives.
+		const probeSettings: unknown[] = [];
+		vi.spyOn(sdkModule, "createAgentSession").mockImplementation(async options => {
+			probeSettings.push(options.settings);
+			return {
+				session: fakeReplaySession("I completed the task using good-skill guidance."),
+				modelFallbackMessage: undefined,
+			} as unknown as CreateAgentSessionResult;
+		});
 
 		const session = makeSession([{ role: "user", content: [{ type: "text", text: "Fix the auth flow." }] }]);
 		const fake = session as unknown as FakeSession;
@@ -112,6 +117,12 @@ describe("SkillPromotionLifecycle", () => {
 		const versions = host.versions.all;
 		const promotedVersion = versions.find(v => v.evaluation?.decision === "promote");
 		expect(promotedVersion?.evaluation?.reason).toContain("auto-executor");
+		// Harmony seam: the probe sessions are INTERNAL evaluations and must
+		// not retain episodes into the shared memory bank.
+		expect(probeSettings.length).toBeGreaterThanOrEqual(2);
+		for (const settings of probeSettings) {
+			expect((settings as { get: (k: string) => unknown }).get("mnemopi.autoRetain")).toBe(false);
+		}
 	});
 
 	test("staged skill with a failing replay arm stays staged (no promotion)", async () => {
