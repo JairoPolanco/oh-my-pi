@@ -287,6 +287,12 @@ Verified both halves live:
 - REJECT: real trials file with failed heldout (overfit) → pairedGate PASS but heldout FAIL → verdict reject → ledger v1 (reject) → skill STAYS staged.
 
 Cost: $0 (pure decision + file moves; the real-model trial collection is the metaharness's job, wired via the same gates).
+## Skill gate interactive gap (dogfooding, autolearn mounting)
+
+The skill auto-executor test (prompt #1, gate armed) hit a REAL wiring gap the interactive session exposed: **the `learn` + `manage_skill` tools were never mounted in omjai**. Both gate on `autolearn.enabled` (default OFF), and the omjai config overlay enabled mnemopi but not autolearn — so the session built no tool that can create a staged skill, and the auto-executor had nothing to sweep. The agent correctly diagnosed this (found LearnTool.createIf, probed the eval bridge → "Unknown tool from js runtime: learn", confirmed the gate env was armed), but could not mount a tool the session didn't build at startup.
+
+**Fix: `autolearn.enabled: true` added to `~/.omp/omjai-config.yml`** (verified: loads true with the overlay, mnemopi backend unchanged). Next omjai launch mounts learn + manage_skill → staged skills → auto-executor sweep. This is the completion of item 3's interactive UX: the hook existed, but nothing produced staged skills in the live session.
+
 ## Cross-session memory recall (dogfooding, prompt-2, verified live)
 
 The last unproven memory claim: does a FRESH session recall a fact committed by an earlier session, WITHOUT model adoption being the blocker? The omjai sweep (prompt 1) committed a fact via the bridge (`memory.propose` → mnemopi, id `7938b97d3c07838b`, backend mnemopi, auto-commit at propose). Prompt 2 ran in a NEW session (different session id, same cwd → same mnemopi bank `oh-my-pi-2sw2b7t2w190o`):
