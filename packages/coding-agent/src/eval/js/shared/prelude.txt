@@ -75,6 +75,43 @@ if (!globalThis.__omp_js_prelude_loaded__) {
 		},
 	);
 
+	// RLM ergonomics (dogfooding, rlm-model-calls-002): `tool.<name>()`
+	// returns the RAW tool-result envelope, which models waste calls
+	// reverse-engineering. These helpers route through the SAME gated tool
+	// path (the session's beforeToolCall/effect-broker applies) but unwrap to
+	// plain, documented values. Every file-system/process effect from eval
+	// goes through the capability gate — never a bypass.
+	const resultText = res => {
+		if (res == null) return "";
+		if (typeof res === "string") return res;
+		if (typeof res.text === "string") return res.text;
+		const content = res.content;
+		if (typeof content === "string") return content;
+		if (Array.isArray(content)) {
+			return content
+				.filter(part => part && part.type === "text" && typeof part.text === "string")
+				.map(part => part.text)
+				.join("\n");
+		}
+		return "";
+	};
+	const readText = async (path, opts, ...rest) => {
+		const o = optionsArg("readText", opts, rest, ["offset", "limit"], "{ offset, limit }");
+		const res = await globalThis.__omp_call_tool__("read", { path, ...o });
+		return resultText(res);
+	};
+	const bashOut = async (command, opts, ...rest) => {
+		const o = optionsArg("bashOut", opts, rest, ["cwd"], "{ cwd }");
+		const res = await globalThis.__omp_call_tool__("bash", { command, ...o });
+		return resultText(res);
+	};
+	const globFiles = async (pattern, opts, ...rest) => {
+		const o = optionsArg("globFiles", opts, rest, ["limit", "gitignore", "hidden"], "{ limit, gitignore, hidden }");
+		const res = await globalThis.__omp_call_tool__("glob", { path: pattern, ...o });
+		const details = res && typeof res === "object" ? res.details : undefined;
+		return details && Array.isArray(details.files) ? details.files : [];
+	};
+
 	// RLM host bridge (blueprint §16, §84): programmatic kernel access.
 	const kernelNamespace = ns =>
 		new Proxy(
@@ -305,6 +342,9 @@ if (!globalThis.__omp_js_prelude_loaded__) {
 	globalThis.print = consoleBridge.log;
 	globalThis.display = display;
 	globalThis.tool = tool;
+	globalThis.readText = readText;
+	globalThis.bashOut = bashOut;
+	globalThis.globFiles = globFiles;
 	globalThis.ctx = ctx;
 	globalThis.artifacts = artifacts;
 	globalThis.tasks = tasks;

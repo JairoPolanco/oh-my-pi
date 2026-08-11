@@ -467,6 +467,61 @@ if "__omp_prelude_loaded__" not in globals():
 
     tool = _ToolProxy()
 
+    def _result_text(res) -> str:
+        """Extract plain text from a tool-result envelope (string, {text}, or
+        {content: [...]}) — the gated helpers' unwrap (dogfooding,
+        rlm-model-calls-002)."""
+        if res is None:
+            return ""
+        if isinstance(res, str):
+            return res
+        if not isinstance(res, dict):
+            return str(res)
+        text = res.get("text")
+        if isinstance(text, str):
+            return text
+        content = res.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str):
+                    parts.append(part["text"])
+            return "\n".join(parts)
+        return ""
+
+    def readText(path, offset: int | None = None, limit: int | None = None) -> str:
+        """Read a file through the GATED read tool and return its text.
+
+        Prefer over the plain `read()` helper for capability-governed work:
+        routes through the same beforeToolCall/effect-broker gate as the read
+        tool, and returns a plain string instead of a result envelope.
+        """
+        args = {"path": path}
+        if offset is not None:
+            args["offset"] = offset
+        if limit is not None:
+            args["limit"] = limit
+        return _result_text(_bridge_call("read", args))
+
+    def bashOut(command: str, cwd: str | None = None) -> str:
+        """Run a shell command through the GATED bash tool and return stdout."""
+        args = {"command": command}
+        if cwd is not None:
+            args["cwd"] = cwd
+        return _result_text(_bridge_call("bash", args))
+
+    def globFiles(pattern: str, **kwargs) -> list[str]:
+        """Glob through the GATED glob tool and return matched file paths."""
+        args = {"path": pattern, **kwargs}
+        res = _bridge_call("glob", args)
+        if isinstance(res, dict):
+            details = res.get("details")
+            if isinstance(details, dict) and isinstance(details.get("files"), list):
+                return [str(f) for f in details["files"]]
+        return []
+
     class _KernelCallable:
         """Invokes one kernel-bridge op (`ctx.materialize`, `tasks.create`, …)."""
 

@@ -28,9 +28,16 @@ const TASKS = [
 		prompt:
 			"Which packages in this monorepo depend on '@oh-my-pi/pi-ai' (in dependencies, devDependencies, or peerDependencies of their package.json)? Report the list of package names.",
 		verify: (text: string) =>
-			["agent", "catalog", "coding-agent", "metaharness", "mnemopi", "snapcompact", "stats", "typescript-edit-benchmark"].every(
-				p => text.includes(p),
-			),
+			[
+				"agent",
+				"catalog",
+				"coding-agent",
+				"metaharness",
+				"mnemopi",
+				"snapcompact",
+				"stats",
+				"typescript-edit-benchmark",
+			].every(p => text.includes(p)),
 	},
 ];
 
@@ -41,7 +48,10 @@ function countTokens(text: string): number {
 	return Math.max(1, Math.ceil(text.length / 4));
 }
 
-async function runArm(task: { id: string; prompt: string; verify: (t: string) => boolean }, arm: string): Promise<Record<string, unknown>> {
+async function runArm(
+	task: { id: string; prompt: string; verify: (t: string) => boolean },
+	arm: string,
+): Promise<Record<string, unknown>> {
 	const shared = await discoverSharedInfra({ cwd: REPO });
 	const tools = arm === RLM_ARM ? ["read", "grep", "glob", "bash", "eval"] : ["read", "grep", "glob", "bash"];
 	const appendSystemPrompt =

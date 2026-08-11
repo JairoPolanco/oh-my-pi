@@ -85,5 +85,11 @@ Real model (`opencode-go/deepseek-v4-flash`), sequential runs, no fan-out. Thesi
 **Verdict: REJECT the RLM benchmark as-designed; the result is an ERGONOMICS finding, not a thesis result.** Message-trace of the RLM arm shows the model spent 12+ calls DEBUGGING the eval-tool contract, not doing the task: `tool.read` returns a wrapped tool-result object, the model guessed `JSON.parse` on BOM-prefixed text, errors surface as `<parse error>` with no shape documentation in-context, and the prelude exposes BOTH `read(path)` (plain text) and `tool.read()` (raw object) with no guidance on which to use. The RLM thesis ("one program replaces N inferences") is UNTESTABLE until the programmatic surface is self-documenting.
 
 **Fix candidate (before any RLM re-benchmark)**: the eval prelude must expose typed, documented helpers (`readText(path) → string`, `bashOut(cmd) → stdout`, `globFiles(pattern) → string[]`) with return-shape documentation injected into the runtime context, and/or richer error messages. Cost of the whole RLM probe: ~$0.005.
+## RLM ergonomics fix (shipped)
+
+The fix candidate is implemented and verified at ZERO model cost (stub-tool prelude test, `kernel-prelude.test.ts`): the JS and Python eval preludes now expose `readText(path) → string`, `bashOut(cmd) → string`, `globFiles(pattern) → string[]` — routed through the SAME gated tool path (`__omp_call_tool__` / `_bridge_call`, so the capability gate applies) but returning plain documented values instead of raw tool-result envelopes. `eval.md` documents the exact return shapes in the prelude block. This is the cheapest possible verification: no model calls, deterministic stubs.
+
+**Decision: RLM benchmark HOLD until re-run with the ergonomic surface.** The next RLM probe should direct the model to `readText`/`bashOut`/`globFiles` and measure `N_model_calls/task` again. When it runs, it should be 3–6 calls, not 12–15, if the ergonomics fix addresses the authoring/debug overhead — that is the hypothesis under test.
+
 
 

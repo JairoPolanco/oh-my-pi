@@ -18,6 +18,17 @@ env(key?=None, value?=None) → str | None | dict
 output(*ids, format?="raw", query?=None, offset?=None, limit?=None) → str | dict | list[dict]
 tool.<name>(args) → unknown
     Invoke any session tool; `args` = its parameter object.
+{{#if js}}readText(path, { offset?, limit? }?) → string
+    Read a file and return its TEXT (plain string). Same capability gate as
+    the read tool, but no envelope to unwrap.
+bashOut(command, { cwd? }?) → string
+    Run a shell command and return its stdout as a plain string. Same gate as
+    bash.
+globFiles(pattern, { limit?, gitignore?, hidden? }?) → string[]
+    Glob and return the matched FILE PATHS as a string array. Same gate as glob.
+    Prefer these three over `tool.read`/`tool.bash`/`tool.glob` for simple
+    gather-work — they return plain values, not result envelopes.
+{{/if}}
 completion(prompt, model?="default"|"smol"|"slow", system?=None, schema?=None) → str | dict
     Oneshot, stateless (no history/tools). `model`: "smol" fast | "default" session | "slow" most capable. `schema` (JSON-Schema) → parsed object.
 {{#if spawns}}agent(prompt, agent?="{{spawnDefaultAgent}}", label?=None, schema?=None, schema{{#if js}}Mode{{else}}_mode{{/if}}?="permissive", isolated?=None, apply?=None, merge?=None, handle?=False) → str | dict

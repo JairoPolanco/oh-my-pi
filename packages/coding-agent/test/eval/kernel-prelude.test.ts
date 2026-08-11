@@ -48,6 +48,50 @@ describe("kernel prelude globals (JS worker)", () => {
 		tempDir[Symbol.dispose]();
 	});
 
+	it("readText/globFiles/bashOut unwrap gated tool envelopes (dogfooding, rlm-model-calls-002)", async () => {
+		// Stub tools return REAL AgentToolResult envelopes; the helpers must
+		// unwrap to plain documented values — the model previously burned
+		// calls reverse-engineering these shapes.
+		const session = makeSession(
+			tempDir.path(),
+			...([
+				{
+					name: "read",
+					execute: async () => ({
+						content: [{ type: "text", text: "line one\nline two" }],
+						details: { sourcePath: "package.json" },
+					}),
+				},
+				{
+					name: "glob",
+					execute: async () => ({
+						content: [{ type: "text", text: "a.ts\nb.ts" }],
+						details: { files: ["a.ts", "b.ts"], fileCount: 2 },
+					}),
+				},
+				{
+					name: "bash",
+					execute: async () => ({
+						content: [{ type: "text", text: "hello-from-eval\n" }],
+						details: { exitCode: 0 },
+					}),
+				},
+			] as unknown as AgentTool[]),
+		);
+		const code = `
+			const text = await readText("package.json");
+			const files = await globFiles("packages/*/package.json");
+			const out = await bashOut("echo hello-from-eval");
+			return JSON.stringify({ text, files, out });
+		`;
+		const result = await executeJs(code, { cwd: tempDir.path(), sessionId, session });
+		expect(result.exitCode).toBe(0);
+		const parsed = JSON.parse(result.output.trim());
+		expect(parsed.text).toBe("line one\nline two");
+		expect(parsed.files).toEqual(["a.ts", "b.ts"]);
+		expect(parsed.out).toBe("hello-from-eval\n");
+	});
+
 	it("artifacts.put/read round-trip through the bridge", async () => {
 		const session = makeSession(tempDir.path(), {
 			name: "read",

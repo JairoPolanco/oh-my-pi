@@ -58,7 +58,13 @@ async function runArm(arm: string, truth: { names: string[]; test: string[] }): 
 					"Run the program, then respond with the full list. Do not read the package.json files yourself with the read tool.",
 				].join("\n")
 			: undefined;
-	const client = new InProcessClient({ cwd: REPO, model: MODEL, shared, tools, ...(appendSystemPrompt ? { appendSystemPrompt } : {}) });
+	const client = new InProcessClient({
+		cwd: REPO,
+		model: MODEL,
+		shared,
+		tools,
+		...(appendSystemPrompt ? { appendSystemPrompt } : {}),
+	});
 	try {
 		await client.start();
 		const t0 = performance.now();
@@ -101,6 +107,10 @@ for (const arm of ["A_baseline", "B_RLM"]) {
 }
 await Bun.write(
 	new URL("../../../research_logs/rlm_model_calls_002.jsonl", import.meta.url),
-	JSON.stringify({ experiment: "rlm-model-calls-002", agent: MODEL, task: TASK.id, groundTruth: truth, results }, null, 1) + "\n",
+	JSON.stringify(
+		{ experiment: "rlm-model-calls-002", agent: MODEL, task: TASK.id, groundTruth: truth, results },
+		null,
+		1,
+	) + "\n",
 );
 console.log("\nrecord -> research_logs/rlm_model_calls_002.jsonl");
