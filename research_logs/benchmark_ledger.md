@@ -129,6 +129,35 @@ Same multi-file task (audit two kernel files + persist findings via `tasks.creat
 
 **Verdict: the harness is 3.1x fewer calls, 4.7x fewer tokens, 3.7x faster, and finishes** — the baseline model burned 22 calls reverse-engineering the eval/kernel surface that AGENTS.md's Constitutional Kernel Harness section + eval.md's kernel-bridge prelude now document directly. This is the prompt-leverage work paying measured dividends: the model leveraged `tasks.create` (durable surface) because it was told the surface exists. Total probe cost: ~$0.006.
 
+## Verification-contract benefit (verification-benefit-001, supervised)
+
+Audit's open question: does `contract.create`+`contract.verify` improve actual correctness? Same task (exact exported names in kernel-bridge.ts), free-form vs contract-with-real-checks:
+
+| Arm | Calls | Tools | Tokens | Wall | Cost | Names right | Contract verified |
+|---|---|---|---|---|---|---|---|
+| A baseline (free-form) | 3 | 2 | 19.5k | 19s | $0.0002 | 2/2 | — (unverifiable) |
+| B contract (create+verify) | 6 | 5 | 57.5k | 35s | $0.0010 | 2/2 | **true** |
+
+**Verdict: verification works as designed — ~2x calls / 3x tokens buys machine-checked evidence.** The baseline answer is asserted; the contract answer is verified (real `pattern` checks against the file — a hallucinated name would fail `verify`). This is the correctness-vs-cost trade: the price of evidence is the overhead. Feature is functional end-to-end (create → verify → pass through the real engine). Total probe cost ~$0.0012.
+
+## Feature benchmark status (features we built)
+
+| Feature | Real-model benchmark | Status |
+|---|---|---|
+| Effect gate / capability broker | edit ablation + harness-vs-baseline | ✅ measured (−20% tokens, 100% seeds; 22→7 calls) |
+| Typed capability planner | via gate runs | ⚠️ indirect |
+| Context VM | synthetic mechanism probe | ⚠️ mechanism-only; real long-horizon untested |
+| `__kernel__` RLM bridge | RLM rejection runs | ✅ measured (authoring overhead on short tasks) |
+| Completion contracts / V1–V4 | verification-benefit-001 | ✅ measured (this run) |
+| Durable tasks / work graph | harness-vs-baseline (tasks.create used) | ⚠️ one use, not isolated |
+| Durable authority | unit reopen test | ⚠️ no model-facing run |
+| Semantic memory (learn/recall) | — | ❌ never measured |
+| Skills (learn/manage_skill) | — | ❌ never measured |
+| Gateway daemon | — | ❌ never measured |
+| Hub peer messaging / actors | — | ❌ never measured |
+
+**Next candidates (cheap): memory learn→recall across sessions (~$0.01), durable tasks isolated (~$0.005), then long-horizon context stress (~$0.05–0.15).**
+
 **Adopted harness qualities (from the four reference surveys), with evidence:**
 - Hermes prompt-cache byte-stability: pinned by regression test (under-budget transform returns message objects BY REFERENCE — verified, `provider-context-governor.test.ts`).
 - Hermes session-scoped capability never env-keyed: `KernelHost` bootstrapMain no longer defaults from env (deterministic; tests full-suite safe).
