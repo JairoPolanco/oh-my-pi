@@ -90,8 +90,13 @@ async function kernelDirFor(session: KernelSessionAdapter): Promise<string> {
 	const artifactsDir = session.getArtifactsDir?.() ?? null;
 	if (artifactsDir) return path.join(artifactsDir, "kernel");
 	// In-memory session: a temp dir keyed by session identity, created
-	// lazily and removed on release/reset. Never the workspace.
-	const key = session.getSessionId?.() ?? session.cwd;
+	// lazily and removed on release/reset. Never the workspace. The key
+	// prefers the kernel session id (the actor-tree identity — always
+	// present even when an embedding exposes no getSessionId/cwd on the
+	// session object), falling back to session id, then cwd, then a literal.
+	// (Dogfooding: an in-memory session with only getKernelSessionId used to
+	// crash sanitizeFileSegment(undefined).)
+	const key = session.getKernelSessionId?.() ?? session.getSessionId?.() ?? session.cwd ?? "session";
 	const dir = path.join(os.tmpdir(), `omp-kernel-${sanitizeFileSegment(key)}`);
 	await fs.mkdir(dir, { recursive: true });
 	TRANSIENT_KERNEL_DIRS.add(dir);

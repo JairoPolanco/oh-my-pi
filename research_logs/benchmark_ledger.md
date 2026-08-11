@@ -157,6 +157,17 @@ Audit's open question: does `contract.create`+`contract.verify` improve actual c
 | Hub peer messaging / actors | — | ❌ never measured |
 
 **Next candidates (cheap): memory learn→recall across sessions (~$0.01), durable tasks isolated (~$0.005), then long-horizon context stress (~$0.05–0.15).**
+## Memory learn→recall (memory-learn-recall-001)
+
+Real-model run: session A reads a fact + persists via `memory.propose`/`commit`; session B (same kernel tree) recalls it.
+
+**Mechanism: VERIFIED at $0.** Direct bridge check: session 1 propose→commit, session 2 recall in the same tree returns the committed fact (id 5a34b8d3..., state committed). Cross-session memory sharing works through the shared kernelSessionId → shared KernelHost → shared store.
+
+**Model run: the model used the gated bridge (memory.recall executed, returned empty) but never called memory.propose** — it recalled first, found nothing, and answered from direct file reading (13 calls). Prompt-following gap on the multi-step propose+commit instruction, not a harness bug (eval.md documents the ops; the model just didn't complete the persist step). Cost of 2 runs ~$0.0015.
+
+**Bug found + fixed (dogfooding):** `kernelDirFor` crashed `sanitizeFileSegment(undefined)` for in-memory sessions exposing only `getKernelSessionId` (no getSessionId/cwd on the session object). Fix: temp-dir key prefers `getKernelSessionId` → `getSessionId` → `cwd` → literal "session".
+
+**Verdict: semantic memory lifecycle works deterministically; model adoption needs a prompt that makes the persist step first-class (single-step instruction, not "then commit the returned id").** Re-run candidate with a simpler prompt (~$0.01).
 
 **Adopted harness qualities (from the four reference surveys), with evidence:**
 - Hermes prompt-cache byte-stability: pinned by regression test (under-budget transform returns message objects BY REFERENCE — verified, `provider-context-governor.test.ts`).
