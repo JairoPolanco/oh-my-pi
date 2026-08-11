@@ -69,4 +69,21 @@ Boosting the evidence span's value score did NOT change the outcome — the loss
 - **Verified**: same 41k-token transcript, 32k window: GOV ON now sends 123 msgs at ~23.8k tokens (−41.8%) WITH the early evidence surviving, spans still atomic. Before the fix: evidence lost. Regression test added (`provider-context-governor.test.ts`).
 
 **Decision: Context VM HOLD → candidate for PROMOTE on long-horizon** (accounting gap closed; the mechanism now compresses without the evidence-loss failure mode). Full real-task long-horizon benchmark still pending — the synthetic probe validated the mechanism, not the model-facing behavior.
+## RLM model-call benchmark (loop 3, rlm-model-calls-001/002)
+
+Real model (`opencode-go/deepseek-v4-flash`), sequential runs, no fan-out. Thesis: deterministic coordination should not require an inference.
+
+| Task | Arm | Model calls | Tool calls | Tokens | Wall | Cost | Success |
+|---|---|---|---|---|---|---|---|
+| sqlite-imports | A baseline | 2 | 1 | 11.7k | 5.1s | $0.0004 | ✓ |
+| sqlite-imports | B RLM | 8 | 7 | 66.4k | 27.2s | $0.0010 | ✓ |
+| pi-ai-deps | A baseline | 3 | 3 | 20.7k | 8.9s | $0.0003 | ✓ |
+| pi-ai-deps | B RLM | 12 | 11 | 136.0k | 51.7s | $0.0015 | ✓ |
+| package-manifest-census (18 pkgs) | A baseline | 6 | 6 | 49.3k | 39.1s | $0.0008 | ✓ (16/16) |
+| package-manifest-census | B RLM | 15 | 14 | 192.8k | 60.3s | $0.0020 | ✓ (16/16) |
+
+**Verdict: REJECT the RLM benchmark as-designed; the result is an ERGONOMICS finding, not a thesis result.** Message-trace of the RLM arm shows the model spent 12+ calls DEBUGGING the eval-tool contract, not doing the task: `tool.read` returns a wrapped tool-result object, the model guessed `JSON.parse` on BOM-prefixed text, errors surface as `<parse error>` with no shape documentation in-context, and the prelude exposes BOTH `read(path)` (plain text) and `tool.read()` (raw object) with no guidance on which to use. The RLM thesis ("one program replaces N inferences") is UNTESTABLE until the programmatic surface is self-documenting.
+
+**Fix candidate (before any RLM re-benchmark)**: the eval prelude must expose typed, documented helpers (`readText(path) → string`, `bashOut(cmd) → stdout`, `globFiles(pattern) → string[]`) with return-shape documentation injected into the runtime context, and/or richer error messages. Cost of the whole RLM probe: ~$0.005.
+
 

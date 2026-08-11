@@ -1,0 +1,73 @@
+{
+ "experiment": "rlm-model-calls-002",
+ "agent": "opencode-go/deepseek-v4-flash",
+ "task": "package-manifest-census",
+ "groundTruth": {
+  "names": [
+   "snapcompact",
+   "pi-coding-agent",
+   "pi-wire",
+   "browser-relay",
+   "pi-tui",
+   "typescript-edit-benchmark",
+   "pi-metaharness",
+   "pi-catalog",
+   "pi-utils",
+   "pi-agent-core",
+   "omptype",
+   "pi-ai",
+   "hashline",
+   "pi-natives",
+   "pi-mnemopi",
+   "omp-stats",
+   "pi-kernel",
+   "collab-web"
+  ],
+  "test": [
+   "snapcompact",
+   "pi-coding-agent",
+   "pi-wire",
+   "pi-tui",
+   "typescript-edit-benchmark",
+   "pi-metaharness",
+   "pi-catalog",
+   "pi-utils",
+   "pi-agent-core",
+   "omptype",
+   "pi-ai",
+   "hashline",
+   "pi-natives",
+   "pi-mnemopi",
+   "pi-kernel",
+   "collab-web"
+  ]
+ },
+ "results": [
+  {
+   "task": "package-manifest-census",
+   "arm": "A_baseline",
+   "modelCalls": 6,
+   "toolCalls": 6,
+   "tokens": 49273,
+   "inputTokens": 1636,
+   "wallMs": 39146,
+   "cost": 0.0008050504,
+   "success": true,
+   "testMentioned": 16,
+   "testTotal": 16
+  },
+  {
+   "task": "package-manifest-census",
+   "arm": "B_RLM",
+   "modelCalls": 15,
+   "toolCalls": 14,
+   "tokens": 192779,
+   "inputTokens": 12819,
+   "wallMs": 60308,
+   "cost": 0.0019819828,
+   "success": true,
+   "testMentioned": 16,
+   "testTotal": 16
+  }
+ ]
+}
