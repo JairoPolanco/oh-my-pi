@@ -14,7 +14,14 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import type { ArtifactRef } from "../artifacts";
-import type { CheckResult, CompletionContract, StateSnapshot, VerificationEngine, VerificationReport } from "./types";
+import type {
+	CheckResult,
+	CompletionContract,
+	StateSnapshot,
+	VerificationCheck,
+	VerificationEngine,
+	VerificationReport,
+} from "./types";
 
 /**
  * Decides whether a verification command may run. The host wires this to the
@@ -168,6 +175,18 @@ export class DeterministicVerificationEngine implements VerificationEngine {
 					};
 				}
 				return { check, pass: true };
+			}
+			default: {
+				// Unknown/malformed check (e.g. a bare string sneaking through
+				// an unvalidated bridge): NEVER return undefined — the caller
+				// reads `r.pass` on every result (dogfooding finding:
+				// contract.verify crashed with `r.pass` on undefined). Fail
+				// closed with a descriptive result instead.
+				return {
+					check: check as VerificationCheck,
+					pass: false,
+					detail: `unknown check kind: ${JSON.stringify((check as { kind?: unknown }).kind)}`,
+				};
 			}
 		}
 	}

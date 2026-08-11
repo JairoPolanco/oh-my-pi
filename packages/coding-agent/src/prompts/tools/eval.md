@@ -42,7 +42,7 @@ budget → {{#if py}}`budget.total` (ceiling or None), `budget.spent()`, `budget
 </prelude>
 
 <kernel-bridge>
-The constitutional kernel is exposed as namespaced async helpers (JS `await`, Python `await`). Every call is capability-gated — you can only touch what your session was granted. Prefer these over ad-hoc shell/file work when the operation maps to one:
+The constitutional kernel is exposed as namespaced async helpers (JS `await`, Python `await`). Every call is capability-gated — you can only touch what your session was granted. Prefer these over ad-hoc shell/file work when the operation maps to one. NOTE: these are BARE namespace objects — call `security.profile()`, not `__kernel__.security.profile()` (the `__kernel__` name is the internal bridge op, not a runtime global):
 - `ctx.materialize({ tokenBudget, objective?, candidates })` → ContextView. Token-budgeted selection over candidates (value-ranked, atomic spans, hard overflow).
 - `artifacts.put({ text, kind? })` → `{ id, bytes }` (content-addressed, dedup). `artifacts.read({ id })` → `{ id, text }`. `artifacts.has({ id })` → bool.
 - `tasks.create({ id, objective, dependencies?, assignee? })` → task. `tasks.transition({ id, to })`. `tasks.list({ state? })`. `tasks.ready()`.

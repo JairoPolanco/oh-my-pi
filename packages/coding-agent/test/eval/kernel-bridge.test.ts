@@ -208,6 +208,25 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(() => call("contract.verify", { id: "nope" })).toThrow(/contract not found/);
 	});
 
+	test("contract.create rejects malformed checks with a clear error (dogfooding finding)", async () => {
+		// Regression: a bare-string check (e.g. checks: ["1+1==2"]) slipped
+		// through unvalidated and crashed contract.verify later at `r.pass`.
+		// The bridge must reject bad shapes AT CREATE with a descriptive error.
+		await expect(call("contract.create", { id: "bad", objective: "x", checks: ["1+1==2"] })).rejects.toThrow(
+			/check must be an object/,
+		);
+		await expect(call("contract.create", { id: "bad2", objective: "x", checks: [{ kind: "nope" }] })).rejects.toThrow(
+			/unknown check kind/,
+		);
+		// A valid check still creates.
+		const ok = (await call("contract.create", {
+			id: "ok",
+			objective: "x",
+			checks: [{ kind: "fileExists", path: path.join(sessionDir, "anything") }],
+		})) as { id: string; checks: number };
+		expect(ok.checks).toBe(1);
+	});
+
 	test("level-3 contracts mandate the independent reviewer (paste-4 P1)", async () => {
 		// The contract's verificationLevel determines verification: the caller
 		// cannot omit the reviewer a level-3 contract requires. The reviewer

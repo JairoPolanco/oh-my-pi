@@ -681,6 +681,24 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			if (typeof objective !== "string") throw new Error("__kernel__.contract.create requires string 'objective'");
 			const checks = Array.isArray(args.checks) ? (args.checks as never[]) : [];
 			const requiredEvidence = Array.isArray(args.requiredEvidence) ? (args.requiredEvidence as never[]) : [];
+			// Shape validation (dogfooding finding: a bare string check slipped
+			// through and crashed verify with `r.pass` on undefined). Each check
+			// must be an object with a KNOWN kind — reject early with a clear
+			// error instead of failing later in the engine.
+			const CHECK_KINDS = new Set(["command", "fileExists", "fileAbsent", "pattern", "json"]);
+			for (const check of checks) {
+				if (check === null || typeof check !== "object") {
+					throw new Error(
+						`__kernel__.contract.create: check must be an object { kind, ... }, got ${JSON.stringify(check)}`,
+					);
+				}
+				const kind = (check as { kind?: unknown }).kind;
+				if (typeof kind !== "string" || !CHECK_KINDS.has(kind)) {
+					throw new Error(
+						`__kernel__.contract.create: unknown check kind ${JSON.stringify(kind)} (expected one of ${[...CHECK_KINDS].join(", ")})`,
+					);
+				}
+			}
 			const contractRecord: CompletionContract = {
 				id,
 				objective,

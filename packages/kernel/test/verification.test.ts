@@ -178,6 +178,22 @@ describe("DeterministicVerificationEngine", () => {
 		});
 		expect(observed).toEqual([undefined]); // host gate falls back to "kernel"
 	});
+
+	test("an unknown check kind fails CLOSED with a descriptive result (dogfooding finding)", async () => {
+		// Regression: a bare-string check (kind === undefined) made #run fall
+		// through and return undefined, crashing verify() at `r.pass`. The
+		// engine must never return undefined from #run.
+		const malformed = contract({
+			// Cast: the type forbids this, but the bridge accepted unvalidated
+			// input before — the engine must survive it regardless.
+			checks: ["1+1==2"] as unknown as CompletionContract["checks"],
+		});
+		const report = await engine.verify(malformed, { cwd: dir, artifacts: [] });
+		expect(report.pass).toBe(false);
+		expect(report.checkResults).toHaveLength(1);
+		expect(report.checkResults[0].pass).toBe(false);
+		expect(report.checkResults[0].detail).toContain("unknown check kind");
+	});
 });
 
 describe("KernelHost verifier gate (paste-6 P0 #3)", () => {

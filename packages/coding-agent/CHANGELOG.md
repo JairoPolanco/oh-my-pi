@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- RLM bridge `contract.create` validates check shapes (dogfooding finding): a bare-string check (e.g. `checks: ["1+1==2"]`) previously slipped through unvalidated and crashed `contract.verify` later. Create now rejects non-object checks and unknown `kind`s with a descriptive error; valid checks unchanged.
+
 ### Added
 
 - Skill promotion auto-executor (`SkillPromotionLifecycle`): when the skill gate is armed, staged skills are evaluated on a turn-end cadence (replay the source task WITH the skill + a heldout usability probe) and promoted live on evidence — arming the gate no longer strands learned skills. Verdict recorded in the harness ledger. Wired into the session gate hook; plain omp (gate off) untouched.
