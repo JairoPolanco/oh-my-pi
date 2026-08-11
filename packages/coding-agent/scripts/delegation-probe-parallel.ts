@@ -128,10 +128,10 @@ for (const arm of ["A_direct", "B_delegate"]) {
 }
 await Bun.write(
 	new URL("../../../research_logs/delegation_probe_002.jsonl", import.meta.url),
-	JSON.stringify(
+	`${JSON.stringify(
 		{ experiment: "delegation-probe-002", agent: MODEL, task: "parallel-export-census", files: FILES, results },
 		null,
 		1,
-	) + "\n",
+	)}\n`,
 );
 console.log("\nrecord -> research_logs/delegation_probe_002.jsonl");

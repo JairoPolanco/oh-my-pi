@@ -226,7 +226,7 @@ for (const q of HELDOUT_QUESTIONS) {
 // Build the evidence in the executor's expected shape.
 const evidence: SkillPromotionEvidence = {
 	skill: skill.name,
-	paired: PAIRED_QUESTIONS.map((q, i) => ({
+	paired: PAIRED_QUESTIONS.map((q, _i) => ({
 		taskId: q.id,
 		baseline: {
 			success: sandbox[q.id].success,
@@ -251,5 +251,5 @@ console.log(`  ${evaluation.verdict.reason}`);
 
 // Write the trials file the executor consumes.
 const trialsPath = new URL("../../../research_logs/skill_trials_real_001.json", import.meta.url);
-await Bun.write(trialsPath, JSON.stringify(evidence, null, 1) + "\n");
+await Bun.write(trialsPath, `${JSON.stringify(evidence, null, 1)}\n`);
 console.log(`trials -> ${trialsPath.pathname.replace(process.cwd(), "").replace(/^\//, "")}`);

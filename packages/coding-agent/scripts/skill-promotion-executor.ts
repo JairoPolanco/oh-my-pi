@@ -153,7 +153,7 @@ if (evaluation.verdict.promote) {
 
 await Bun.write(
 	new URL("../../../research_logs/skill_promotion_001.jsonl", import.meta.url),
-	JSON.stringify(
+	`${JSON.stringify(
 		{
 			experiment: "skill-promotion-001",
 			skill: name,
@@ -171,7 +171,7 @@ await Bun.write(
 		},
 		null,
 		1,
-	) + "\n",
+	)}\n`,
 );
 console.log("record -> research_logs/skill_promotion_001.jsonl");
 await host.close?.().catch(() => {});

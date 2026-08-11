@@ -1,0 +1,132 @@
+{
+ "experiment": "code-quality-001",
+ "agent": "opencode-go/deepseek-v4-flash",
+ "taskIds": [
+  "access-remove-optional-chain-001",
+  "literal-flip-boolean-001",
+  "literal-off-by-one-001",
+  "operator-swap-equality-001"
+ ],
+ "arms": {
+  "A_baseline": {
+   "verified": 4,
+   "total": 4,
+   "calls": 18,
+   "tokens": 117100,
+   "cost": 0.0017722656000000003
+  },
+  "B_harness": {
+   "verified": 4,
+   "total": 4,
+   "calls": 20,
+   "tokens": 129769,
+   "cost": 0.0015023092000000001
+  }
+ },
+ "results": [
+  {
+   "task": "access-remove-optional-chain-001",
+   "arm": "A_baseline",
+   "timedOut": false,
+   "modelCalls": 5,
+   "toolCalls": 4,
+   "tokens": 33820,
+   "wallMs": 8994,
+   "cost": 0.0005777044000000001,
+   "verified": true,
+   "formattedEquivalent": true,
+   "answerLen": 162
+  },
+  {
+   "task": "literal-flip-boolean-001",
+   "arm": "A_baseline",
+   "timedOut": false,
+   "modelCalls": 3,
+   "toolCalls": 2,
+   "tokens": 18719,
+   "wallMs": 5538,
+   "cost": 0.00043050840000000005,
+   "verified": true,
+   "formattedEquivalent": true,
+   "answerLen": 91
+  },
+  {
+   "task": "literal-off-by-one-001",
+   "arm": "A_baseline",
+   "timedOut": false,
+   "modelCalls": 5,
+   "toolCalls": 4,
+   "tokens": 32308,
+   "wallMs": 9116,
+   "cost": 0.00038447640000000005,
+   "verified": true,
+   "formattedEquivalent": true,
+   "answerLen": 161
+  },
+  {
+   "task": "operator-swap-equality-001",
+   "arm": "A_baseline",
+   "timedOut": false,
+   "modelCalls": 5,
+   "toolCalls": 4,
+   "tokens": 32253,
+   "wallMs": 8362,
+   "cost": 0.00037957640000000004,
+   "verified": true,
+   "formattedEquivalent": true,
+   "answerLen": 149
+  },
+  {
+   "task": "access-remove-optional-chain-001",
+   "arm": "B_harness",
+   "timedOut": false,
+   "modelCalls": 5,
+   "toolCalls": 4,
+   "tokens": 33333,
+   "wallMs": 7804,
+   "cost": 0.00039294080000000004,
+   "verified": true,
+   "formattedEquivalent": true,
+   "answerLen": 119
+  },
+  {
+   "task": "literal-flip-boolean-001",
+   "arm": "B_harness",
+   "timedOut": false,
+   "modelCalls": 5,
+   "toolCalls": 4,
+   "tokens": 31879,
+   "wallMs": 8061,
+   "cost": 0.00036273720000000003,
+   "verified": true,
+   "formattedEquivalent": true,
+   "answerLen": 92
+  },
+  {
+   "task": "literal-off-by-one-001",
+   "arm": "B_harness",
+   "timedOut": false,
+   "modelCalls": 5,
+   "toolCalls": 4,
+   "tokens": 32338,
+   "wallMs": 8718,
+   "cost": 0.00037786559999999995,
+   "verified": true,
+   "formattedEquivalent": true,
+   "answerLen": 154
+  },
+  {
+   "task": "operator-swap-equality-001",
+   "arm": "B_harness",
+   "timedOut": false,
+   "modelCalls": 5,
+   "toolCalls": 4,
+   "tokens": 32219,
+   "wallMs": 8145,
+   "cost": 0.0003687656000000001,
+   "verified": true,
+   "formattedEquivalent": true,
+   "answerLen": 177
+  }
+ ]
+}

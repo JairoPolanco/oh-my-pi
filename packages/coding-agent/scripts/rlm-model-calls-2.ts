@@ -117,10 +117,10 @@ for (const arm of ["A_baseline", "B_RLM"]) {
 }
 await Bun.write(
 	new URL("../../../research_logs/rlm_model_calls_002.jsonl", import.meta.url),
-	JSON.stringify(
+	`${JSON.stringify(
 		{ experiment: "rlm-model-calls-002", agent: MODEL, task: TASK.id, groundTruth: truth, results },
 		null,
 		1,
-	) + "\n",
+	)}\n`,
 );
 console.log("\nrecord -> research_logs/rlm_model_calls_002.jsonl");

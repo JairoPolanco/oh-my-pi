@@ -124,7 +124,7 @@ Then reply with every task id you see.`,
 	console.log(`\ntask dt-1 persisted+visible in t1: ${t1HasTask} | retrieved in t2: ${t2HasTask}`);
 	await Bun.write(
 		new URL("../../../research_logs/durable_tasks_001.jsonl", import.meta.url),
-		JSON.stringify(
+		`${JSON.stringify(
 			{
 				experiment: "durable-tasks-001",
 				agent: MODEL,
@@ -135,7 +135,7 @@ Then reply with every task id you see.`,
 			},
 			null,
 			1,
-		) + "\n",
+		)}\n`,
 	);
 	console.log("record -> research_logs/durable_tasks_001.jsonl");
 } finally {

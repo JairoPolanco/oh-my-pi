@@ -4714,6 +4714,22 @@ export class AgentSession {
 						};
 					});
 				}
+				// Skill promotion auto-executor (productionization item 3):
+				// when the skill gate is armed, staged skills are evaluated
+				// on the sweep cadence and promoted live on evidence — arming
+				// the gate no longer strands learned skills. Only attaches
+				// when the gate is armed; plain omp (gate off) is untouched.
+				if (Bun.env.OMP_KERNEL_SKILL_PROMOTION_GATE === "1") {
+					void import("../runtime/skill-promotion-lifecycle").then(({ attachSkillPromotionLifecycle }) => {
+						if (this.#detachKernelTrajectoryTap === undefined) return;
+						const detachSkills = attachSkillPromotionLifecycle(this, host);
+						const prev = this.#detachKernelTrajectoryTap;
+						this.#detachKernelTrajectoryTap = () => {
+							prev();
+							detachSkills();
+						};
+					});
+				}
 			});
 		} catch {
 			// Uninstrumented turns are fine — the kernel log is best-effort.

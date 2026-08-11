@@ -3097,9 +3097,14 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// clamp images to the active provider budget before the request is sent.
 		// Kernel context governance (audit item 6) sits after obfuscation and
 		// BEFORE snapcompact so dropped low-value messages are never rasterized.
-		// It is gate-closed by default (byte-identical pass-through) and only
-		// engages when the benchmark gate `OMP_KERNEL_CONTEXT_GOVERNANCE=1` is set.
-		const contextGovernor = new ProviderContextGovernor();
+		// Gate-closed by default (byte-identical pass-through); engages when the
+		// benchmark env `OMP_KERNEL_CONTEXT_GOVERNANCE=1` is set OR the config
+		// override `kernel.contextGovernance` is on (omjai's real default —
+		// item 2, no longer just the ledger promotion).
+		const contextGovernorSettingsEnabled = settings.get("kernel.contextGovernance") === true;
+		const contextGovernor = new ProviderContextGovernor(undefined, {
+			settingsEnabled: contextGovernorSettingsEnabled,
+		});
 		const snapcompactSystemPromptMode = settings.get("snapcompact.systemPrompt");
 		const snapcompactInline =
 			snapcompactSystemPromptMode !== "none" || settings.get("snapcompact.toolResults")
@@ -3116,7 +3121,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				: undefined;
 		const transformProviderContext = async (context: Context, transformModel: Model): Promise<Context> => {
 			let transformed = obfuscator ? obfuscateProviderContext(obfuscator, context) : context;
-			if (kernelContextGovernanceEnabled())
+			if (kernelContextGovernanceEnabled() || contextGovernorSettingsEnabled)
 				transformed = await contextGovernor.transform(transformed, transformModel);
 			if (snapcompactInline) transformed = await snapcompactInline.transform(transformed, transformModel);
 			return clampProviderContextImages(transformed, transformModel);

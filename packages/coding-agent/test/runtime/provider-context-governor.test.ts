@@ -57,6 +57,27 @@ describe("ProviderContextGovernor", () => {
 		expect(result.messages).toHaveLength(3);
 	});
 
+	test("settings-enabled override engages the VM with the env gate closed (item 2 pin)", async () => {
+		// omjai's real default: `kernel.contextGovernance: true` in the config
+		// overlay ORs with the env gate. Plain omp (neither) is byte-identical;
+		// the settings-enabled governor must compress like the env gate.
+		const settingsGovernor = new ProviderContextGovernor(undefined, { settingsEnabled: true });
+		const messages = [
+			textMessage("developer", "system instructions", 0),
+			textMessage("user", "start with A", 1),
+			textMessage("assistant", "doing A...", 2),
+			textMessage("user", "then B", 3),
+			textMessage("assistant", "doing B...", 4),
+			textMessage("user", "now finish with C", 5),
+		];
+		// Env gate CLOSED — the settings override alone must engage the VM.
+		const result = await settingsGovernor.transform({ messages }, MODEL);
+		expect(result.messages).not.toBe(messages);
+		// Developer instruction and the current message survive.
+		expect(result.messages[0].role).toBe("developer");
+		expect(result.messages.at(-1)?.role).toBe("user");
+	});
+
 	test("gate open: drops low-value trajectory under a tight budget", async () => {
 		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
 		const messages = [

@@ -117,6 +117,6 @@ const summary = {
 };
 await Bun.write(
 	new URL("../../../research_logs/rlm_model_calls_001.jsonl", import.meta.url),
-	JSON.stringify(summary) + "\n",
+	`${JSON.stringify(summary)}\n`,
 );
 console.log("\nrecord -> research_logs/rlm_model_calls_001.jsonl");

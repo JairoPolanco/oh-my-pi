@@ -123,6 +123,6 @@ for (const arm of ["A_baseline", "B_context"]) {
 }
 await Bun.write(
 	new URL("../../../research_logs/context_stress_real_001.jsonl", import.meta.url),
-	JSON.stringify({ experiment: "context-stress-real-001", agent: MODEL, files: FILES, results }, null, 1) + "\n",
+	`${JSON.stringify({ experiment: "context-stress-real-001", agent: MODEL, files: FILES, results }, null, 1)}\n`,
 );
 console.log("\nrecord -> research_logs/context_stress_real_001.jsonl");

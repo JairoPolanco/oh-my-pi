@@ -150,7 +150,7 @@ results.push(
 );
 await Bun.write(
 	new URL("../../../research_logs/context_stress_pressure_001.jsonl", import.meta.url),
-	JSON.stringify(
+	`${JSON.stringify(
 		{
 			experiment: "context-stress-pressure-001",
 			agent: MODEL,
@@ -160,6 +160,6 @@ await Bun.write(
 		},
 		null,
 		1,
-	) + "\n",
+	)}\n`,
 );
 console.log("\nrecord -> research_logs/context_stress_pressure_001.jsonl");

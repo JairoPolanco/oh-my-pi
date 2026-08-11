@@ -131,6 +131,8 @@ function messageTokenCost(message: Message): number {
  */
 export class ProviderContextGovernor {
 	#materializer: ContextMaterializer;
+	/** Config-file override (omjai's `kernel.contextGovernance: true`); ORs with the env gate. */
+	#settingsEnabled: boolean;
 
 	constructor(
 		// The governor already reserves output/system/overhead OUTSIDE the
@@ -138,12 +140,17 @@ export class ProviderContextGovernor {
 		// true spendable pool, so the materializer must not reserve again —
 		// otherwise provider history is ~10% more conservative than intended.
 		materializer: ContextMaterializer = new ContextMaterializer({ reserveFraction: 0 }),
+		options: { settingsEnabled?: boolean } = {},
 	) {
 		this.#materializer = materializer;
+		this.#settingsEnabled = options.settingsEnabled ?? false;
 	}
 
 	async transform(context: Context, model: Model): Promise<Context> {
-		if (!kernelContextGovernanceEnabled()) return context;
+		// Enabled when EITHER the benchmark env gate is open OR the config
+		// override is on (item 2: omjai's actual default, not just the ledger
+		// promotion). Plain omp with neither stays byte-identical.
+		if (!kernelContextGovernanceEnabled() && !this.#settingsEnabled) return context;
 		if (context.messages.length === 0) return context;
 
 		// B_history = B_model − output − system/tools − provider overhead.

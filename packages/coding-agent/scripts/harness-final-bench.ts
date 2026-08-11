@@ -56,6 +56,6 @@ for (const arm of ["A_baseline", "B_harness"]) {
 }
 await Bun.write(
 	new URL("../../../research_logs/harness_final_001.jsonl", import.meta.url),
-	JSON.stringify({ experiment: "harness-final-001", agent: MODEL, task: TASK.id, results }, null, 1) + "\n",
+	`${JSON.stringify({ experiment: "harness-final-001", agent: MODEL, task: TASK.id, results }, null, 1)}\n`,
 );
 console.log("record -> research_logs/harness_final_001.jsonl");

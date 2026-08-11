@@ -4,6 +4,8 @@
 
 ### Added
 
+- Skill promotion auto-executor (`SkillPromotionLifecycle`): when the skill gate is armed, staged skills are evaluated on a turn-end cadence (replay the source task WITH the skill + a heldout usability probe) and promoted live on evidence — arming the gate no longer strands learned skills. Verdict recorded in the harness ledger. Wired into the session gate hook; plain omp (gate off) untouched.
+- `kernel.contextGovernance` settings key: real config default for the Context VM (omjai sets it via the config overlay; plain omp default-off). The governor honors it via constructor override, ORing with the `OMP_KERNEL_CONTEXT_GOVERNANCE` benchmark env.
 - Added the eval kernel host bridge (`__kernel__` synthetic bridge): persistent Python/JS cells can now call `ctx.materialize`, `artifacts.put/read/has`, `tasks.create/transition/list/ready`, `events.query`, `memory.propose/commit/recall/stale`, `actors.status/list/send`, `capabilities.grant/effective`, `contract.create/verify`, `routing.register/resolve/record/stats`, `policy.authorize`, `security.profile`, `harness.hypothesis/promote/versions`, and `gateway.status` against the constitutional kernel, with durable per-session SQLite task state and an append-only event log (RLM host bridge).
 - Added the hidden `board` tool: durable cross-session work graph with dependency edges, claim leases, heartbeats, attempt history, and event-log audit (opt-in via `--tools`; not in the default active set).
 - Added kernel actor seam (`actors/`): typed `AgentMessage` mailbox over the existing IrcBus wire format, and `AgentStatus`→`ActorStatus` liveness projection.

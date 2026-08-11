@@ -71,7 +71,7 @@ for (const arm of ["A_baseline", "B_contract"]) {
 }
 await Bun.write(
 	new URL("../../../research_logs/verification_benefit_001.jsonl", import.meta.url),
-	JSON.stringify(
+	`${JSON.stringify(
 		{
 			experiment: "verification-benefit-001",
 			agent: MODEL,
@@ -81,6 +81,6 @@ await Bun.write(
 		},
 		null,
 		1,
-	) + "\n",
+	)}\n`,
 );
 console.log("\nrecord -> research_logs/verification_benefit_001.jsonl");

@@ -2665,6 +2665,24 @@ export const SETTINGS_SCHEMA = {
 	// Config-file-only knob (numbers without `options` are hidden from the UI).
 	"autolearn.minToolCalls": { type: "number", default: 5 },
 
+	// Kernel Context VM (item 2 productionization): the constitutional
+	// context governor compresses low-value history toward the model window.
+	// Default-off in plain omp (byte-identical pass-through); omjai's config
+	// overlay turns it on so the harness's promoted default is real config,
+	// not just a ledger record. The OMP_KERNEL_CONTEXT_GOVERNANCE env gate
+	// still ORs (benchmark arms keep working).
+	"kernel.contextGovernance": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "advanced",
+			group: "Kernel Harness",
+			label: "Kernel Context VM",
+			description:
+				"Govern provider context with the kernel ContextMaterializer (compresses low-value history). Plain omp default-off; omjai enables it.",
+		},
+	},
+
 	// Mnemopi local SQLite memory backend.
 	"mnemopi.dbPath": {
 		type: "string",

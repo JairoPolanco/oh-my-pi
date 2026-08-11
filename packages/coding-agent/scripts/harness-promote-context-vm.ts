@@ -101,7 +101,7 @@ console.log(
 // jsonl is the committed artifact).
 await Bun.write(
 	new URL("../../../research_logs/harness_promote_context_vm_001.jsonl", import.meta.url),
-	JSON.stringify(
+	`${JSON.stringify(
 		{
 			experiment: "harness-promote-context-vm-001",
 			decision: "PROMOTE",
@@ -116,7 +116,7 @@ await Bun.write(
 		},
 		null,
 		1,
-	) + "\n",
+	)}\n`,
 );
 console.log("record -> research_logs/harness_promote_context_vm_001.jsonl");
 await host.close?.().catch(() => {});

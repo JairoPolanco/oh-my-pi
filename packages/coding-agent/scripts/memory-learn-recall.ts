@@ -50,7 +50,7 @@ async function makeSession() {
 }
 
 /** Bridge actor identity for in-memory sessions: the session's agent id. */
-function sessionAdapter(session: unknown): {
+function sessionAdapter(_session: unknown): {
 	cwd: string;
 	getSessionId: () => string;
 	getKernelSessionId: () => string;
@@ -153,7 +153,7 @@ console.log(
 
 await Bun.write(
 	new URL("../../../research_logs/memory_learn_recall_001.jsonl", import.meta.url),
-	JSON.stringify(
+	`${JSON.stringify(
 		{
 			experiment: "memory-learn-recall-001",
 			agent: MODEL,
@@ -168,6 +168,6 @@ await Bun.write(
 		},
 		null,
 		1,
-	) + "\n",
+	)}\n`,
 );
 console.log("record -> research_logs/memory_learn_recall_001.jsonl");

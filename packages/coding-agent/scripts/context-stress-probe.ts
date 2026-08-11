@@ -194,6 +194,6 @@ const record = {
 };
 await Bun.write(
 	new URL("../../../research_logs/context_stress_probe_001.jsonl", import.meta.url),
-	JSON.stringify(record) + "\n",
+	`${JSON.stringify(record)}\n`,
 );
 console.log("\nrecord -> research_logs/context_stress_probe_001.jsonl");

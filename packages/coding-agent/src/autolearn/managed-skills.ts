@@ -7,7 +7,7 @@
  * surfaced like normal skills, but every write here is confined to
  * `getManagedSkillsDir()` — auto-management can never touch authored skills.
  */
-import { constants as fsConstants, type Stats } from "node:fs";
+import { type Dirent, constants as fsConstants, type Stats } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getAgentDir, isEnoent } from "@oh-my-pi/pi-utils";
@@ -119,6 +119,39 @@ export function getManagedSkillActiveDir(agentDir: string = getAgentDir()): stri
 	return skillPromotionGateArmed()
 		? path.join(getManagedSkillsDir(agentDir), "active")
 		: getManagedSkillsDir(agentDir);
+}
+
+/** Source-task sidecar for a staged skill (written by the auto-executor hook). */
+export function stagedSkillSourceFile(name: string, agentDir: string = getAgentDir()): string {
+	return path.join(getManagedSkillStagingDir(agentDir), name, "SOURCE.txt");
+}
+
+/**
+ * Staged skills awaiting evaluation (auto-executor hook): every skill dir
+ * under staging/ with a readable SKILL.md. Returns names, oldest first —
+ * the sweep evaluates one per cadence slot.
+ */
+export async function listStagedSkills(agentDir: string = getAgentDir()): Promise<string[]> {
+	const staging = getManagedSkillStagingDir(agentDir);
+	let entries: Dirent[];
+	try {
+		entries = await fs.readdir(staging, { withFileTypes: true });
+	} catch (err) {
+		if (isEnoent(err)) return [];
+		throw err;
+	}
+	const names: string[] = [];
+	for (const entry of entries) {
+		if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+		try {
+			const stat = await fs.lstat(path.join(staging, entry.name, "SKILL.md"));
+			if (stat.isFile() && !stat.isSymbolicLink()) names.push(entry.name);
+		} catch (err) {
+			if (isEnoent(err)) continue;
+			throw err;
+		}
+	}
+	return names.sort();
 }
 
 /**

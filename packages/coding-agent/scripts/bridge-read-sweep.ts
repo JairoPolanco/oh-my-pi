@@ -108,7 +108,7 @@ Then reply with a JSON summary of what each key returned (a few chars each).`,
 	console.log(`last text (200): ${String(last).slice(0, 200)}`);
 	await Bun.write(
 		new URL("../../../research_logs/bridge_read_sweep_001.jsonl", import.meta.url),
-		JSON.stringify(
+		`${JSON.stringify(
 			{
 				experiment: "bridge-read-sweep-001",
 				agent: MODEL,
@@ -119,7 +119,7 @@ Then reply with a JSON summary of what each key returned (a few chars each).`,
 			},
 			null,
 			1,
-		) + "\n",
+		)}\n`,
 	);
 	console.log("record -> research_logs/bridge_read_sweep_001.jsonl");
 } finally {
