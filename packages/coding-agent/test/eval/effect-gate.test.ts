@@ -11,6 +11,11 @@ function makeSession(overrides: Partial<ToolSession> = {}): ToolSession {
 	return {
 		cwd: testDir,
 		hasUI: false,
+		// Session-file-backed: resolves the kernel dir under the TEST dir
+		// (removed per-test), not the real project-scoped dir — a root with
+		// no session file would hit the durable project kernel dir and leak
+		// capability state across tests (split-brain fix made dirs durable).
+		getSessionFile: () => `${testDir}/session.jsonl`,
 		getSessionId: () => "test-session",
 		getAgentId: () => "Main",
 		...overrides,

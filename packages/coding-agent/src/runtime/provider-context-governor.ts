@@ -133,6 +133,34 @@ export class ProviderContextGovernor {
 	#materializer: ContextMaterializer;
 	/** Config-file override (omjai's `kernel.contextGovernance: true`); ORs with the env gate. */
 	#settingsEnabled: boolean;
+	/**
+	 * Cache-stable selection state (dogfooding everyday fix): the message
+	 * INDICES the provider received on the previous turn. Indices are
+	 * append-stable (messages only grow the transcript), so this is the true
+	 * cache-prefix key. On each turn, units absent from the previous output
+	 * are dropped PERMANENTLY (never re-admitted by value-ranking — a unit
+	 * that left the cache prefix and re-enters busts it), and survivors are
+	 * sticky (selected first). Tracked by index, not span id: span boundaries
+	 * shift as the transcript grows and mandatory/current classification
+	 * flips, but a message index never changes.
+	 */
+	#prevOutputIndices = new Set<number>();
+	#stickyIds = new Set<string>();
+	/**
+	 * Indices that were in a PREVIOUS output and later left it (any reason:
+	 * value-ranking, hard budget, or a mandatory→optional flip). Never
+	 * re-admitted — a unit that left the cache prefix and re-enters busts
+	 * it. Distinct from new indices (first time in the transcript), which
+	 * are never here.
+	 */
+	#everDroppedIndices = new Set<number>();
+
+	/** Reset per-session cache-stability state (test seam; production constructs one governor per session). */
+	resetCacheState(): void {
+		this.#prevOutputIndices.clear();
+		this.#stickyIds.clear();
+		this.#everDroppedIndices.clear();
+	}
 
 	constructor(
 		// The governor already reserves output/system/overhead OUTSIDE the
@@ -214,11 +242,26 @@ export class ProviderContextGovernor {
 		const optionalBudget = Math.max(0, historyBudget - mandatoryCost);
 
 		// Materialize ONLY optional units under the remaining budget. Each
-		// span is one candidate whose token cost is the whole span.
+		// span is one candidate whose token cost is the whole span. Units the
+		// hard budget dropped in a PREVIOUS turn are excluded up front —
+		// never re-admitted by value-ranking (cache-stability fix).
 		const candidates: ContextRequest["candidates"] = [];
 		const candidateUnitOf = new Map<string, number>();
 		units.forEach((unit, unitIndex) => {
 			if (mandatoryUnitIds.has(unitIndex)) return;
+			// A unit that LEFT a previous output is never re-admitted (cache
+			// prefix stability); genuinely new indices are not in the dropped
+			// set and compete normally.
+			if (this.#everDroppedIndices.size > 0) {
+				let dropped = false;
+				for (let i = unit.start; i <= unit.end; i++) {
+					if (this.#everDroppedIndices.has(i)) {
+						dropped = true;
+						break;
+					}
+				}
+				if (dropped) return;
+			}
 			if (unit.start === unit.end) {
 				const candidate = messageToCandidate(messages[unit.start]!, unit.start);
 				candidates.push(candidate);
@@ -245,7 +288,7 @@ export class ProviderContextGovernor {
 				wireDelta += messageTokenCost(messages[i]!) - estimateTokens(messageText(messages[i]!));
 			}
 			candidates.push({
-				id: `span:${unitIndex}`,
+				id: `span:${unit.start}-${unit.end}`,
 				kind: "trajectory",
 				level: "episodic",
 				tokens: estimateTokens(text) + wireDelta,
@@ -256,7 +299,7 @@ export class ProviderContextGovernor {
 				truncatable: false,
 				wireCostDelta: wireDelta,
 			});
-			candidateUnitOf.set(`span:${unitIndex}`, unitIndex);
+			candidateUnitOf.set(`span:${unit.start}-${unit.end}`, unitIndex);
 		});
 		const view =
 			optionalBudget > 0
@@ -270,6 +313,10 @@ export class ProviderContextGovernor {
 						// are later discarded. They are scoring metadata at the
 						// unit level, already accounted.
 						candidates,
+						// Cache-stable selection: units that survived last turn
+						// are selected first; only NEW units compete for the
+						// remainder by value (everyday-context fix).
+						stickyIds: this.#stickyIds,
 					})
 				: {
 						items: [],
@@ -313,8 +360,42 @@ export class ProviderContextGovernor {
 		// UNITS; if structural compression cannot close the gap, an explicit
 		// ContextOverflowError is thrown rather than returning an over-limit
 		// request.
-		const finalMessages = enforceHardBudgetOnUnits(units, rebuilt, selectedUnits, mandatoryUnitIds, historyBudget);
-		return { ...context, messages: finalMessages };
+		const final = enforceHardBudgetOnUnits(units, rebuilt, selectedUnits, mandatoryUnitIds, historyBudget);
+
+		// Cache-stable state: record the FINAL output's message indices (the
+		// provider's cache prefix this turn). Any index that was in the
+		// PREVIOUS output but is absent now enters the permanent dropped set —
+		// whether value-ranking, hard budget, or a mandatory→optional flip
+		// removed it. Once out, always out (re-entry busts the prefix).
+		const nextSticky = new Set<string>();
+		const nextPrevOutput = new Set<number>();
+		for (const unit of units) {
+			const unitIndex = units.indexOf(unit);
+			if (mandatoryUnitIds.has(unitIndex)) continue; // mandatory survives anyway
+			const spanIndex = spanOf.get(unit.start);
+			const candidateId =
+				spanIndex !== undefined && spanOf.get(unit.end) === spanIndex
+					? `span:${unit.start}-${unit.end}`
+					: `${unit.start}:${messages[unit.start]!.role}`;
+			if (final.survivingUnitIds.has(unitIndex)) {
+				nextSticky.add(candidateId);
+				for (let i = unit.start; i <= unit.end; i++) nextPrevOutput.add(i);
+			}
+		}
+		// Mandatory units are also part of the output prefix.
+		for (const unit of units) {
+			const unitIndex = units.indexOf(unit);
+			if (!mandatoryUnitIds.has(unitIndex)) continue;
+			for (let i = unit.start; i <= unit.end; i++) nextPrevOutput.add(i);
+		}
+		// Indices that were in the previous output but are absent now → dropped
+		// forever (they left the provider's cache prefix).
+		for (const index of this.#prevOutputIndices) {
+			if (!nextPrevOutput.has(index)) this.#everDroppedIndices.add(index);
+		}
+		this.#stickyIds = nextSticky;
+		this.#prevOutputIndices = nextPrevOutput;
+		return { ...context, messages: final.messages };
 	}
 }
 
@@ -334,7 +415,7 @@ function enforceHardBudgetOnUnits(
 	selectedUnits: Set<number>,
 	mandatoryUnitIds: Set<number>,
 	window: number,
-): Message[] {
+): { messages: Message[]; survivingUnitIds: Set<number> } {
 	type Unit = { id: number; start: number; end: number; mandatory: boolean };
 	// Stable unit ids; spans stay contiguous.
 	const surviving: Unit[] = [];
@@ -351,7 +432,9 @@ function enforceHardBudgetOnUnits(
 		return sum;
 	};
 	let total = surviving.reduce((sum, unit) => sum + unitCost(unit), 0);
-	if (total <= window) return rebuilt;
+	if (total <= window) {
+		return { messages: rebuilt, survivingUnitIds: new Set(surviving.map(u => u.id)) };
+	}
 
 	// Evict whole optional units oldest-first. Unit ids are STABLE — the
 	// mandatory/current classification is looked up by unit id, never by a
@@ -371,7 +454,9 @@ function enforceHardBudgetOnUnits(
 		for (let i = unit.start; i <= unit.end; i++) kept.push(rebuilt[i]!);
 	}
 	total = kept.reduce((sum, message) => sum + messageTokenCost(message), 0);
-	if (total <= window) return kept;
+	if (total <= window) {
+		return { messages: kept, survivingUnitIds: new Set(surviving.map(u => u.id)) };
+	}
 
 	// Immutable structure alone overflows: truncate the current input text
 	// first, then the developer instructions if the current turn alone cannot
@@ -404,7 +489,7 @@ function enforceHardBudgetOnUnits(
 			window,
 		);
 	}
-	return kept;
+	return { messages: kept, survivingUnitIds: new Set(surviving.map(u => u.id)) };
 }
 
 /**

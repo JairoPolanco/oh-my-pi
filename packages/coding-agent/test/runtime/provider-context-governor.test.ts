@@ -40,6 +40,7 @@ const governor = new ProviderContextGovernor();
 afterEach(() => {
 	delete Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV];
 	delete Bun.env.OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE;
+	governor.resetCacheState();
 });
 
 describe("ProviderContextGovernor", () => {
@@ -433,5 +434,54 @@ describe("ProviderContextGovernor", () => {
 		// Developer instruction and the current message survive.
 		expect(evicted.messages[0].role).toBe("developer");
 		expect(evicted.messages.at(-1)?.role).toBe("user");
+	});
+
+	test("cache stability: a unit that left the output is never re-admitted on a later turn (everyday-context fix)", async () => {
+		// Regression (dogfooding, real 156k session): value-ranked re-ranking
+		// oscillated units in/out as the transcript grew (21 returns across 25
+		// removals), busting the provider cache prefix every flip — measured
+		// ~3.4x cache cost. The governor must evict MONOTONICALLY: once a
+		// unit leaves the output it stays out.
+		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
+		Bun.env.OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE = "200"; // forced pressure
+		const tight = { contextWindow: 128_000 } as unknown as Model;
+		// Build a transcript that grows turn by turn, each turn adding a tool
+		// span, under a budget that forces eviction of early units.
+		const messages: Message[] = [
+			textMessage("developer", "rules", 0),
+			textMessage("user", "task", 1),
+			toolCallMessage("call-1", 2),
+			toolResultMessage(3, "result 1 ".repeat(60)),
+			textMessage("user", "more", 4),
+			toolCallMessage("call-2", 5),
+			toolResultMessage(6, "result 2 ".repeat(60)),
+			textMessage("user", "even more", 7),
+			toolCallMessage("call-3", 8),
+			toolResultMessage(9, "result 3 ".repeat(60)),
+			textMessage("user", "current turn", 10),
+		];
+		// Transform at growing cuts; track which message indices ever left the
+		// output and confirm none return.
+		const everRemoved = new Set<number>();
+		let prevKept: Set<number> | null = null;
+		for (let cut = 4; cut <= messages.length; cut++) {
+			if (cut % 2 !== 0 && cut !== messages.length) continue;
+			const result = await governor.transform({ messages: messages.slice(0, cut) }, tight);
+			const kept = new Set<number>();
+			for (const om of result.messages) {
+				const idx = messages.findIndex(
+					(m, i) => !kept.has(i) && m.role === om.role && JSON.stringify(m.content) === JSON.stringify(om.content),
+				);
+				if (idx >= 0) kept.add(idx);
+			}
+			if (prevKept) {
+				const removed = [...prevKept].filter(v => !kept.has(v));
+				const returned = [...everRemoved].filter(v => kept.has(v));
+				expect(returned).toEqual([]); // nothing that left ever returns
+				for (const v of removed) everRemoved.add(v);
+			}
+			prevKept = kept;
+		}
+		expect(everRemoved.size).toBeGreaterThan(0); // the budget did force eviction
 	});
 });

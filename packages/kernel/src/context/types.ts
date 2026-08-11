@@ -71,6 +71,15 @@ export interface ContextRequest {
 	objective?: string;
 	/** Instructions/policy; always included under the instruction band. */
 	instructions?: string;
+	/**
+	 * Cache-stable selection (dogfooding, everyday-context fix): candidate ids
+	 * that SURVIVED the previous turn's materialization. They are selected
+	 * FIRST (in original order, up to budget) so the survivor set is monotonic
+	 * turn-to-turn — the provider's prompt-cache prefix stays byte-stable
+	 * instead of churning when new candidates re-rank the whole set (measured
+	 * 5/9 churn transitions on a real 156k session → ~3.4x cache cost).
+	 */
+	stickyIds?: ReadonlySet<string>;
 }
 
 /** A candidate for materialization with estimated value components (§11). */

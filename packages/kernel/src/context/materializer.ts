@@ -142,9 +142,31 @@ export class ContextMaterializer {
 			allocation[kind] = kindUsed;
 		}
 
+		// STICKY-FIRST (cache-stable selection, dogfooding everyday fix): units
+		// that survived the previous turn are selected first, in ORIGINAL
+		// candidate order, up to the global budget — never displaced by a new
+		// higher-value candidate re-ranking the whole set. The survivor set is
+		// monotonic across turns, so the provider's prompt-cache prefix stays
+		// byte-stable (measured: value-ranked re-ranking churned 5/9 transitions
+		// on a real 156k session → ~3.4x cache cost). New units still compete
+		// for the REMAINDER by value below.
+		const stickyIds = request.stickyIds;
+		const selectedIds = new Set<string>();
+		if (stickyIds && stickyIds.size > 0) {
+			for (const candidate of candidates) {
+				if (!stickyIds.has(candidate.id)) continue;
+				if (globalRemaining() <= 0) break;
+				const fit = this.#fitCandidate(candidate, globalRemaining());
+				if (!fit) continue;
+				items.push(fit.item);
+				bandUsed.set(candidate.kind, (bandUsed.get(candidate.kind) ?? 0) + fit.cost);
+				selectedIds.add(candidate.id);
+				used += fit.cost;
+			}
+		}
+
 		// Value-ranked greedy over the global pool, band caps as regularizers.
 		const ranked = candidates.filter(c => RANKED_KINDS.includes(c.kind)).sort((a, b) => itemValue(b) - itemValue(a));
-		const selectedIds = new Set<string>();
 		for (const candidate of ranked) {
 			if (globalRemaining() <= 0) break;
 			const kind = candidate.kind;
