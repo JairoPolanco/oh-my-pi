@@ -44,6 +44,9 @@ async function groundTruth(): Promise<{ names: string[]; test: string[] }> {
 	return { names, test };
 }
 
+/** Hard per-arm wall-clock cap (supervised benchmarking — abort, never runaway). */
+const ARM_TIMEOUT_MS = Number(process.env.RLM_ARM_TIMEOUT_MS ?? 240_000);
+
 async function runArm(arm: string, truth: { names: string[]; test: string[] }): Promise<Record<string, unknown>> {
 	const shared = await discoverSharedInfra({ cwd: REPO });
 	const tools = arm === "B_RLM" ? ["read", "grep", "glob", "bash", "eval"] : ["read", "grep", "glob", "bash"];
@@ -53,9 +56,10 @@ async function runArm(arm: string, truth: { names: string[]; test: string[] }): 
 					"",
 					"# RLM mode",
 					"You have an eval tool that runs a JavaScript program. Do ALL of the file investigation INSIDE ONE eval program",
-					"using the `tool.read`, `tool.glob`, and `tool.bash` helpers (available in the eval runtime).",
+					"using the documented helpers (available in the eval runtime): `readText(path)` returns file text, ",
+					"`globFiles(pattern)` returns matched paths, `bashOut(command)` returns stdout.",
 					"The program should LOOP over every package.json under packages/ itself and collect the results.",
-					"Run the program, then respond with the full list. Do not read the package.json files yourself with the read tool.",
+					"Run the program ONCE, then respond with the full list. Do not read the package.json files yourself with the read tool.",
 				].join("\n")
 			: undefined;
 	const client = new InProcessClient({
@@ -68,17 +72,23 @@ async function runArm(arm: string, truth: { names: string[]; test: string[] }): 
 	try {
 		await client.start();
 		const t0 = performance.now();
-		await client.prompt(TASK.prompt);
+		// Supervised: race the prompt against a hard deadline; on expiry abort
+		// the session (stops further model spend) and report a TIMEOUT rather
+		// than letting it spiral.
+		const timedOut = await Promise.race([
+			client.prompt(TASK.prompt).then(() => false),
+			Bun.sleep(ARM_TIMEOUT_MS).then(() => true),
+		]);
+		if (timedOut) client.abort();
 		const wallMs = performance.now() - t0;
 		const stats = await client.getSessionStats();
 		const last = (await client.getLastAssistantText()) ?? "";
-		// Success: the answer names the packages that DO have scripts.test and
-		// covers a meaningful fraction of all packages.
 		const mentioned = truth.test.filter(name => last.includes(name));
-		const success = mentioned.length >= truth.test.length * 0.8 && last.length > 400;
+		const success = !timedOut && mentioned.length >= truth.test.length * 0.8 && last.length > 400;
 		const record = {
 			task: TASK.id,
 			arm,
+			timedOut,
 			modelCalls: stats.assistantMessages,
 			toolCalls: stats.toolCalls,
 			tokens: stats.tokens.total,
@@ -90,7 +100,7 @@ async function runArm(arm: string, truth: { names: string[]; test: string[] }): 
 			testTotal: truth.test.length,
 		};
 		console.log(
-			`${arm.padEnd(9)} calls=${stats.assistantMessages} tools=${stats.toolCalls} tokens=${stats.tokens.total} wall=${Math.round(wallMs)}ms cost=$${stats.cost.toFixed(4)} success=${success} (test-having packages mentioned ${mentioned.length}/${truth.test.length})`,
+			`${arm.padEnd(9)} ${timedOut ? "TIMEOUT" : "done  "} calls=${stats.assistantMessages} tools=${stats.toolCalls} tokens=${stats.tokens.total} wall=${Math.round(wallMs)}ms cost=$${stats.cost.toFixed(4)} success=${success} (test-having mentioned ${mentioned.length}/${truth.test.length})`,
 		);
 		return record;
 	} finally {

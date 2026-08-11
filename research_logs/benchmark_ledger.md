@@ -90,6 +90,21 @@ Real model (`opencode-go/deepseek-v4-flash`), sequential runs, no fan-out. Thesi
 The fix candidate is implemented and verified at ZERO model cost (stub-tool prelude test, `kernel-prelude.test.ts`): the JS and Python eval preludes now expose `readText(path) → string`, `bashOut(cmd) → string`, `globFiles(pattern) → string[]` — routed through the SAME gated tool path (`__omp_call_tool__` / `_bridge_call`, so the capability gate applies) but returning plain documented values instead of raw tool-result envelopes. `eval.md` documents the exact return shapes in the prelude block. This is the cheapest possible verification: no model calls, deterministic stubs.
 
 **Decision: RLM benchmark HOLD until re-run with the ergonomic surface.** The next RLM probe should direct the model to `readText`/`bashOut`/`globFiles` and measure `N_model_calls/task` again. When it runs, it should be 3–6 calls, not 12–15, if the ergonomics fix addresses the authoring/debug overhead — that is the hypothesis under test.
+## RLM re-run with ergonomic helpers (supervised, rlm-model-calls-003)
+
+Re-ran the 18-package census with the documented helpers (`readText`/`globFiles`/`bashOut`), hard 240s per-arm abort cap (supervised, aborted on expiry):
+
+| Arm | Model calls | Tool calls | Tokens | Wall | Cost |
+|---|---|---|---|---|---|
+| A baseline | 5 | 21 | 59.9k | 26s | $0.0013 |
+| B RLM + helpers | 20 | 19 | 239.3k | 102s | $0.0021 |
+
+**Verdict: REJECT the RLM thesis on this task class.** The ergonomic helpers did NOT reduce calls — RLM was still 4x calls / 4x tokens. Root insight: the thesis's premise ("each tool call costs an inference, so deterministic coordination saves inferences") does NOT hold in OMP — the baseline loop already batches MANY tool calls per inference (21 tools / 5 calls). There is no per-call inference tax for RLM to remove; the program-authoring + debug cycle is pure overhead on top of a loop that was already efficient.
+
+**When RLM might still win (untested)**: tasks where the DIRECT loop needs many INFERENCES, not many tool calls — e.g. iterative measurement where each step's next action depends on the previous result (model must re-think per step). That is the remaining hypothesis; not worth testing on this repo's cheap aggregation tasks.
+
+**Cost discipline note**: the confirm run (2 arms, ~$0.004) was fine; a subsequent TRACE re-run (my error) burned a full 600s budget — the supervised abort cap held on the timed arm but the trace re-executed the task. No further model spend this session.
+
 
 
 
