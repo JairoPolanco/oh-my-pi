@@ -104,6 +104,21 @@ Re-ran the 18-package census with the documented helpers (`readText`/`globFiles`
 **When RLM might still win (untested)**: tasks where the DIRECT loop needs many INFERENCES, not many tool calls — e.g. iterative measurement where each step's next action depends on the previous result (model must re-think per step). That is the remaining hypothesis; not worth testing on this repo's cheap aggregation tasks.
 
 **Cost discipline note**: the confirm run (2 arms, ~$0.004) was fine; a subsequent TRACE re-run (my error) burned a full 600s budget — the supervised abort cap held on the timed arm but the trace re-executed the task. No further model spend this session.
+## Delegation threshold probe (loop 4, delegation-probe-001, supervised)
+
+Medium multi-file task (3 source files, export census), ONE subagent max, hard 240s abort cap:
+
+| Arm | Model calls | Tool calls | Tokens | Wall | Cost | Success |
+|---|---|---|---|---|---|---|
+| A direct | 3 | 6 | 24.2k | 14s | $0.0008 | ✓ |
+| B delegate (1 subagent) | 11 | 10 | 97.9k | 88s | $0.0012 | ✓ |
+
+**Verdict: delegation is pure overhead on this task class** — 3.7x calls, 4x tokens for the same result. Mechanism finding: in-process spawning WORKS (the task tool mounts and spawns a real subagent through the benchmark client), but the subagent re-runs the whole inspection the parent could batch, then the parent re-verifies. Consistent with the RLM rejection: OMP's direct loop already batches multiple tools per inference, so the "coordination saves inferences" premise doesn't hold on medium tasks.
+
+**When delegation might win (untested)**: large independent workstreams where isolation/parallelism (V_parallel + V_isolation) exceeds coordination+duplication (C_coordination + C_duplication) — i.e. many files, no shared context needed, subagents run in parallel. That needs a real parallel-delegation run on a LARGE task, which is the most expensive benchmark in the plan; parked until a cheaper harness exists.
+
+**Benchmark-infra finding**: `client.dispose()` on the InProcessClient HUNG ~225s after a successful arm in one run (arm A wall=14s, shell wall=240s). Process-exit worked; the hang is in session/worker teardown. Not blocking (each arm is its own process), but noted for the harness.
+
 
 
 
