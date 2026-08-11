@@ -104,9 +104,7 @@ Re-ran the 18-package census with the documented helpers (`readText`/`globFiles`
 **When RLM might still win (untested)**: tasks where the DIRECT loop needs many INFERENCES, not many tool calls — e.g. iterative measurement where each step's next action depends on the previous result (model must re-think per step). That is the remaining hypothesis; not worth testing on this repo's cheap aggregation tasks.
 
 **Cost discipline note**: the confirm run (2 arms, ~$0.004) was fine; a subsequent TRACE re-run (my error) burned a full 600s budget — the supervised abort cap held on the timed arm but the trace re-executed the task. No further model spend this session.
-## Delegation threshold probe (loop 4, delegation-probe-001, supervised)
-
-Medium multi-file task (3 source files, export census), ONE subagent max, hard 240s abort cap:
+## Delegation threshold probe (loop 4, delegation-probe-001, supervised)Medium multi-file task (3 source files, export census), ONE subagent max, hard 240s abort cap:
 
 | Arm | Model calls | Tool calls | Tokens | Wall | Cost | Success |
 |---|---|---|---|---|---|---|
@@ -118,6 +116,19 @@ Medium multi-file task (3 source files, export census), ONE subagent max, hard 2
 **When delegation might win (untested)**: large independent workstreams where isolation/parallelism (V_parallel + V_isolation) exceeds coordination+duplication (C_coordination + C_duplication) — i.e. many files, no shared context needed, subagents run in parallel. That needs a real parallel-delegation run on a LARGE task, which is the most expensive benchmark in the plan; parked until a cheaper harness exists.
 
 **Benchmark-infra finding**: `client.dispose()` on the InProcessClient HUNG ~225s after a successful arm in one run (arm A wall=14s, shell wall=240s). Process-exit worked; the hang is in session/worker teardown. Not blocking (each arm is its own process), but noted for the harness.
+
+## Parallel delegation threshold (loop 4b, delegation-probe-002, supervised)
+
+The ledger's explicitly-untested class: "large independent workstreams… many files, no shared context needed, subagents run in parallel." 8 INDEPENDENT source files, export census, hard 300s abort cap. Run 1 (no spawn counter — invalid as delegation evidence, discarded); run 2 with a transcript task-spawn counter:
+
+| Arm | Model calls | Tool calls | Tokens | Wall | Cost | Exports named | Spawns | Success |
+|---|---|---|---|---|---|---|---|---|
+| A direct | 2 | 8 | 17.6k | 13s | $0.0006 | 8/8 | 0 | ✓ |
+| B delegate (instructed: 4-way parallel fan-out) | 8 | 10 | 75.8k | 62s | $0.0007 | 8/8 | **1** | ✓ |
+
+**Verdict: delegation rejected on the large-parallel class too — but for a NEW reason: the model does not execute the instructed fan-out.** B spawned ONE subagent (instructed 4 in parallel) and then duplicated the remaining inspection itself (9 direct tool calls after the spawn). 4x model calls, 4.3x tokens, 4.7x wall for the same 8/8 result. This is the same class of finding as memory adoption: multi-step orchestration instructions get collapsed. The parallel-delegation hypothesis remains UNTESTED — it cannot be tested via model-initiated `task` calls with this model; it would need harness-structured parallel fan-out (executor-level batch spawn), which is a different feature.
+
+**Cost**: $0.0013 (run 2) + $0.0025 (run 1) ≈ $0.004 — well under the ~$0.10–0.30 estimate because the direct arm's grep shortcut keeps A cheap and B never truly fans out.
 ## Prompt-leverage benefit (evidence run, harness-vs-baseline-001, supervised)
 
 Same multi-file task (audit two kernel files + persist findings via `tasks.create`), gates OFF vs ON (docs on):

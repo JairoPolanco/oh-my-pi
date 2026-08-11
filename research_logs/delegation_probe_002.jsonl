@@ -1,0 +1,69 @@
+{
+ "experiment": "delegation-probe-002",
+ "agent": "opencode-go/deepseek-v4-flash",
+ "task": "parallel-export-census",
+ "files": [
+  {
+   "path": "packages/coding-agent/src/eval/kernel-bridge.ts",
+   "export": "runKernelBridge"
+  },
+  {
+   "path": "packages/coding-agent/src/runtime/provider-context-governor.ts",
+   "export": "ProviderContextGovernor"
+  },
+  {
+   "path": "packages/kernel/src/events/types.ts",
+   "export": "HarnessEvent"
+  },
+  {
+   "path": "packages/kernel/src/capabilities/registry.ts",
+   "export": "CapabilityRegistry"
+  },
+  {
+   "path": "packages/kernel/src/learning/versions.ts",
+   "export": "HarnessVersionLedger"
+  },
+  {
+   "path": "packages/kernel/src/gateway/gateway.ts",
+   "export": "Gateway"
+  },
+  {
+   "path": "packages/metaharness/src/optimize.ts",
+   "export": "evaluateExperimentPromotion"
+  },
+  {
+   "path": "packages/coding-agent/src/registry/agent-registry.ts",
+   "export": "AgentRegistry"
+  }
+ ],
+ "results": [
+  {
+   "task": "parallel-export-census",
+   "arm": "A_direct",
+   "timedOut": false,
+   "modelCalls": 2,
+   "toolCalls": 8,
+   "tokens": 17643,
+   "wallMs": 13280,
+   "cost": 0.0006020812,
+   "exportsNamed": 8,
+   "taskSpawns": 0,
+   "success": true,
+   "answerLen": 1725
+  },
+  {
+   "task": "parallel-export-census",
+   "arm": "B_delegate",
+   "timedOut": false,
+   "modelCalls": 8,
+   "toolCalls": 10,
+   "tokens": 75773,
+   "wallMs": 62327,
+   "cost": 0.0006662908,
+   "exportsNamed": 8,
+   "taskSpawns": 1,
+   "success": true,
+   "answerLen": 966
+  }
+ ]
+}
