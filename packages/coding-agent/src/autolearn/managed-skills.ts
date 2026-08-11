@@ -339,3 +339,51 @@ export async function deleteManagedSkill(name: string): Promise<void> {
 		throw new Error(`Managed skill "${safe}" does not exist.`);
 	});
 }
+
+/**
+ * Move a STAGED skill into the live surface VERBATIM (the evaluated
+ * artifact — the gate's promotion half). This is the ONLY file that moves a
+ * skill out of staging; it refuses when the gate is off (nothing is ever
+ * staged, so there is nothing to promote) or the staged copy is missing or
+ * symlinked. The TRUSTED EVALUATOR decides when to call this — the primitive
+ * itself is mechanical.
+ */
+export async function promoteManagedSkill(name: string): Promise<{ path: string }> {
+	const safe = sanitizeSkillName(name);
+	if (!skillPromotionGateArmed()) {
+		throw new Error(`Promotion gate is off (OMP_KERNEL_SKILL_PROMOTION_GATE != 1) — nothing is staged to promote.`);
+	}
+	return serializeSkillMutation(safe, async () => {
+		await assertManagedRootSafe();
+		const stagedDir = path.join(getManagedSkillStagingDir(), safe);
+		const activeDir = path.join(getManagedSkillActiveDir(), safe);
+		const stagedFile = path.join(stagedDir, "SKILL.md");
+		// The active dir must not already claim the name (a live skill is a
+		// different generation — overwriting it would bypass the gate).
+		const activeStat = await fs.lstat(activeDir).catch(err => {
+			if (isEnoent(err)) return null;
+			throw err;
+		});
+		if (activeStat !== null) {
+			throw new Error(`Skill "${safe}" is already live; promote only stages.`);
+		}
+		const stagedStat = await fs.lstat(stagedFile).catch(err => {
+			if (isEnoent(err)) return null;
+			throw err;
+		});
+		if (stagedStat === null) {
+			throw new Error(`Staged skill "${safe}" does not exist.`);
+		}
+		if (
+			stagedStat.isSymbolicLink() ||
+			(await fs.lstat(stagedDir).catch(err => (isEnoent(err) ? null : err)))?.isSymbolicLink()
+		) {
+			throw new Error(
+				`Staged skill "${safe}" resolves through a symlink; refusing to promote outside the managed directory.`,
+			);
+		}
+		await fs.mkdir(path.dirname(activeDir), { recursive: true });
+		await fs.rename(stagedDir, activeDir);
+		return { path: path.join(activeDir, "SKILL.md") };
+	});
+}

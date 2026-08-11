@@ -6,6 +6,7 @@ import {
 	deleteManagedSkill,
 	getManagedSkillsDir,
 	MAX_MANAGED_SKILL_BYTES,
+	promoteManagedSkill,
 	sanitizeSkillName,
 	toSkillFrontmatter,
 	writeManagedSkill,
@@ -31,6 +32,8 @@ describe("managed-skills primitives", () => {
 	});
 
 	const skillFile = (name: string) => path.join(getManagedSkillsDir(), name, "SKILL.md");
+	const activeFile = (name: string) => path.join(getManagedSkillsDir(), "active", name, "SKILL.md");
+	const stagingFile = (name: string) => path.join(getManagedSkillsDir(), "staging", name, "SKILL.md");
 
 	describe("sanitizeSkillName", () => {
 		it("rejects traversal, slashes, and empty names", () => {
@@ -262,9 +265,6 @@ describe("managed-skills primitives", () => {
 			else Bun.env[gateEnv] = originalEnv;
 		});
 
-		const activeFile = (name: string) => path.join(getManagedSkillsDir(), "active", name, "SKILL.md");
-		const stagingFile = (name: string) => path.join(getManagedSkillsDir(), "staging", name, "SKILL.md");
-
 		it("routes writes to staging and only promotes with the promote flag", async () => {
 			Bun.env[gateEnv] = "1";
 			const staged = await writeManagedSkill({ action: "create", name: "gated", description: "d", body: "b" });
@@ -296,6 +296,41 @@ describe("managed-skills primitives", () => {
 			await writeManagedSkill({ action: "create", name: "stageddel", description: "d", body: "b" });
 			await deleteManagedSkill("stageddel");
 			expect(await Bun.file(stagingFile("stageddel")).exists()).toBe(false);
+		});
+	});
+
+	describe("promoteManagedSkill", () => {
+		const gateEnv = "OMP_KERNEL_SKILL_PROMOTION_GATE";
+		const originalEnv = Bun.env[gateEnv];
+
+		afterEach(() => {
+			if (originalEnv === undefined) delete Bun.env[gateEnv];
+			else Bun.env[gateEnv] = originalEnv;
+		});
+
+		it("moves a staged skill to the live surface verbatim", async () => {
+			Bun.env[gateEnv] = "1";
+			await writeManagedSkill({ action: "create", name: "promo", description: "d", body: "b" });
+			expect(await Bun.file(stagingFile("promo")).exists()).toBe(true);
+
+			const { path: activePath } = await promoteManagedSkill("promo");
+			expect(activePath.endsWith(path.join("active", "promo", "SKILL.md"))).toBe(true);
+			expect(await Bun.file(activeFile("promo")).exists()).toBe(true);
+			expect(await Bun.file(stagingFile("promo")).exists()).toBe(false);
+		});
+
+		it("refuses when the gate is off (nothing is ever staged)", async () => {
+			Bun.env[gateEnv] = "0";
+			await writeManagedSkill({ action: "create", name: "ungated", description: "d", body: "b" });
+			await expect(promoteManagedSkill("ungated")).rejects.toThrow(/gate is off/);
+		});
+
+		it("refuses to promote a missing or already-live skill", async () => {
+			Bun.env[gateEnv] = "1";
+			await expect(promoteManagedSkill("ghost")).rejects.toThrow(/does not exist/);
+
+			await writeManagedSkill({ action: "create", name: "live", description: "d", body: "b", promote: true });
+			await expect(promoteManagedSkill("live")).rejects.toThrow(/already live/);
 		});
 	});
 });

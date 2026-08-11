@@ -275,6 +275,18 @@ The prior real-model run (context-stress-real-001) measured NON-REGRESSION — a
 
 **Verdict: evidence survives REAL eviction pressure with a REAL model.** The early file-1 finding (kernelHostFor) survived a ~90% forced eviction per turn; the task completed correctly. The VM kept the model on-task (10 targeted reads vs the baseline's 16 wandering re-reads), 12.5x fewer tokens, 3x faster, 9x cheaper. Note: A's absolute numbers are high run-to-run variance (prior run's A was 3 calls/46.9k — the ungoverned model re-reads opportunistically; same-day A/B comparison is valid). Combined with the synthetic probe (41.6% compression WITH evidence) and the byte-stability pin: **Context VM = PROMOTE candidate — the last unmeasured claim (real-pressure evidence survival) is now closed.**
 
+## Skill promotion evidence pipeline (skill-promotion-001, $0 mechanism + executor)
+
+The LAST parked item (paste-9: "keep the skill gate off until a trusted evaluator exists"). Now connected end-to-end:
+- `evaluateSkillPromotion` (kernel learning plane): paired sandbox-vs-replay trials through the kernel promotion gate + a DISJOINT held-out split through the sequential design; verdict = both clear. Pure, deterministic, $0.
+- `promoteManagedSkill` (coding-agent): the only file that moves a skill out of staging — verbatim move, refuses gate-off/missing/symlinked/already-live.
+- `skill-promotion-executor.ts`: staged skill → evidence (synthetic $0 default; real trial file via SKILL_TRIALS) → evaluate → record trusted verdict in harness ledger (harness.recordEvaluation, same path as Context VM v1) → promote live only on PASS.
+
+Verified both halves live:
+- PROMOTE: synthetic clear evidence → verdict promote → ledger v1 → `staging/demo-kicker` moved to `active/demo-kicker`.
+- REJECT: real trials file with failed heldout (overfit) → pairedGate PASS but heldout FAIL → verdict reject → ledger v1 (reject) → skill STAYS staged.
+
+Cost: $0 (pure decision + file moves; the real-model trial collection is the metaharness's job, wired via the same gates).
 ## Dead-code batch (dead-code-001, 48052173b) — every built feature now has a PRODUCTION caller, not just a mechanism:
 - **Gateway daemon**: `connectSessionToGateway` had zero production callers. Session gate hook now attaches the live runtime (session id + model) to the control plane when `OMP_KERNEL_GATEWAY_PROJECT_DIR` is set (same opt-in flag as the daemon); best-effort, missing broker never affects the turn.
 - **Trusted-verdict ledger**: `recordEvaluation` had no caller. New `__kernel__.harness.recordEvaluation` bridge op (same gate as promote — the candidate cannot self-certify), `harness.evaluated` event kind, operator-scoped `harness.recordEvaluation` gateway method on `KernelHost` (idempotent on the daemon-shared gateway), and metaharness `recordExperimentVerdict` mapping the optimizer's recommendation to the ledger. Verified end-to-end: propose → gateway verdict → promote applies → head advances.

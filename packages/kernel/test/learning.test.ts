@@ -3,6 +3,7 @@ import {
 	CONSTITUTIONAL_COMPONENTS,
 	EDITABLE_COMPONENTS,
 	evaluatePromotion,
+	evaluateSkillPromotion,
 	HarnessVersionLedger,
 	isConstitutional,
 	isEditable,
@@ -322,5 +323,72 @@ describe("sequential design", () => {
 			{ stage: "signal", taskCount: 20, successRate: 0.2, passed: false },
 		]);
 		expect(verdictFromSequential(run).promote).toBe(false);
+	});
+});
+
+describe("skill promotion evidence gate", () => {
+	const metric = (success: number) => ({ success, cost: 0.001, latencyMs: 1000, reliability: 1 });
+
+	test("promotes when the paired gate and held-out generalization both pass", () => {
+		const evidence = {
+			skill: "fix-auth",
+			paired: Array.from({ length: 6 }, (_, i) => ({
+				taskId: `auth-${i}`,
+				baseline: metric(0),
+				candidate: metric(1),
+			})),
+			// 40 disjoint held-out tasks all solved: clears smoke(2)→signal(20)
+			// and reaches confirm(40<100) — passed.
+			heldOut: Array.from({ length: 40 }, (_, i) => ({ taskId: `held-${i}`, success: 1 })),
+		};
+		const result = evaluateSkillPromotion(evidence);
+		expect(result.verdict.promote).toBe(true);
+		expect(result.sequential.passed).toBe(true);
+	});
+
+	test("rejects when the paired gate fails (skill does not help)", () => {
+		const evidence = {
+			skill: "noop",
+			paired: Array.from({ length: 6 }, (_, i) => ({
+				taskId: `t-${i}`,
+				baseline: metric(1),
+				candidate: metric(1), // no improvement
+			})),
+			heldOut: Array.from({ length: 40 }, (_, i) => ({ taskId: `held-${i}`, success: 1 })),
+		};
+		const result = evaluateSkillPromotion(evidence);
+		expect(result.verdict.promote).toBe(false);
+		expect(result.pairedGate.promote).toBe(false);
+	});
+
+	test("rejects when held-out generalization fails (overfit to source tasks)", () => {
+		const evidence = {
+			skill: "overfit",
+			paired: Array.from({ length: 6 }, (_, i) => ({
+				taskId: `source-${i}`,
+				baseline: metric(0),
+				candidate: metric(1),
+			})),
+			// Held-out tasks fail the floor: the skill memorized its source.
+			heldOut: Array.from({ length: 40 }, (_, i) => ({ taskId: `held-${i}`, success: 0 })),
+		};
+		const result = evaluateSkillPromotion(evidence);
+		expect(result.verdict.promote).toBe(false);
+		expect(result.sequential.stoppedAt).not.toBeNull();
+	});
+
+	test("rejects when no held-out split exists", () => {
+		const evidence = {
+			skill: "noheldout",
+			paired: Array.from({ length: 6 }, (_, i) => ({
+				taskId: `t-${i}`,
+				baseline: metric(0),
+				candidate: metric(1),
+			})),
+			heldOut: [],
+		};
+		const result = evaluateSkillPromotion(evidence);
+		expect(result.verdict.promote).toBe(false);
+		expect(result.sequential.passed).toBe(false);
 	});
 });

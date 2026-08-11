@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Skill promotion evidence evaluator (`evaluateSkillPromotion`): arms the skill promotion gate with a real decision — paired sandbox-vs-replay trials through the kernel promotion gate PLUS a disjoint held-out split through the sequential design; promotes only when both clear (paste-9's last parked item). Pure + deterministic, no model calls.
 - Trusted-verdict ledger path (dead-code fix): new `harness.evaluated` event kind; `KernelHost` registers an operator-scoped `harness.recordEvaluation` gateway method so the metaharness evaluator records promote/reject verdicts into the ledger from another process (the `harness.promote` bridge op then applies the recorded verdict).
 - Constitutional kernel package: append-only event bus with DAG parent links and provenance, content-addressed immutable artifact store, capability registry with monotonic child-scope inheritance, policy engine with constraint evaluation, context materializer with scoring and token-budget allocation, verification contracts and deterministic checks, and the AgentRuntime/Actor/DurableTask seam interfaces.
 - Kernel actor seam: `actorStatusFromRef` / `kernelActorState` liveness projection, typed `AgentMessage` mailbox envelope codec (`encodeAgentMessage`/`decodeAgentMessage`/`makeAgentMessage`).
