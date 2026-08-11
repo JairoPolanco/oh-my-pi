@@ -168,6 +168,17 @@ Real-model run: session A reads a fact + persists via `memory.propose`/`commit`;
 **Bug found + fixed (dogfooding):** `kernelDirFor` crashed `sanitizeFileSegment(undefined)` for in-memory sessions exposing only `getKernelSessionId` (no getSessionId/cwd on the session object). Fix: temp-dir key prefers `getKernelSessionId` → `getSessionId` → `cwd` → literal "session".
 
 **Verdict: semantic memory lifecycle works deterministically; model adoption needs a prompt that makes the persist step first-class (single-step instruction, not "then commit the returned id").** Re-run candidate with a simpler prompt (~$0.01).
+## Durable tasks (durable-tasks-001, supervised)
+
+Same-session two-turn test with SINGLE-STEP prompts (lesson from memory run): t1 = `tasks.create({id:"dt-1",...})` + `tasks.list()`; t2 = `tasks.list()` again.
+
+| Turn | Calls | Tokens | Wall | Cost | dt-1 visible |
+|---|---|---|---|---|---|
+| t1_persist | 7 | 55.7k | 34s | $0.0004 | ✓ |
+| t2_retrieve | 10 | 83.9k | 14s | $0.0005 | ✓ |
+
+**Verdict: durable tasks work end-to-end with real model use.** The model persisted via the gated bridge, re-created the same id idempotently in t2 (safe — durable store keyed by id), and `tasks.list()` retrieved it. Cost ~$0.0009. Confirms the single-step prompt pattern (vs memory's skipped multi-step chain). Feature status: durable tasks ✅ measured.
+
 
 **Adopted harness qualities (from the four reference surveys), with evidence:**
 - Hermes prompt-cache byte-stability: pinned by regression test (under-budget transform returns message objects BY REFERENCE — verified, `provider-context-governor.test.ts`).
