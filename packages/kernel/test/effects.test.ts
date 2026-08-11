@@ -79,10 +79,11 @@ describe("mapToolEffectToOperation", () => {
 		expect(mapToolEffectToOperation({ tool: "hub", args: { op: "send", to: "Worker", message: "hi" } })).toEqual([
 			{ id: "agent.message", effect: "spawn", resource: "actor" },
 		]);
-		// send WITHOUT a `to` writes stdin to a named process — exec-tier.
+		// send WITHOUT a `to` writes stdin to a named process — exec-tier,
+		// matching the execute-effect grant surface (paste-9).
 		expect(
 			mapToolEffectToOperation({ tool: "hub", args: { op: "send", name: "debugger", text: "continue" } }),
-		).toEqual([{ id: "process.control", effect: "write", resource: "debugger" }]);
+		).toEqual([{ id: "process.control", effect: "execute", resource: "debugger" }]);
 		expect(mapToolEffectToOperation({ tool: "hub", args: { op: "logs", name: "web" } })).toEqual([
 			{ id: "process.read", effect: "read", resource: "web" },
 		]);
@@ -281,6 +282,11 @@ describe("EffectBroker", () => {
 		expect(broker.allows("main", { tool: "hub", args: { op: "stop", name: "web" } })).toBe(true);
 		expect(broker.allows("main", { tool: "hub", args: { op: "restart", name: "web" } })).toBe(true);
 		expect(broker.allows("main", { tool: "hub", args: { op: "logs", name: "web" } })).toBe(true);
+		// stdin to a named process is exec-tier process.control — the grant
+		// surface is execute, so the same baseline covers it (paste-9).
+		expect(broker.allows("main", { tool: "hub", args: { op: "send", name: "debugger", text: "continue" } })).toBe(
+			true,
+		);
 	});
 
 	test("hub peer messaging is ALLOWED under agent.message:actor (paste-8 P0 #2)", () => {

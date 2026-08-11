@@ -237,8 +237,10 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 			}
 			if (action === "send") {
 				// stdin to a named process — process control, exec-tier in
-				// OMP's own hubApproval.
-				return [op("process.control", "write", processName)];
+				// OMP's own hubApproval. The capability is granted with effect
+				// `execute` (paste-9): `write` here would never match the
+				// baseline/planner grants and deny every stdin send.
+				return [op("process.control", "execute", processName)];
 			}
 			if (action === "logs" || action === "ps" || action === "describe") {
 				return [op("process.read", "read", processName)];

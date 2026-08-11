@@ -372,6 +372,18 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		await expect(
 			call("routing.register", { role: "worker", provider: "anthropic", model: "claude" }, evalOnly),
 		).rejects.toThrow(/lacks routing\.write/);
+		// routing.record is telemetry injection — same routing.write gate
+		// (paste-9).
+		await expect(
+			call("routing.record", { model: "m1", contextTokens: 100, outputTokens: 10 }, evalOnly),
+		).rejects.toThrow(/lacks routing\.write/);
+		// harness.hypothesis/promote/versions need their own capability ids
+		// (paste-9): proposing a harness change is a governed effect.
+		await expect(
+			call("harness.hypothesis", { component: "context-heuristic", observation: "o", hypothesis: "h" }, evalOnly),
+		).rejects.toThrow(/lacks harness\.propose/);
+		await expect(call("harness.promote", { version: 1 }, evalOnly)).rejects.toThrow(/lacks harness\.promote/);
+		await expect(call("harness.versions", {}, evalOnly)).rejects.toThrow(/lacks harness\.read/);
 		// The same principal CAN read artifacts (artifact.read granted below
 		// when the baseline covers it) — reads and writes are distinct.
 		await expect(call("artifacts.put", { text: "x" }, evalOnly)).rejects.toThrow(/lacks artifact\.write/);

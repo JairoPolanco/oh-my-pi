@@ -777,6 +777,9 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 		}
 		case "routing.record": {
 			// Feed routing statistics: log a model request + response pair.
+			// A uniform capability OS (paste-9): telemetry injection is a
+			// routing-write effect, gated like every other mutation.
+			requireCapability(host, actor, "routing.write", "write", "routing");
 			const model = requireArg(args, "model");
 			if (typeof model !== "string") throw new Error("__kernel__.routing.record requires string 'model'");
 			host.events.append({
@@ -823,6 +826,9 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 		}
 		case "harness.hypothesis": {
 			// Phase 11 (§66): commit a falsifiable hypothesis for a harness change.
+			// A dedicated harness-proposal capability (paste-9): mutating the
+			// version ledger is a capability-governed effect like any other.
+			requireCapability(host, actor, "harness.propose", "write", "harness");
 			// Editable components only — constitutional layers are refused here.
 			const component = requireArg(args, "component");
 			const observation = requireArg(args, "observation");
@@ -867,6 +873,10 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			// from comparison statistics the model itself submits. Accepting
 			// caller-supplied `comparisons` here would let the candidate
 			// fabricate the evidence that activates its own mutation.
+			// A separate promotion capability (paste-9): even applying an
+			// already-trusted verdict is a governed effect — distinct from
+			// proposing.
+			requireCapability(host, actor, "harness.promote", "execute", "harness");
 			if (Array.isArray(args.comparisons) && args.comparisons.length > 0) {
 				throw new Error(
 					"harness.promote refuses self-certified comparisons: the evaluation verdict must come from the trusted metaharness evaluator, not the candidate",
@@ -890,6 +900,8 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 		}
 		case "harness.versions": {
 			// Phase 11 (§70): the harness version ledger — bisectable history.
+			// Read capability for uniformity (paste-9).
+			requireCapability(host, actor, "harness.read", "read", "harness");
 			return host.versions.all.map(v => ({
 				number: v.number,
 				parent: v.parent,

@@ -170,6 +170,9 @@ export class KernelHost implements Kernel {
 				{ id: "routing.write", scope: "routing", effect: "write" },
 				{ id: "routing.read", scope: "routing", effect: "read" },
 				{ id: "event.read", scope: "events", effect: "read" },
+				{ id: "harness.propose", scope: "harness", effect: "write" },
+				{ id: "harness.promote", scope: "harness", effect: "execute" },
+				{ id: "harness.read", scope: "harness", effect: "read" },
 			]);
 		}
 		// ONE daemon-scoped gateway above all session hosts (blueprint §92):
