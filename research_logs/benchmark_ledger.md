@@ -287,6 +287,18 @@ Verified both halves live:
 - REJECT: real trials file with failed heldout (overfit) → pairedGate PASS but heldout FAIL → verdict reject → ledger v1 (reject) → skill STAYS staged.
 
 Cost: $0 (pure decision + file moves; the real-model trial collection is the metaharness's job, wired via the same gates).
+## Live dogfooding prompts A/B/C (2026-08-11)
+
+Three remaining surfaces exercised in the live omjai session:
+
+**A — Context VM long read-chain (evidence survival):** the model read all 4 files FULLY (agent-session.ts 9283 lines in chunked reads), correctly reported `#ensureKernelTrajectoryTap` (found at ~line 4360) plus one export per file (AgentSession, runKernelBridge, EffectBroker, DeterministicVerificationEngine). Early evidence survived a genuinely long transcript. No eviction-loss; the honest claim is non-regression on real long work (VM's pressure threshold may or may not have engaged — reads were chunked, transcript large but not verifiably past ~96k).
+
+**B — Harness ledger write path (split-brain fix verified):** `harness.hypothesis` minted version 1, `harness.recordEvaluation` recorded reject with reason "live dogfooding probe". **The verdict landed in the PROJECT-SCOPED `-Projects-oh-my-pi/kernel/harness.db`** (v0 + v1 reject) — the SAME ledger the file-based sessions use. The split-brain fix works: one ledger per project, confirmed live.
+
+**C — Parallel delegation (NEW data point against the rejection):** the model fanned out 4 SCOUT agents in ONE batch (single spawn turn), each read one file, all 4 reports verified correct against source (HarnessVersionLedger, Gateway, runSequentialDesign, CompletionContract), ~$0.00, ~18s. This is the first live evidence of real parallel delegation.
+
+**Why C differs from the benchmark rejection:** the prompt explicitly enumerated 4 self-contained slices AND the model's own delegation gates say "user-enumerated 2+ self-contained runnable slices skip straight to dispatch" — plus scouts are cheap read-only agents. The benchmark rejection (delegation-probe-002: model collapsed 4-way instruction to 1 spawn) stands for IMPLICIT delegation on medium tasks; this shows EXPLICIT enumeration + scout agents works. The ledger's "parallel-delegation hypothesis untested" note is now partially answered: it's testable, and it works when the task is enumerated + scouts are available.
+
 ## Kernel dir split-brain (dogfooding, fixed 22e8d7962)
 
 The skill auto-executor test surfaced it: the learn session (file-based) wrote its harness ledger + events to `~/.omp/agent/sessions/-Projects-oh-my-pi/kernel/`, but the interactive root session (no session file at gate-hook time) fell into `os.tmpdir()/omp-kernel-<sessionId>` — TWO harness ledgers and TWO capability trees for ONE project. The promotion verdict landed in the temp dir's ledger, the learn events in the shared dir's event log; both worked, but the ledger wasn't where the project's other sessions read it.
