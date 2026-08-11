@@ -52,6 +52,37 @@ describe("KernelHost (composition root)", () => {
 		expect(lines).toHaveLength(2); // no replay duplication
 	});
 
+	test("capability tree survives reopen: parent edges + direct grants are durable (paste-8 P0)", async () => {
+		// First "process": bootstrap root, derive a read-only child.
+		{
+			const host = new KernelHost(dir, { mainPrincipal: "Main", bootstrapMain: true });
+			await host.warm();
+			host.capabilities.setParent("worker", "Main");
+			host.capabilities.deriveChildCapabilities("worker", [
+				{ id: "fs.read", scope: "repo/**", effect: "read" },
+				{ id: "fs.write", scope: "repo/**", effect: "write" }, // dropped: Main-derived bound... present in baseline
+			]);
+			await host.close();
+		}
+		// Second "process": the SAME constrained authority must come back —
+		// never zero, never re-bootstrapped as a fresh root.
+		{
+			const host = new KernelHost(dir, { mainPrincipal: "Main", bootstrapMain: false });
+			await host.warm();
+			expect(host.capabilities.parentOf("worker")).toBe("Main");
+			const workerGrants = host.capabilities.direct("worker").map(c => c.id);
+			expect(workerGrants).toContain("fs.read");
+			// The main baseline also persisted (bootstrap wrote through).
+			expect(host.capabilities.direct("Main").some(c => c.id === "process.exec")).toBe(true);
+			// Monotonicity still enforced against the restored parent: a
+			// capability outside the persisted baseline is refused.
+			expect(() =>
+				host.capabilities.grant("worker", { id: "fs.read", scope: "outside:secret", effect: "read" }),
+			).toThrow(/monotonicity violation/);
+			await host.close();
+		}
+	});
+
 	test("contracts and the version ledger survive reopen", async () => {
 		{
 			const host = new KernelHost(dir);

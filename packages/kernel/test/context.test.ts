@@ -215,6 +215,76 @@ describe("ContextMaterializer", () => {
 		const instructions = view.items.filter(i => i.kind === "instruction");
 		expect(instructions).toHaveLength(1);
 	});
+
+	test("unused band quota spills into the global pool by value (paste-8 P0)", () => {
+		// 1000-token budget with ONLY trajectory candidates used to cap at the
+		// trajectory band (~164 tokens) and leave the rest empty — band caps
+		// are priors, not ceilings. The spillover pass fills by global value.
+		const materializer = new ContextMaterializer();
+		const view = materializer.materialize({
+			tokenBudget: 1000,
+			candidates: [
+				candidate({
+					id: "t1",
+					kind: "trajectory",
+					level: "episodic",
+					tokens: 100,
+					impact: 0.9,
+					information: 0.9,
+					reliability: 0.9,
+				}),
+				candidate({
+					id: "t2",
+					kind: "trajectory",
+					level: "episodic",
+					tokens: 100,
+					impact: 0.9,
+					information: 0.9,
+					reliability: 0.9,
+				}),
+				candidate({
+					id: "t3",
+					kind: "trajectory",
+					level: "episodic",
+					tokens: 100,
+					impact: 0.9,
+					information: 0.9,
+					reliability: 0.9,
+				}),
+				candidate({
+					id: "t4",
+					kind: "trajectory",
+					level: "episodic",
+					tokens: 100,
+					impact: 0.9,
+					information: 0.9,
+					reliability: 0.9,
+				}),
+				candidate({
+					id: "t5",
+					kind: "trajectory",
+					level: "episodic",
+					tokens: 100,
+					impact: 0.9,
+					information: 0.9,
+					reliability: 0.9,
+				}),
+				candidate({
+					id: "t6",
+					kind: "trajectory",
+					level: "episodic",
+					tokens: 100,
+					impact: 0.9,
+					information: 0.9,
+					reliability: 0.9,
+				}),
+			],
+		});
+		// All six (600 tokens) fit under the 900-token spendable budget; the
+		// old single-pass behavior selected only the trajectory band's share.
+		expect(view.items.filter(i => i.kind === "trajectory")).toHaveLength(6);
+		expect(view.usedTokens).toBeGreaterThan(500);
+	});
 });
 
 describe("DefaultContextEngine compression", () => {

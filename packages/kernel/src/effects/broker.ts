@@ -106,12 +106,53 @@ function op(id: CapabilityId, effect: CapabilityEffect, resource: string): Opera
 }
 
 /**
+ * LSP actions that only READ program state — the mirror of OMP's own
+ * `LSP_READONLY_ACTIONS` in src/lsp/servers.ts (paste-8 P0). Any LSP action
+ * NOT in this set (rename, rename_file, code_actions+apply, request, reload)
+ * mutates the workspace and requires fs.write — a read grant must never
+ * authorize a rename.
+ */
+export const LSP_READONLY_ACTIONS: ReadonlySet<string> = new Set([
+	"diagnostics",
+	"definition",
+	"type_definition",
+	"implementation",
+	"references",
+	"hover",
+	"symbols",
+	"status",
+	"capabilities",
+]);
+
+/**
+ * Debug actions that only read program state — the mirror of OMP's own
+ * `DEBUG_READONLY_ACTIONS` in src/tools/debug.ts (paste-8 P0). launch,
+ * attach, continue, step_*, pause, evaluate, breakpoint mutations and memory
+ * writes all require process.exec — a read grant must never authorize
+ * launching or controlling a process.
+ */
+export const DEBUG_READONLY_ACTIONS: ReadonlySet<string> = new Set([
+	"output",
+	"threads",
+	"stack_trace",
+	"scopes",
+	"variables",
+	"disassemble",
+	"read_memory",
+	"loaded_sources",
+	"modules",
+	"sessions",
+]);
+
+/**
  * Default tool → operations mapping (constitutional §55 conventions, paste-7
- * P0 #3). Compound tools return ALL required operations; `hub` maps BY
- * OPERATION so process control is never authorized as agent spawning; `task`
- * is agent spawning (not board); `board` reads are reads; `learn` without a
- * skill is memory.write, with a skill is memory.write AND skill.write; `goal`
- * has its own read/write lifecycle.
+ * P0 #3, paste-8 P0). Compound tools return ALL required operations; `hub`
+ * maps BY OPERATION so process control is never authorized as agent
+ * spawning; `task` is agent spawning (not board); `board` reads are reads;
+ * `learn` without a skill is memory.write, with a skill is memory.write AND
+ * skill.write; `goal` has its own read/write lifecycle. The taxonomy is
+ * derived from each tool's REAL argument schema and OMP's own approval
+ * declarations — never stricter-than-tool synthetic shapes.
  */
 export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Operation[] | null {
 	const { tool, args } = effect;
@@ -119,12 +160,37 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 		case "read":
 		case "grep":
 		case "glob":
-		case "lsp":
 		case "inspect_image":
 		case "ast_grep":
-		case "security_scan":
-		case "debug":
 			return [op("fs.read", "read", canonicalFileResource(firstString(args) ?? "", root))];
+		case "lsp": {
+			// LSP maps BY ACTION (paste-8 P0 #6): the tool itself classifies
+			// rename/rename_file/code_actions+apply as writes. A read grant
+			// must never authorize a workspace mutation through the "query"
+			// surface.
+			const action = String(args.action ?? "");
+			if (LSP_READONLY_ACTIONS.has(action)) {
+				return [op("fs.read", "read", canonicalFileResource(firstString(args) ?? "", root))];
+			}
+			if (action === "code_actions" && args.apply === false) {
+				return [op("fs.read", "read", canonicalFileResource(firstString(args) ?? "", root))];
+			}
+			return [op("fs.write", "write", canonicalFileResource(firstString(args) ?? "", root))];
+		}
+		case "debug": {
+			// Debug maps BY ACTION (paste-8 P0 #7): state inspection is
+			// process.read; launch/attach/continue/evaluate/breakpoints and
+			// memory writes are process.exec — a read grant must never
+			// authorize launching or controlling a process.
+			const action = String(args.action ?? "");
+			return DEBUG_READONLY_ACTIONS.has(action)
+				? [op("process.read", "read", canonicalProcessResource(args.cwd as string | undefined, root))]
+				: [op("process.exec", "execute", canonicalProcessResource(args.cwd as string | undefined, root))];
+		}
+		case "security_scan":
+			// SecurityScanTool declares approval "exec" (paste-8 P0 #8) —
+			// scans/cloud/model operations execute code. NEVER fs.read.
+			return [op("process.exec", "execute", canonicalProcessResource(args.cwd as string | undefined, root))];
 		case "write":
 		case "edit":
 		case "ast_edit":
@@ -153,26 +219,33 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 			return [op("task.read", "read", "board")];
 		}
 		case "hub": {
-			// Multiplexed broker tool — map BY OPERATION (paste-7 P0 #3).
-			// `hub start/stop/restart/send` control processes: process.exec,
-			// never agent.spawn. `hub send` to an agent is agent.message.
+			// Multiplexed broker tool — map BY OPERATION from the REAL Hub
+			// schema (paste-8 P0 #1, #2): process ops carry `name` (the stable
+			// launch identity), never a raw cwd/application path; peer
+			// messaging is the generic `actor` resource (the planner sees tool
+			// NAMES only — it cannot know recipient identities, and the main
+			// baseline grants agent.message:actor).
 			const action = String(args.op ?? args.action ?? "");
 			const to = typeof args.to === "string" ? args.to : undefined;
+			const processName = typeof args.name === "string" && args.name.length > 0 ? args.name : "process";
 			if (action === "start" || action === "stop" || action === "restart") {
-				return [op("process.control", "execute", firstString(args) ?? "process")];
+				return [op("process.control", "execute", processName)];
 			}
-			if (action === "send" && to && to !== "all") {
-				return [op("agent.message", "spawn", to)];
+			if (action === "send" && to && !args.name) {
+				// Peer DM — generic actor resource (paste-8 P0 #2).
+				return [op("agent.message", "spawn", "actor")];
 			}
-			if (action === "send" || action === "stdin") {
-				return [op("process.control", "write", firstString(args) ?? "process")];
+			if (action === "send") {
+				// stdin to a named process — process control, exec-tier in
+				// OMP's own hubApproval.
+				return [op("process.control", "write", processName)];
 			}
 			if (action === "logs" || action === "ps" || action === "describe") {
-				return [op("process.read", "read", firstString(args) ?? "process")];
+				return [op("process.read", "read", processName)];
 			}
 			if (action === "cancel") return [op("job.control", "execute", "job")];
 			if (action === "wait") return [op("job.read", "read", "job")];
-			// list / inbox / peers: read-only agent + job roster.
+			// list / inbox / jobs / peers: read-only agent + job roster.
 			return [op("agent.read", "read", "roster"), op("job.read", "read", "job")];
 		}
 		case "vibe_spawn":
@@ -191,12 +264,11 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 			if (args.skill) ops.push(op("skill.write", "write", "propose"));
 			return ops;
 		}
-		case "manage_skill": {
-			const action = String(args.action ?? "create");
-			return action === "create" || action === "update"
-				? [op("skill.write", "write", "promote")]
-				: [op("skill.read", "read", "skills")];
-		}
+		case "manage_skill":
+			// create/update/DELETE are all skill mutations — OMP's
+			// manage_skill declares approval "write" for every action
+			// (paste-8 P0 #3). A skill.read principal must NEVER delete.
+			return [op("skill.write", "write", "promote")];
 		case "memory_edit":
 		case "retain":
 			return [op("memory.write", "write", "facts")];
@@ -205,14 +277,19 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 			return [op("memory.read", "read", "facts")];
 		case "checkpoint":
 		case "rewind":
-			return [op("session.state", "write", tool)];
+			// One session-state vocabulary: the host baseline grants
+			// session.state:session (paste-8 P0 #4) — never per-op resources.
+			return [op("session.state", "write", "session")];
 		case "goal": {
 			const action = String(args.op ?? args.action ?? "get");
 			return action === "get" ? [op("goal.read", "read", "goal")] : [op("goal.write", "write", "goal")];
 		}
 		case "computer": {
-			const readOnly = args.action === "read" || args.action === "screenshot";
-			return readOnly ? [op("computer.read", "read", "screen")] : [op("computer.control", "execute", "input")];
+			// The REAL Computer tool takes `read_only: true`, not `action`
+			// (paste-8 P0 #5).
+			return args.read_only === true
+				? [op("computer.read", "read", "screen")]
+				: [op("computer.control", "execute", "input")];
 		}
 		default:
 			return null; // ungoverned tool → OMP's own approval machinery applies

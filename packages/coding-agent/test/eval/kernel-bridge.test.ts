@@ -20,6 +20,9 @@ function makeSession(overrides: Partial<ToolSession> = {}): ToolSession {
 		cwd: testDir,
 		getSessionId: () => "bridge-test",
 		getSessionFile: () => path.join(sessionDir, "session.jsonl"),
+		// The bridge authorizes AS the session's agent; "Main" is the
+		// bootstrapped principal with the full baseline (paste-8 P0).
+		getAgentId: () => "Main",
 		...overrides,
 	} as unknown as ToolSession;
 }
@@ -285,34 +288,38 @@ describe("kernel bridge memory + actors + capabilities", () => {
 	});
 
 	test("policy.authorize enforces default-deny + granted capabilities", async () => {
+		// "Worker" has no grants (Main carries the full bootstrapped
+		// baseline) — default deny holds for the unprivileged principal.
 		const denied = (await call("policy.authorize", {
 			id: "fs.write",
 			effect: "write",
 			resource: "repo/src/db.ts",
-			actor: "Main",
+			actor: "Worker",
 		})) as { allow: boolean; reason?: string };
 		expect(denied.allow).toBe(false);
 
 		// Grants are host-owned: the model-facing bridge has no grant op.
 		const host = await kernelHostFor(makeSession());
-		host.capabilities.grant("Main", { id: "fs.write", scope: "repo/**", effect: "write" });
+		host.capabilities.setParent("Worker", "Main");
+		host.capabilities.grant("Worker", { id: "fs.write", scope: "repo/**", effect: "write" });
 		const allowed = (await call("policy.authorize", {
 			id: "fs.write",
 			effect: "write",
 			resource: "repo/src/db.ts",
-			actor: "Main",
+			actor: "Worker",
 		})) as { allow: boolean };
 		expect(allowed.allow).toBe(true);
 	});
 
 	test("policy.authorize enforces scope boundaries", async () => {
 		const host = await kernelHostFor(makeSession());
-		host.capabilities.grant("Main", { id: "fs.write", scope: "repo/src/**", effect: "write" });
+		host.capabilities.setParent("Worker", "Main");
+		host.capabilities.grant("Worker", { id: "fs.write", scope: "repo/src/**", effect: "write" });
 		const outside = (await call("policy.authorize", {
 			id: "fs.write",
 			effect: "write",
 			resource: "repo/README.md",
-			actor: "Main",
+			actor: "Worker",
 		})) as { allow: boolean };
 		expect(outside.allow).toBe(false);
 	});
@@ -336,6 +343,38 @@ describe("kernel bridge memory + actors + capabilities", () => {
 
 	test("memory.propose requires a string fact", async () => {
 		expect(() => call("memory.propose", {})).toThrow(/requires 'fact'/);
+	});
+
+	test("RLM bridge mutations require the matching capability — no privileged backdoor (paste-8 P0)", async () => {
+		// The audit's acceptance case: a principal granted ONLY eval (=
+		// process.exec) must NOT be able to mutate constitutional state
+		// through `__kernel__` without the corresponding typed capability.
+		const host = await kernelHostFor(makeSession());
+		host.capabilities.setParent("EvalOnly", "Main");
+		host.capabilities.grant("EvalOnly", { id: "process.exec", scope: "repo/**", effect: "execute" });
+		const evalOnly = makeSession({ getAgentId: () => "EvalOnly" });
+
+		// task.write absent → tasks.create denied.
+		await expect(call("tasks.create", { id: "t1", objective: "x" }, evalOnly)).rejects.toThrow(/lacks task\.write/);
+		// memory.write absent → memory.propose denied.
+		await expect(call("memory.propose", { fact: "x" }, evalOnly)).rejects.toThrow(/lacks memory\.write/);
+		// agent.message absent → actors.send denied.
+		await expect(call("actors.send", { to: "Worker", kind: "ping" }, evalOnly)).rejects.toThrow(
+			/lacks agent\.message/,
+		);
+		// agent.kill absent → actors.abort denied.
+		await expect(call("actors.abort", { id: "nope" }, evalOnly)).rejects.toThrow(/lacks agent\.kill/);
+		// contract.write absent → contract.create denied.
+		await expect(call("contract.create", { id: "c1", objective: "x" }, evalOnly)).rejects.toThrow(
+			/lacks contract\.write/,
+		);
+		// routing.write absent → routing.register denied.
+		await expect(
+			call("routing.register", { role: "worker", provider: "anthropic", model: "claude" }, evalOnly),
+		).rejects.toThrow(/lacks routing\.write/);
+		// The same principal CAN read artifacts (artifact.read granted below
+		// when the baseline covers it) — reads and writes are distinct.
+		await expect(call("artifacts.put", { text: "x" }, evalOnly)).rejects.toThrow(/lacks artifact\.write/);
 	});
 
 	test("harness.hypothesis commits a version and refuses constitutional components", async () => {

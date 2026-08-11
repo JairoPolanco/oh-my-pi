@@ -123,7 +123,13 @@ function messageTokenCost(message: Message): number {
 export class ProviderContextGovernor {
 	#materializer: ContextMaterializer;
 
-	constructor(materializer: ContextMaterializer = new ContextMaterializer()) {
+	constructor(
+		// The governor already reserves output/system/overhead OUTSIDE the
+		// optional-history budget (paste-8 P0): its `optionalBudget` is the
+		// true spendable pool, so the materializer must not reserve again —
+		// otherwise provider history is ~10% more conservative than intended.
+		materializer: ContextMaterializer = new ContextMaterializer({ reserveFraction: 0 }),
+	) {
 		this.#materializer = materializer;
 	}
 

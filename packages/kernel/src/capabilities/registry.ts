@@ -146,10 +146,22 @@ export function capabilityCovers(parent: Capability, child: Capability): boolean
 export class CapabilityRegistry {
 	#grants = new Map<PrincipalId, Capability[]>();
 	#parents = new Map<PrincipalId, PrincipalId | undefined>();
+	#onChange: ((principal: PrincipalId) => void) | undefined;
+
+	constructor(options: { onChange?: (principal: PrincipalId) => void } = {}) {
+		this.#onChange = options.onChange;
+	}
+
+	/** Restore the tree from a durable snapshot (host warm, paste-8 P0). */
+	loadSnapshot(parents: Map<PrincipalId, PrincipalId | undefined>, grants: Map<PrincipalId, Capability[]>): void {
+		this.#parents = new Map(parents);
+		this.#grants = new Map(grants);
+	}
 
 	/** Register the parent of a principal (for monotonicity checks). */
 	setParent(child: PrincipalId, parent: PrincipalId | undefined): void {
 		this.#parents.set(child, parent);
+		this.#onChange?.(child);
 	}
 
 	parentOf(principal: PrincipalId): PrincipalId | undefined {
@@ -183,6 +195,7 @@ export class CapabilityRegistry {
 		const existing = this.#grants.get(principal) ?? [];
 		if (!existing.some(e => capabilityCovers(e, cap) && capabilityCovers(cap, e))) {
 			this.#grants.set(principal, [...existing, cap]);
+			this.#onChange?.(principal);
 		}
 	}
 
@@ -251,5 +264,6 @@ export class CapabilityRegistry {
 			}
 		}
 		this.#grants.set(principal, merged);
+		this.#onChange?.(principal);
 	}
 }

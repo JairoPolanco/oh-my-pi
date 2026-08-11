@@ -27,6 +27,9 @@ function makeSession(cwd: string, ...tools: AgentTool[]): ToolSession {
 		getArtifactsDir: () => null,
 		getSessionId: () => "test-session",
 		getEvalSessionId: () => "test-eval-session",
+		// Bridge ops authorize AS the session's agent; "Main" is the
+		// bootstrapped principal with the full baseline (paste-8 P0).
+		getAgentId: () => "Main",
 		getToolByName: (name: string) => tools.find(tool => tool.name === name),
 	} as unknown as ToolSession;
 }
@@ -133,7 +136,7 @@ describe("kernel prelude globals (JS worker)", () => {
 			const report = await contract.verify({ id: "pc1" });
 			await routing.register({ role: "scout", provider: "openai", model: "gpt-5" });
 			const selection = await routing.resolve({ role: "scout", taskComplexity: 0.5, risk: 0.2 });
-			const denied = await policy.authorize({ id: "fs.write", effect: "write", resource: "repo/x.ts" });
+			const denied = await policy.authorize({ id: "fs.write", effect: "write", resource: "repo/x.ts", actor: "Unprivileged" });
 			const profile = await security.profile({});
 			return JSON.stringify({
 				verified: report.pass,

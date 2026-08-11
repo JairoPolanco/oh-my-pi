@@ -266,12 +266,43 @@ function requireArg(args: KernelBridgeArgs, name: string): unknown {
 }
 
 /**
+ * The actor identity behind bridge calls: the SESSION's principal (the agent
+ * that owns the eval cell). Never caller-supplied — the model cannot claim an
+ * identity it wasn't granted (paste-8 P0).
+ */
+function bridgeActor(session: ToolSession): string {
+	return session.getAgentId?.() ?? "eval";
+}
+
+/**
+ * Require a capability for a `__kernel__` bridge operation (paste-8 P0). The
+ * RLM host bridge is NOT a privileged backdoor: every op authorizes against
+ * the SAME policy/capability registry as tool effects. An eval-capable agent
+ * that was only granted `process.exec` cannot mutate task/memory/actor state
+ * without the corresponding typed capability — the capability OS holds for
+ * the bridge exactly as it holds for normal tool dispatch.
+ */
+function requireCapability(
+	host: KernelHost,
+	actor: string,
+	id: string,
+	effect: "read" | "write" | "execute" | "network" | "secret" | "spawn",
+	resource: string,
+): void {
+	const decision = host.policy.authorize(actor, { id, effect, resource });
+	if (!decision.allow) {
+		throw new Error(`__kernel__ capability denied: ${actor} lacks ${id}:${resource} (${decision.reason})`);
+	}
+}
+
+/**
  * Dispatch a kernel bridge operation. Ops mirror the constitutional kernel
  * surfaces: context materialization, content-addressed artifacts, durable
  * tasks, and the event log.
  */
 export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBridgeOptions): Promise<unknown> {
 	const host = await kernelHostFor(options.session);
+	const actor = bridgeActor(options.session);
 	switch (args.op) {
 		case "ctx.materialize": {
 			// Conservative Context VM (blueprint §11): candidates in, token-budgeted
@@ -289,6 +320,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return view;
 		}
 		case "artifacts.put": {
+			requireCapability(host, actor, "artifact.write", "write", "artifacts");
 			const text = requireArg(args, "text");
 			if (typeof text !== "string") throw new Error("__kernel__.artifacts.put requires string 'text'");
 			const record = await host.artifacts.putText(text, {
@@ -302,6 +334,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return { id: record.id, bytes: record.bytes, sessionArtifactId };
 		}
 		case "artifacts.read": {
+			requireCapability(host, actor, "artifact.read", "read", "artifacts");
 			const id = requireArg(args, "id");
 			if (typeof id !== "string") throw new Error("__kernel__.artifacts.read requires string 'id'");
 			const text = await host.artifacts.readText(id);
@@ -316,12 +349,14 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return { id, text };
 		}
 		case "artifacts.has": {
+			requireCapability(host, actor, "artifact.read", "read", "artifacts");
 			const id = requireArg(args, "id");
 			if (typeof id !== "string") throw new Error("__kernel__.artifacts.has requires string 'id'");
 			if (await host.artifacts.has(id)) return true;
 			return (await readSessionArtifact(options.session, id)) !== null;
 		}
 		case "tasks.create": {
+			requireCapability(host, actor, "task.write", "write", "board");
 			const id = requireArg(args, "id");
 			const objective = requireArg(args, "objective");
 			if (typeof id !== "string" || typeof objective !== "string") {
@@ -341,6 +376,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return task;
 		}
 		case "tasks.transition": {
+			requireCapability(host, actor, "task.write", "write", "board");
 			const id = requireArg(args, "id") as TaskId;
 			const to = requireArg(args, "to");
 			if (!TASK_STATES.includes(to as TaskState)) {
@@ -355,6 +391,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return task;
 		}
 		case "tasks.list": {
+			requireCapability(host, actor, "task.read", "read", "board");
 			const state =
 				typeof args.state === "string" && TASK_STATES.includes(args.state as TaskState)
 					? (args.state as TaskState)
@@ -370,10 +407,12 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			}));
 		}
 		case "tasks.ready": {
+			requireCapability(host, actor, "task.read", "read", "board");
 			const tasks = await host.tasks.ready();
 			return tasks.map(task => ({ id: task.id, objective: task.objective }));
 		}
 		case "events.query": {
+			requireCapability(host, actor, "event.read", "read", "events");
 			const kind = typeof args.kind === "string" ? args.kind : undefined;
 			const limit = typeof args.limit === "number" ? args.limit : 50;
 			const events = kind ? host.events.query(e => e.payload.kind === kind) : [...host.events.all];
@@ -382,6 +421,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 				.map(e => ({ id: e.id, kind: e.payload.kind, timestamp: e.timestamp, sessionId: e.sessionId }));
 		}
 		case "actors.status": {
+			requireCapability(host, actor, "agent.read", "read", "roster");
 			// Parent-visible liveness (blueprint §29): project the registry's
 			// live refs onto the kernel ActorStatus shape.
 			const registry = options.session.agentRegistry ?? AgentRegistry.global();
@@ -392,12 +432,14 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return actorStatusFromRef(ref);
 		}
 		case "actors.list": {
+			requireCapability(host, actor, "agent.read", "read", "roster");
 			const registry = options.session.agentRegistry ?? AgentRegistry.global();
 			return registry
 				.listVisibleTo(options.session.getAgentId?.() ?? MAIN_AGENT_ID)
 				.map(ref => ({ id: ref.id, displayName: ref.displayName, ...actorStatusFromRef(ref) }));
 		}
 		case "actors.send": {
+			requireCapability(host, actor, "agent.message", "spawn", "actor");
 			const to = requireArg(args, "to");
 			const kind = requireArg(args, "kind");
 			if (typeof to !== "string" || typeof kind !== "string") {
@@ -420,6 +462,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return { ...receipt, messageId: message.id };
 		}
 		case "actors.park": {
+			requireCapability(host, actor, "agent.kill", "execute", "actor");
 			// Persistent actor lifecycle (§32): park = intentionally suspend but
 			// keep the ref + session file for later revival. Uses OMP's lifecycle
 			// manager — do NOT replace it.
@@ -430,6 +473,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return { parked: actorId };
 		}
 		case "actors.revive": {
+			requireCapability(host, actor, "agent.kill", "execute", "actor");
 			const actorId = requireArg(args, "id");
 			if (typeof actorId !== "string") throw new Error("__kernel__.actors.revive requires string 'id'");
 			const lifecycle = options.session.agentLifecycle?.() ?? AgentLifecycleManager.global();
@@ -437,6 +481,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return { revived: actorId, live: session !== undefined };
 		}
 		case "actors.abort": {
+			requireCapability(host, actor, "agent.kill", "execute", "actor");
 			const actorId = requireArg(args, "id");
 			if (typeof actorId !== "string") throw new Error("__kernel__.actors.abort requires string 'id'");
 			const registry = options.session.agentRegistry ?? AgentRegistry.global();
@@ -457,6 +502,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return host.capabilities.effective(actor).map(cap => `${cap.id}:${cap.scope}`);
 		}
 		case "memory.propose": {
+			requireCapability(host, actor, "memory.write", "write", "facts");
 			const fact = requireArg(args, "fact");
 			if (typeof fact !== "string") throw new Error("__kernel__.memory.propose requires string 'fact'");
 			// Prefer the session's live memory backend (mnemopi) so RLM and
@@ -496,6 +542,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return { id: proposed.id, state: proposed.state };
 		}
 		case "memory.commit": {
+			requireCapability(host, actor, "memory.write", "write", "facts");
 			const id = requireArg(args, "id");
 			if (typeof id !== "string") throw new Error("__kernel__.memory.commit requires string 'id'");
 			// Lifecycle routes to the OWNING backend (paste-4 P1). A mnemopi
@@ -510,6 +557,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return { committed: id };
 		}
 		case "memory.reject": {
+			requireCapability(host, actor, "memory.write", "write", "facts");
 			const id = requireArg(args, "id");
 			if (typeof id !== "string") throw new Error("__kernel__.memory.reject requires string 'id'");
 			// Mnemopi has no staged lifecycle to reject — surfacing that is
@@ -521,6 +569,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return { rejected: id };
 		}
 		case "memory.stale": {
+			requireCapability(host, actor, "memory.write", "write", "facts");
 			const id = requireArg(args, "id");
 			if (typeof id !== "string") throw new Error("__kernel__.memory.stale requires string 'id'");
 			if (memoryOwner(options.session).get(id) === "mnemopi") {
@@ -530,6 +579,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return { stale: id };
 		}
 		case "memory.recall": {
+			requireCapability(host, actor, "memory.read", "read", "facts");
 			// Prefer the session's live memory backend so RLM recall sees the
 			// same facts as OMP's own recall/learn (§19).
 			const live = sessionLiveMemory(options.session);
@@ -558,6 +608,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			}));
 		}
 		case "contract.create": {
+			requireCapability(host, actor, "contract.write", "write", "contracts");
 			// Phase 8 (§40, §76): register a completion contract for later
 			// verification. Checks run against the session cwd; required evidence
 			// is matched against artifacts the caller provides at verify time.
@@ -584,6 +635,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return { id, checks: checks.length, evidence: requiredEvidence.length };
 		}
 		case "contract.verify": {
+			requireCapability(host, actor, "contract.read", "read", "contracts");
 			// Evidence-first verification (§43): the report leads with artifacts,
 			// not the worker's prose.
 			const id = requireArg(args, "id");
@@ -643,6 +695,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return report;
 		}
 		case "routing.resolve": {
+			requireCapability(host, actor, "routing.read", "read", "routing");
 			// Phase 9 (§45–47): rule-based routing. The registry stays
 			// interpretable; learned statistics replace it later.
 			const role = requireArg(args, "role");
@@ -664,6 +717,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return host.models.resolve(role as never, features);
 		}
 		case "routing.register": {
+			requireCapability(host, actor, "routing.write", "write", "routing");
 			const role = requireArg(args, "role");
 			const provider = requireArg(args, "provider");
 			const model = requireArg(args, "model");
@@ -674,6 +728,7 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			return { registered: `${role} → ${provider}/${model}` };
 		}
 		case "routing.stats": {
+			requireCapability(host, actor, "routing.read", "read", "routing");
 			// §46 statistics from the event log: per-model call volume, tokens,
 			// latency, plus overall contract pass rate. Rule-based start; the
 			// learned bandit replaces the resolver later, not the accounting.
@@ -914,13 +969,38 @@ export function deriveCapabilitiesFromTools(toolNames: readonly string[], _works
 			case "read":
 			case "grep":
 			case "glob":
-			case "lsp":
 			case "inspect_image":
 			case "ast_grep":
-			case "security_scan":
-			case "debug":
 				if (!requested.some(c => c.id === "fs.read")) {
 					requested.push({ id: "fs.read", scope, effect: "read" });
+				}
+				break;
+			case "lsp":
+				// LSP maps by action (paste-8 P0 #6): queries are reads, but
+				// rename/rename_file/code_actions+apply are writes. The
+				// planner sees tool NAMES only → request both.
+				if (!requested.some(c => c.id === "fs.read")) {
+					requested.push({ id: "fs.read", scope, effect: "read" });
+				}
+				if (!requested.some(c => c.id === "fs.write")) {
+					requested.push({ id: "fs.write", scope, effect: "write" });
+				}
+				break;
+			case "debug":
+				// Debug maps by action (paste-8 P0 #7): inspection is
+				// process.read, launch/continue/evaluate is process.exec.
+				if (!requested.some(c => c.id === "process.read")) {
+					requested.push({ id: "process.read", scope, effect: "read" });
+				}
+				if (!requested.some(c => c.id === "process.exec")) {
+					requested.push({ id: "process.exec", scope, effect: "execute" });
+				}
+				break;
+			case "security_scan":
+				// SecurityScanTool declares approval "exec" (paste-8 P0 #8) —
+				// NEVER fs.read.
+				if (!requested.some(c => c.id === "process.exec")) {
+					requested.push({ id: "process.exec", scope, effect: "execute" });
 				}
 				break;
 			case "write":
@@ -965,7 +1045,10 @@ export function deriveCapabilitiesFromTools(toolNames: readonly string[], _works
 				}
 				break;
 			case "hub":
-				// Multiplexed broker: request the full surface (paste-7 P0 #3).
+				// Multiplexed broker: request the full surface (paste-7 P0 #3,
+				// paste-8 P0 #1): process ops carry `name`, so name-scoped
+				// process resources are needed alongside repo paths; peer
+				// messaging is the generic actor resource.
 				if (!requested.some(c => c.id === "agent.read")) {
 					requested.push({ id: "agent.read", scope: "roster", effect: "read" });
 				}
@@ -976,10 +1059,10 @@ export function deriveCapabilitiesFromTools(toolNames: readonly string[], _works
 					requested.push({ id: "agent.message", scope: "actor", effect: "spawn" });
 				}
 				if (!requested.some(c => c.id === "process.control")) {
-					requested.push({ id: "process.control", scope: "repo/**", effect: "execute" });
+					requested.push({ id: "process.control", scope: "*", effect: "execute" });
 				}
 				if (!requested.some(c => c.id === "process.read")) {
-					requested.push({ id: "process.read", scope: "repo/**", effect: "read" });
+					requested.push({ id: "process.read", scope: "*", effect: "read" });
 				}
 				if (!requested.some(c => c.id === "job.control")) {
 					requested.push({ id: "job.control", scope: "job", effect: "execute" });
@@ -1017,8 +1100,10 @@ export function deriveCapabilitiesFromTools(toolNames: readonly string[], _works
 				}
 				break;
 			case "manage_skill":
-				if (!requested.some(c => c.id === "skill.write")) {
-					requested.push({ id: "skill.write", scope: "propose", effect: "write" });
+				// create/update/DELETE are all skill mutations — promote
+				// scope, matching the mapper and main baseline (paste-8 P0 #3).
+				if (!requested.some(c => c.id === "skill.write" && c.scope === "promote")) {
+					requested.push({ id: "skill.write", scope: "promote", effect: "write" });
 				}
 				break;
 			case "memory_edit":

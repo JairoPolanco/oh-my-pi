@@ -144,6 +144,7 @@ export class ContextMaterializer {
 
 		// Value-ranked greedy over the global pool, band caps as regularizers.
 		const ranked = candidates.filter(c => RANKED_KINDS.includes(c.kind)).sort((a, b) => itemValue(b) - itemValue(a));
+		const selectedIds = new Set<string>();
 		for (const candidate of ranked) {
 			if (globalRemaining() <= 0) break;
 			const kind = candidate.kind;
@@ -154,10 +155,27 @@ export class ContextMaterializer {
 			if (!fit) continue;
 			items.push(fit.item);
 			bandUsed.set(kind, kindUsed + fit.cost);
+			selectedIds.add(candidate.id);
 			used += fit.cost;
 		}
 		for (const [kind, value] of bandUsed) {
 			allocation[kind] = value;
+		}
+
+		// SPILLOVER PASS (paste-8 P0): band caps are PRIORS, not ceilings.
+		// Once every band has been offered its normalized share, remaining
+		// budget is filled globally by value — trajectory-heavy transcripts
+		// no longer leave 80% of capacity empty just because one band hit its
+		// cap and no other kind exists to consume the remainder.
+		for (const candidate of ranked) {
+			if (globalRemaining() <= 0) break;
+			if (selectedIds.has(candidate.id)) continue;
+			const fit = this.#fitCandidate(candidate, globalRemaining());
+			if (!fit) continue;
+			items.push(fit.item);
+			selectedIds.add(candidate.id);
+			used += fit.cost;
+			allocation[candidate.kind] = (allocation[candidate.kind] ?? 0) + fit.cost;
 		}
 
 		// Sort final view: mandatory first, then by kind priority.

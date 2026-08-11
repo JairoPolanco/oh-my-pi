@@ -27,6 +27,7 @@ import {
 	type Kernel,
 	PolicyEngine,
 	RuleBasedModelRegistry,
+	SqliteCapabilityStore,
 	SqliteContractStore,
 	SqliteTaskStore,
 } from "./index";
@@ -40,6 +41,8 @@ export class KernelHost implements Kernel {
 	readonly dir: string;
 	/** Capability registry for this session's actor tree (monotonic child ⊆ parent). */
 	readonly capabilities: CapabilityRegistry;
+	/** Durable capability tree store (paste-8 P0 — durable authority). */
+	readonly capabilityStore: SqliteCapabilityStore;
 	/** Semantic memory backend (episodic = event log; semantic = this). */
 	readonly memory: InMemoryMemoryBackend;
 	/** Policy engine over the session's capability registry (default deny). */
@@ -81,7 +84,19 @@ export class KernelHost implements Kernel {
 		this.contracts = new SqliteContractStore(path.join(dir, "contracts.db"));
 		this.events = new EventBus();
 		this.log = new EventLog(path.join(dir, "events.jsonl"), this.events);
-		this.capabilities = new CapabilityRegistry();
+		this.capabilityStore = new SqliteCapabilityStore(path.join(dir, "capabilities.db"));
+		// Durable authority (paste-8 P0): every registry mutation writes the
+		// affected principal's parent edge + direct grants through to SQLite
+		// so a cold-revived actor rejoins the SAME constrained tree.
+		this.capabilities = new CapabilityRegistry({
+			onChange: principal => {
+				this.capabilityStore.putPrincipal(
+					principal,
+					this.capabilities.parentOf(principal),
+					this.capabilities.direct(principal),
+				);
+			},
+		});
 		this.memory = new InMemoryMemoryBackend();
 		this.policy = new PolicyEngine(this.capabilities);
 		this.effects = new EffectBroker(this.policy, undefined, { workspaceRoot: this.workspaceRoot });
@@ -116,6 +131,11 @@ export class KernelHost implements Kernel {
 				{ id: "process.exec", scope: "repo/**", effect: "execute" },
 				{ id: "process.control", scope: "repo/**", effect: "execute" },
 				{ id: "process.read", scope: "repo/**", effect: "read" },
+				// Named processes (hub start/stop/logs carry `name`, not a
+				// path) live under a name-scoped resource — the workspace
+				// grants cover path-shaped resources only (paste-8 P0 #1).
+				{ id: "process.control", scope: "*", effect: "execute" },
+				{ id: "process.read", scope: "*", effect: "read" },
 				{ id: "network", scope: "*", effect: "network" },
 				// Typed capabilities for governed state/agent effects (paste-6
 				// P0/P1, paste-7 P0/P1): read authority is capability-
@@ -133,12 +153,23 @@ export class KernelHost implements Kernel {
 				{ id: "memory.write", scope: "facts", effect: "write" },
 				{ id: "memory.read", scope: "facts", effect: "read" },
 				{ id: "skill.write", scope: "propose", effect: "write" },
+				{ id: "skill.write", scope: "promote", effect: "write" },
 				{ id: "skill.read", scope: "skills", effect: "read" },
 				{ id: "session.state", scope: "session", effect: "write" },
 				{ id: "goal.read", scope: "goal", effect: "read" },
 				{ id: "goal.write", scope: "goal", effect: "write" },
 				{ id: "computer.read", scope: "screen", effect: "read" },
 				{ id: "computer.control", scope: "input", effect: "execute" },
+				// Kernel-store surfaces reachable through the RLM `__kernel__`
+				// bridge (paste-8 P0): every bridge mutation authorizes through
+				// the SAME policy as tool effects — never a privileged backdoor.
+				{ id: "artifact.write", scope: "artifacts", effect: "write" },
+				{ id: "artifact.read", scope: "artifacts", effect: "read" },
+				{ id: "contract.write", scope: "contracts", effect: "write" },
+				{ id: "contract.read", scope: "contracts", effect: "read" },
+				{ id: "routing.write", scope: "routing", effect: "write" },
+				{ id: "routing.read", scope: "routing", effect: "read" },
+				{ id: "event.read", scope: "events", effect: "read" },
 			]);
 		}
 		// ONE daemon-scoped gateway above all session hosts (blueprint §92):
@@ -168,12 +199,20 @@ export class KernelHost implements Kernel {
 	async warm(): Promise<void> {
 		await this.log.load();
 		this.log.persistFromNow();
+		// Durable authority (paste-8 P0): restore the capability tree BEFORE
+		// any policy decision or bootstrap — a cold-revived host rejoins the
+		// persisted parent edges + direct grants, never starting empty.
+		const snapshot = this.capabilityStore.snapshot();
+		if (snapshot.grants.size > 0) {
+			this.capabilities.loadSnapshot(snapshot.parents, snapshot.grants);
+		}
 	}
 
 	async close(): Promise<void> {
 		this.tasks.close();
 		this.contracts.close();
 		this.versions.close();
+		this.capabilityStore.close();
 		this.#detachGateway?.();
 		this.#detachGateway = undefined;
 		await this.log.flush();
