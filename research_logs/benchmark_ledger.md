@@ -118,6 +118,23 @@ Medium multi-file task (3 source files, export census), ONE subagent max, hard 2
 **When delegation might win (untested)**: large independent workstreams where isolation/parallelism (V_parallel + V_isolation) exceeds coordination+duplication (C_coordination + C_duplication) — i.e. many files, no shared context needed, subagents run in parallel. That needs a real parallel-delegation run on a LARGE task, which is the most expensive benchmark in the plan; parked until a cheaper harness exists.
 
 **Benchmark-infra finding**: `client.dispose()` on the InProcessClient HUNG ~225s after a successful arm in one run (arm A wall=14s, shell wall=240s). Process-exit worked; the hang is in session/worker teardown. Not blocking (each arm is its own process), but noted for the harness.
+## Prompt-leverage benefit (evidence run, harness-vs-baseline-001, supervised)
+
+Same multi-file task (audit two kernel files + persist findings via `tasks.create`), gates OFF vs ON (docs on):
+
+| Arm | Model calls | Tools | Tokens | Wall | Cost | Completed | Used kernel task |
+|---|---|---|---|---|---|---|---|
+| A baseline (gates off) | 22 | 28 | 544,402 | 240s TIMEOUT | $0.0041 | ✗ flailed discovering eval surface | ✗ |
+| B harness (gates on + AGENTS.md/eval.md docs) | 7 | 14 | 116,954 | 65s | $0.0016 | ✓ | ✓ `tasks.create` |
+
+**Verdict: the harness is 3.1x fewer calls, 4.7x fewer tokens, 3.7x faster, and finishes** — the baseline model burned 22 calls reverse-engineering the eval/kernel surface that AGENTS.md's Constitutional Kernel Harness section + eval.md's kernel-bridge prelude now document directly. This is the prompt-leverage work paying measured dividends: the model leveraged `tasks.create` (durable surface) because it was told the surface exists. Total probe cost: ~$0.006.
+
+**Adopted harness qualities (from the four reference surveys), with evidence:**
+- Hermes prompt-cache byte-stability: pinned by regression test (under-budget transform returns message objects BY REFERENCE — verified, `provider-context-governor.test.ts`).
+- Hermes session-scoped capability never env-keyed: `KernelHost` bootstrapMain no longer defaults from env (deterministic; tests full-suite safe).
+- FinanceClaw failures-as-events: gate fail-closes to a block result, never throws upward (verified in `#beforeToolCall` catch path).
+- PrimeAgent/pi RLM programmatic surface: `__kernel__` namespaces now documented in eval.md so the model knows it exists.
+
 
 
 
