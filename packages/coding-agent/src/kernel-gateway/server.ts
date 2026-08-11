@@ -17,6 +17,8 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { EventBus, EventLog, Gateway, startGatewayServer } from "@oh-my-pi/pi-kernel";
 import { logger, postmortem } from "@oh-my-pi/pi-utils";
+import { daemonRuntimeDir } from "../launch/paths";
+import { DAEMON_RUNTIME_DIR_ENV } from "../launch/protocol";
 import {
 	KERNEL_GATEWAY_AUTH_TOKEN_ENV,
 	KERNEL_GATEWAY_PROJECT_DIR_ENV,
@@ -33,6 +35,11 @@ import {
 export async function runKernelGatewayWorker(): Promise<void> {
 	const projectDir = process.env[KERNEL_GATEWAY_PROJECT_DIR_ENV] ?? process.cwd();
 	delete process.env[KERNEL_GATEWAY_PROJECT_DIR_ENV];
+	// The daemon's runtime dir (where its own event log lives): the spawning
+	// client injects OMP_DAEMON_RUNTIME_DIR; fall back to the config-root
+	// derivation when absent (e.g. manually spawned workers).
+	const runtimeDir = process.env[DAEMON_RUNTIME_DIR_ENV] ?? daemonRuntimeDir(projectDir);
+	delete process.env[DAEMON_RUNTIME_DIR_ENV];
 
 	const gateway = Gateway.global();
 	// Control-plane surface: scope-less introspection answers anonymously;
@@ -68,8 +75,12 @@ export async function runKernelGatewayWorker(): Promise<void> {
 	// The daemon's OWN event log: sessions stream their kernel events here
 	// (`event.append` WS frames), so the control plane accumulates every
 	// session's trajectory — exact replay and attribution live at the daemon.
+	// The log lives in the DAEMON RUNTIME dir (~/.omp/run/daemons/<key>), NOT
+	// the project directory — a project-scoped write would pollute the
+	// workspace with `.omp/gateway/` (same bug class as the kernel-store
+	// workspace write, 7b1b2e7e2; found by the omjai harness sweep).
 	const events = new EventBus();
-	const logDir = path.join(projectDir, ".omp", "gateway");
+	const logDir = path.join(runtimeDir, "gateway");
 	await fs.mkdir(logDir, { recursive: true });
 	const log = new EventLog(path.join(logDir, "events.jsonl"), events);
 	await log.load();

@@ -11,6 +11,7 @@
 import { logger, ptree } from "@oh-my-pi/pi-utils";
 import { createDaemonBrokerClient, daemonClientForProject, readOrCreateToken } from "../launch/client";
 import { describeQuietly, stopQuietly, waitReady } from "../launch/ensure";
+import { DAEMON_RUNTIME_DIR_ENV } from "../launch/protocol";
 import { resolveWorkerSpawnCmd, SMOKE_TEST_TIMEOUT_MS, workerEnvFromParent } from "../subprocess/worker-client";
 import {
 	KERNEL_GATEWAY_AUTH_TOKEN_ENV,
@@ -77,7 +78,8 @@ export async function ensureKernelGateway(opts: {
 		// The daemon and its session clients share the project's broker token
 		// (paste-4 P1): the daemon requires it on inbound event frames, so the
 		// event log is not a public write surface.
-		const authToken = await readOrCreateToken(opts.runtimeDir ?? (await daemonRuntimeDirFor(client.projectDir)));
+		const runtimeDir = opts.runtimeDir ?? (await daemonRuntimeDirFor(client.projectDir));
+		const authToken = await readOrCreateToken(runtimeDir);
 		try {
 			const started = await client.request(
 				{
@@ -89,6 +91,10 @@ export async function ensureKernelGateway(opts: {
 						env: {
 							[KERNEL_GATEWAY_PROJECT_DIR_ENV]: client.projectDir,
 							[KERNEL_GATEWAY_AUTH_TOKEN_ENV]: authToken,
+							// The daemon writes its OWN event log under the
+							// runtime dir — never the project dir (dogfooding
+							// finding: `.omp/gateway/` polluted the workspace).
+							[DAEMON_RUNTIME_DIR_ENV]: runtimeDir,
 						},
 						cwd: spawn.cwd ?? client.projectDir,
 						pty: false,

@@ -114,7 +114,10 @@ describe("kernel gateway daemon under the broker", () => {
 					name: KERNEL_GATEWAY_DAEMON_NAME,
 					application: spawn.cmd[0]!,
 					args: spawn.cmd.slice(1),
-					env: workerEnvFromParent({ [KERNEL_GATEWAY_PROJECT_DIR_ENV]: projectDir }),
+					env: workerEnvFromParent({
+						[KERNEL_GATEWAY_PROJECT_DIR_ENV]: projectDir,
+						[DAEMON_RUNTIME_DIR_ENV]: runtimeDir,
+					}),
 					cwd: spawn.cwd ?? projectDir,
 					pty: false,
 					ready: { log: KERNEL_GATEWAY_READY_PATTERN, timeoutMs: 30_000 },
@@ -152,13 +155,20 @@ describe("kernel gateway daemon under the broker", () => {
 			await Bun.sleep(500);
 			detach();
 
-			// The daemon's own event log accumulated the session's events.
-			const logPath = path.join(projectDir, ".omp", "gateway", "events.jsonl");
+			// The daemon's OWN event log accumulated the session's events.
+			// It lives in the DAEMON RUNTIME dir — never the project dir
+			// (dogfooding finding: `.omp/gateway/` polluted the workspace).
+			const logPath = path.join(runtimeDir, "gateway", "events.jsonl");
 			const text = await Bun.file(logPath)
 				.text()
 				.catch(() => "");
 			expect(text).toContain("tool.called");
 			expect(text).toContain("tool.completed");
+
+			// The project directory must NOT have been polluted with a
+			// `.omp/gateway/` event log.
+			const projectLog = path.join(projectDir, ".omp", "gateway", "events.jsonl");
+			expect(await Bun.file(projectLog).exists()).toBe(false);
 
 			// The runtime registered over RPC shows in the daemon roster.
 			const status = await fetch(`http://${endpoint!.hostname}:${endpoint!.port}/rpc`, {

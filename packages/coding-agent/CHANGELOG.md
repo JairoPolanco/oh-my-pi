@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Kernel gateway daemon event log moved OUT of the project directory (dogfooding finding): `startGatewayServer` wrote `<projectDir>/.omp/gateway/events.jsonl`, polluting the workspace whenever `OMP_KERNEL_GATEWAY_PROJECT_DIR` was set (the omjai launcher sets it). The log now lives under the daemon runtime dir (`~/.omp/run/daemons/<key>/gateway/`), resolved from `OMP_DAEMON_RUNTIME_DIR` (injected by the spawning client) with a config-root fallback. Same bug class as the kernel-store workspace write. Test updated to assert the runtime-dir log AND that the project dir stays clean.
 - RLM bridge `contract.create` validates check shapes (dogfooding finding): a bare-string check (e.g. `checks: ["1+1==2"]`) previously slipped through unvalidated and crashed `contract.verify` later. Create now rejects non-object checks and unknown `kind`s with a descriptive error; valid checks unchanged.
 
 ### Added
