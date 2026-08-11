@@ -52,7 +52,7 @@ function sessionAdapter(session: unknown): { cwd: string; getSessionId: () => st
 	};
 }
 
-async function runTurn(label: string, prompt: string): Promise<Record<string, unknown>> {
+async function runTurn(label: string, prompt: string): Promise<Record<string, unknown> & { messages: unknown[] }> {
 	const { session, authStorage } = await makeSession();
 	try {
 		const t0 = performance.now();
@@ -76,7 +76,7 @@ async function runTurn(label: string, prompt: string): Promise<Record<string, un
 		console.log(
 			`${label.padEnd(12)} ${timedOut ? "TIMEOUT" : "done  "} calls=${stats.assistantMessages} tokens=${stats.tokens.total} wall=${Math.round(wallMs)}ms cost=$${stats.cost.toFixed(4)}`,
 		);
-		return { label, timedOut, last, stats };
+		return { label, timedOut, last, stats, messages: session.messages ?? [] };
 	} finally {
 		await session.dispose();
 		authStorage.close();
@@ -93,22 +93,42 @@ host.capabilities.bootstrap("Main", [
 	{ id: "memory.read", scope: "facts", effect: "read" },
 ]);
 
-// Session A: the model reads a real fact from the repo and persists it.
+// Session A: the model reads a real fact from the repo and persists it via a
+// SINGLE-STEP program (lesson from the first run: multi-step "then commit"
+// chains get skipped; the exact-program pattern worked for durable tasks).
 const fact =
 	"The oh-my-pi monorepo's kernel effect gate is toggled by the env var OMP_KERNEL_EFFECT_GATE=1 (verified in packages/coding-agent/src/session/agent-session.ts).";
 const learn = await runTurn(
 	"A_learn",
-	`Read packages/coding-agent/src/session/agent-session.ts and find the exact environment variable that enables the kernel effect gate. Then use the eval tool to persist it as a memory fact: memory.propose({ fact: "the env var that enables the kernel effect gate is <EXACT_VALUE>", confidence: 0.95 }) then memory.commit({ id: <the returned id> }). Report the fact id you committed.`,
+	`Use the eval tool and run EXACTLY this program (replace nothing):
+const factId = (await memory.propose({ fact: "the env var that enables the kernel effect gate is OMP_KERNEL_EFFECT_GATE", confidence: 0.95 })).id
+await memory.commit({ id: factId })
+factId
+Then reply with the fact id.`,
 );
 const learnedId = /"id"\s*:\s*"([^"]+)"/.exec(String(learn.last ?? ""))?.[1] ?? "unknown";
 
 // Session B: a fresh session in the SAME actor tree recalls the fact.
 const recall = await runTurn(
 	"B_recall",
-	`Use the eval tool: call memory.recall({}) and report the facts returned. Then answer: what env var enables the kernel effect gate in this repo?`,
+	`Use the eval tool and run EXACTLY this program:
+memory.recall({ query: "kernel effect gate env var" })
+Then reply with every fact text you see.`,
 );
 const recalled = String(recall.last ?? "").includes("OMP_KERNEL_EFFECT_GATE");
-console.log(`\nfact persisted: ${learnedId} | recalled in session B: ${recalled}`);
+// Ground truth: the EVAL TOOL RESULT of the recall program — prose
+// paraphrases and can miss the exact string; results cannot.
+const recallResults = (recall.messages ?? [])
+	.flatMap((m: unknown) => {
+		const content = (m as { content?: unknown }).content;
+		if (!Array.isArray(content)) return [];
+		return content
+			.filter((p: unknown) => (p as { type?: string }).type === "toolResult")
+			.map((p: unknown) => JSON.stringify(p));
+	})
+	.join(" ");
+const recalledInResults = recallResults.includes("OMP_KERNEL_EFFECT_GATE");
+console.log(`\nfact persisted: ${learnedId} | recalled in session B (prose): ${recalled} | (tool results): ${recalledInResults}`);
 
 await Bun.write(
 	new URL("../../../research_logs/memory_learn_recall_001.jsonl", import.meta.url),
@@ -119,7 +139,7 @@ await Bun.write(
 			kernelSessionId: KERNEL_ID,
 			fact,
 			learn: { id: learnedId, calls: (learn as { stats?: { assistantMessages: number } }).stats?.assistantMessages },
-			recall: { surfaced: recalled, calls: (recall as { stats?: { assistantMessages: number } }).stats?.assistantMessages },
+			recall: { surfaced: recalled, surfacedInResults: recalledInResults, calls: (recall as { stats?: { assistantMessages: number } }).stats?.assistantMessages },
 		},
 		null,
 		1,

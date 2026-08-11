@@ -201,6 +201,7 @@ Same-session two-turn test with SINGLE-STEP prompts (lesson from memory run): t1
 | RLM bridge | ✅ rejection runs | rejected on short tasks (authoring overhead) |
 | Typed capability planner | ⚠️ via gate runs | indirect |
 | Skills / Gateway / Hub | ❌ never | — |
+| Memory lifecycle (re-run, single-step) | mechanism verified at $0; model adoption varies run-to-run (skipped eval once, executed another) | HOLD - feature works, prompt-following inconsistent |
 
 
 
