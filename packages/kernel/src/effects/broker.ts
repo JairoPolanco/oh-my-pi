@@ -92,6 +92,63 @@ function canonicalProcessResource(cwd: string | undefined, root: string | undefi
 	return `repo/${rel.split(path.sep).join("/")}`;
 }
 
+/**
+ * Bash write-target scan (harness-value-001 finding): the process resource
+ * is the command's CWD, so `echo x > /tmp/f` from the workspace authorizes —
+ * the gate checks WHERE the shell runs, not WHAT it touches. This is a
+ * documented in-process heuristic, but a redirect target resolving OUTSIDE
+ * the workspace is a real bypass of the fs.write boundary. Conservative
+ * parse: find `>`, `>>`, `2>`, `&>`, `>|` targets (skipping `2>&1` merges
+ * and `<<` heredocs), expand `~`, `$HOME`/`${HOME}`, `$TMPDIR`/`${TMPDIR}`,
+ * resolve against the workspace root, and return `outside:` when the target
+ * escapes. Unparseable/ambiguous targets resolve against the command's cwd
+ * and are left to the process resource (no new false denies).
+ */
+function bashWriteTargetsOutside(
+	command: string | undefined,
+	_cwd: string | undefined,
+	root: string | undefined,
+): boolean {
+	if (!command || !root) return false;
+	const home = typeof process.env.HOME === "string" ? process.env.HOME : undefined;
+	const tmp = typeof process.env.TMPDIR === "string" ? process.env.TMPDIR : "/tmp";
+	const expand = (raw: string): string => {
+		const tilde = raw.startsWith("~") ? `${home ?? ""}${raw.slice(1)}` : raw;
+		return tilde.replace(/\$\{?HOME\}?/g, home ?? "").replace(/\$\{?TMPDIR\}?/g, tmp);
+	};
+	// Redirection targets: `> file`, `>> file`, `2> file`, `&> file`,
+	// `>| file`. Exclude `2>&1`, `>&` fd merges, and `<<` heredoc markers.
+	const TOKEN = /(?:>>|>|2>|&>|>)(\s*)([^\s<&|;]+)/g;
+	let match: RegExpExecArray | null = TOKEN.exec(command);
+	while (match !== null) {
+		const target = match[2]!;
+		if (!target) continue;
+		// fd merge like 2>&1 or >&1 — the token is an fd, not a path.
+		if (/^&\d+$/.test(target) || /^\d+$/.test(target)) {
+			match = TOKEN.exec(command);
+			continue;
+		}
+		const expanded = expand(target);
+		// `$(...)` / `${...}` command substitution — cannot resolve statically;
+		// not a plain path, skip (the cwd resource governs).
+		if (expanded.includes("$(") || expanded.includes("${") || expanded.includes("`")) {
+			match = TOKEN.exec(command);
+			continue;
+		}
+		let abs: string;
+		try {
+			abs = path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(root, expanded);
+		} catch {
+			match = TOKEN.exec(command);
+			continue;
+		}
+		const rel = path.relative(root, abs);
+		if (rel.startsWith("..") || path.isAbsolute(rel)) return true;
+		match = TOKEN.exec(command);
+	}
+	return false;
+}
+
 /** Hostname from a URL (paste-7 P1): network authority is the host, not the raw URL. */
 function hostOf(url: string): string {
 	try {
@@ -199,6 +256,18 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 		case "bash":
 		case "python":
 		case "eval":
+			// Bash/py/eval execute in a workspace context — the process
+			// resource is the CWD. But a command can redirect output to a
+			// path OUTSIDE the workspace (harness-value-001 finding): scan
+			// write-redirection targets and deny when one escapes, so the
+			// fs.write boundary isn't bypassed via `echo > /tmp/x`.
+			if (
+				args.command &&
+				typeof args.command === "string" &&
+				bashWriteTargetsOutside(args.command, args.cwd as string | undefined, root)
+			) {
+				return [op("process.exec", "execute", "outside:")];
+			}
 			return [op("process.exec", "execute", canonicalProcessResource(args.cwd as string | undefined, root))];
 		case "fetch":
 		case "web_search":

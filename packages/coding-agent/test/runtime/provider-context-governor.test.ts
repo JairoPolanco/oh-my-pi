@@ -39,7 +39,7 @@ const governor = new ProviderContextGovernor();
 
 afterEach(() => {
 	delete Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV];
-	delete Bun.env["OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE"];
+	delete Bun.env.OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE;
 });
 
 describe("ProviderContextGovernor", () => {
@@ -421,7 +421,7 @@ describe("ProviderContextGovernor", () => {
 			textMessage("assistant", "older ".repeat(100), 4),
 			textMessage("user", "w".repeat(800), 5), // mandatory (CURRENT turn)
 		];
-		Bun.env["OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE"] = "400";
+		Bun.env.OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE = "400";
 		// Gate closed: override must be ignored (zero behavior change off-arm).
 		const passthrough = await governor.transform({ messages }, MODEL);
 		expect(passthrough.messages).toHaveLength(6);

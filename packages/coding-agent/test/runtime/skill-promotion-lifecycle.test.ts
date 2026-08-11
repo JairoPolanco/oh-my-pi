@@ -133,7 +133,6 @@ describe("SkillPromotionLifecycle", () => {
 		// Poll until the sweep settles (or timeout) — the arms are async.
 		let swept = false;
 		for (let i = 0; i < 40; i++) {
-			const stagedPath = path.join(getManagedSkillStagingDir(), "weak-skill", "SKILL.md");
 			const hasSource = await fs
 				.readFile(path.join(getManagedSkillStagingDir(), "weak-skill", "SOURCE.txt"), "utf8")
 				.then(() => true)

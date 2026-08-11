@@ -11,12 +11,10 @@
  * (context-heuristic), recordEvaluation(promote), promote. Durable SQLite
  * ledger under research_logs/. $0 (no model calls).
  */
-import * as path from "node:path";
 import { kernelHostFor, runKernelBridge } from "../src/eval/kernel-bridge";
 import type { ToolSession } from "../src/tools";
 
 const REPO = "/Users/jairopolanco/Projects/oh-my-pi";
-const KERNEL_DIR = path.join(REPO, "research_logs", "harness-ledger");
 
 /** Bridge adapter: the promotion is authorized as the bootstrapped Main. */
 const session = {

@@ -230,6 +230,28 @@ describe("EffectBroker", () => {
 		expect(broker.allows("agent", { tool: "bash", args: { command: "x", cwd: "/etc" } })).toBe(false);
 	});
 
+	test("bash write-redirection OUTSIDE the workspace is denied (harness-value-001 finding)", () => {
+		const registry = new CapabilityRegistry();
+		registry.grant("agent", { id: "process.exec", scope: "repo/**", effect: "execute" });
+		const broker = new EffectBroker(new PolicyEngine(registry), undefined, { workspaceRoot: "/repo" });
+		// `echo > /tmp/x` from the workspace cwd previously authorized (the
+		// process resource is the CWD, not the command target) — a real
+		// fs.write-bypass. Now the redirection target resolves outside → deny.
+		expect(broker.allows("agent", { tool: "bash", args: { command: "echo PROBE > /tmp/omp-probe.txt" } })).toBe(
+			false,
+		);
+		expect(
+			broker.allows("agent", { tool: "bash", args: { command: "echo x >> ~/evil.txt", cwd: "/repo/sub" } }),
+		).toBe(false);
+		// In-workspace redirection still passes (no false deny).
+		expect(
+			broker.allows("agent", { tool: "bash", args: { command: "bun test > /repo/out.log", cwd: "/repo/sub" } }),
+		).toBe(true);
+		expect(broker.allows("agent", { tool: "bash", args: { command: "echo hi > out.log" } })).toBe(true);
+		// fd merges and heredocs are not path targets — still allowed.
+		expect(broker.allows("agent", { tool: "bash", args: { command: "bun test 2>&1 | tee /repo/x.log" } })).toBe(true);
+	});
+
 	test("authorize returns the mapped operations on success", () => {
 		const registry = new CapabilityRegistry();
 		registry.grant("agent", { id: "process.exec", scope: "repo/**", effect: "execute" });

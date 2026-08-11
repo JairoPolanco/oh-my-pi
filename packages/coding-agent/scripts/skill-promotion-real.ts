@@ -36,28 +36,6 @@ const REPO = "/Users/jairopolanco/Projects/oh-my-pi";
 const MODEL = "opencode-go/deepseek-v4-flash";
 const SESSION_TIMEOUT_MS = Number(process.env.SKILL_SESSION_TIMEOUT_MS ?? 120_000);
 
-/** Ground truth: op -> capability id (from src/eval/kernel-bridge.ts). */
-const GATE_MAP: Record<string, string> = {
-	"artifact.put": "artifact.write",
-	"artifact.read": "artifact.read",
-	"tasks.create": "task.write",
-	"tasks.transition": "task.write",
-	"tasks.list": "task.read",
-	"events.query": "event.read",
-	"actors.send": "agent.message",
-	"actors.abort": "agent.kill",
-	"memory.propose": "memory.write",
-	"memory.recall": "memory.read",
-	"contract.create": "contract.write",
-	"contract.verify": "contract.read",
-	"routing.register": "routing.write",
-	"routing.stats": "routing.read",
-	"harness.promote": "harness.promote",
-	"harness.versions": "harness.read",
-	"capabilities.effective": "capabilities.read",
-	"security.profile": "security.read",
-};
-
 const SKILL_FILE = `${process.env.HOME}/.omp/agent/managed-skills/active/kernel-capability-gates/SKILL.md`;
 
 /** The staged skill content (matches what the executor would promote). */

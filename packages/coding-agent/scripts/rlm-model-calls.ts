@@ -44,10 +44,6 @@ const TASKS = [
 const RLM_ARM = "B_RLM";
 const BASELINE_ARM = "A_baseline";
 
-function countTokens(text: string): number {
-	return Math.max(1, Math.ceil(text.length / 4));
-}
-
 async function runArm(
 	task: { id: string; prompt: string; verify: (t: string) => boolean },
 	arm: string,
