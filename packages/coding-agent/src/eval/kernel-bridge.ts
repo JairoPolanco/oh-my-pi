@@ -961,6 +961,39 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 				reason: `evaluation is ${recorded.evaluation?.decision ?? "pending"}; awaiting trusted verdict`,
 			};
 		}
+		case "harness.recordEvaluation": {
+			// Phase 11 (§64) trusted-verdict bridge (dead-code fix): the
+			// metaharness evaluator records its promotion/reject verdict into
+			// the ledger, and `harness.promote` applies it. Recording is as
+			// authoritative as applying — same capability gate. The verdict
+			// shape is the optimizer's `recommendation` mapped to the
+			// kernel's evaluation contract; the RLM cannot self-certify.
+			requireCapability(host, actor, "harness.promote", "execute", "harness");
+			const version = requireArg(args, "version");
+			const decision = requireArg(args, "decision");
+			if (typeof version !== "number")
+				throw new Error("__kernel__.harness.recordEvaluation requires number 'version'");
+			if (decision !== "promote" && decision !== "reject") {
+				throw new Error("__kernel__.harness.recordEvaluation: decision must be 'promote' or 'reject'");
+			}
+			const reason =
+				typeof args.reason === "string"
+					? args.reason
+					: decision === "promote"
+						? "trusted evaluator promote"
+						: "trusted evaluator reject";
+			const recorded = host.versions.recordEvaluation(version, { decision, reason });
+			host.events.append(
+				{
+					kind: "harness.evaluated",
+					version,
+					decision,
+					reason,
+				},
+				{ sessionId: options.session.getSessionId?.() ?? "default" },
+			);
+			return { version, decision, reason: recorded.evaluation?.reason };
+		}
 		case "harness.versions": {
 			// Phase 11 (§70): the harness version ledger — bisectable history.
 			// Read capability for uniformity (paste-9).

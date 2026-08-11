@@ -4670,6 +4670,35 @@ export class AgentSession {
 			void import("../runtime/trajectory-tap").then(({ attachKernelTrajectoryTap }) => {
 				if (this.#detachKernelTrajectoryTap !== undefined) return;
 				this.#detachKernelTrajectoryTap = attachKernelTrajectoryTap(this, host);
+				// Control-plane attachment (dead-code fix): the gateway
+				// daemon + session attachment existed but nothing called
+				// them in production. Opt-in via the same flag as the
+				// daemon (OMP_KERNEL_GATEWAY_PROJECT_DIR); best-effort —
+				// a missing broker never affects the turn.
+				if (Bun.env.OMP_KERNEL_GATEWAY_PROJECT_DIR) {
+					void import("../kernel-gateway/daemon").then(({ connectSessionToGateway }) => {
+						if (this.#detachKernelTrajectoryTap === undefined) return;
+						void connectSessionToGateway({
+							projectDir: Bun.env.OMP_KERNEL_GATEWAY_PROJECT_DIR!,
+							runtime: {
+								id: `session:${this.sessionId}`,
+								provider: this.model?.provider ?? "omp",
+								model: this.model?.id ?? "omp-runtime",
+							},
+							events: host.events,
+						})
+							.then(detachGateway => {
+								const prev = this.#detachKernelTrajectoryTap;
+								this.#detachKernelTrajectoryTap = () => {
+									prev?.();
+									detachGateway();
+								};
+							})
+							.catch(() => {
+								// Daemon unreachable: session runs un-attached.
+							});
+					});
+				}
 				// Lifecycle memory: kernel store only (mnemopi already
 				// auto-retains when it is the live backend — never both).
 				if (this.getMnemopiSessionState() === undefined) {

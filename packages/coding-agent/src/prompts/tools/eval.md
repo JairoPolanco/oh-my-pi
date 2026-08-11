@@ -52,7 +52,7 @@ The constitutional kernel is exposed as namespaced async helpers (JS `await`, Py
 - `contract.create({ id, objective, requirements?, checks?, requiredEvidence?, verificationLevel? })`, `contract.verify({ id, evidence?, reviewerModel? })` → verification report (V1–V4).
 - `routing.resolve({ role, taskComplexity?, … })`, `routing.register({ role, provider, model })`, `routing.stats()`.
 - `policy.authorize({ id, effect, resource, actor? })` → `{ allow, reason? }`. `security.profile({ actor? })` → tier + effective capabilities.
-- `harness.hypothesis({ component, observation, hypothesis, prediction?, change?, evaluationSlice? })` → version. `harness.promote({ version })` (applies a TRUSTED verdict only). `harness.versions()`.
+- `harness.hypothesis({ component, observation, hypothesis, prediction?, change?, evaluationSlice? })` → version. `harness.recordEvaluation({ version, decision, reason? })` (trusted evaluator verdict; same capability as promote — you cannot self-certify). `harness.promote({ version })` (applies a TRUSTED verdict only). `harness.versions()`.
 - `gateway.status()` → control-plane runtimes + methods.
 </kernel-bridge>
 {{#if spawns}}

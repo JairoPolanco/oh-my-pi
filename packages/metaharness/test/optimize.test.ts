@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { STAGE_TASK_COUNTS } from "@oh-my-pi/pi-kernel";
-import { evaluateExperimentPromotion } from "../src/optimize";
+import { evaluateExperimentPromotion, recordExperimentVerdict } from "../src/optimize";
 import { type LaunchRecord, RunStore } from "../src/store";
 
 const testDir = `${import.meta.dir}/tmp-optimize`;
@@ -197,5 +197,47 @@ describe("evaluateExperimentPromotion", () => {
 		const variant = report?.results.find(r => r.arm === "variant");
 		expect(variant?.pairing.paired).toBe(1);
 		expect(variant?.pairing.unpaired).toBe(2);
+	});
+
+	test("recordExperimentVerdict maps the recommendation to the ledger contract", async () => {
+		const recorded: { version: number; evaluation: { decision: string; reason: string } }[] = [];
+		const result = await recordExperimentVerdict({
+			experiment: "opt8",
+			recommendation: { promote: true, checks: [], reason: "variant 'v1' passes gate + sequential design" },
+			version: 3,
+			ledger: {
+				async recordEvaluation(number, evaluation) {
+					recorded.push({ version: number, evaluation });
+				},
+			},
+		});
+		expect(result.decision).toBe("promote");
+		expect(result.version).toBe(3);
+		expect(recorded).toEqual([
+			{
+				version: 3,
+				evaluation: { decision: "promote", reason: "variant 'v1' passes gate + sequential design" },
+			},
+		]);
+	});
+
+	test("recordExperimentVerdict records a reject verdict verbatim", async () => {
+		let captured: { decision: string; reason: string } | undefined;
+		await recordExperimentVerdict({
+			experiment: "opt9",
+			recommendation: {
+				promote: false,
+				checks: [],
+				reason: "reject: no variant passes both the promotion gate and sequential design",
+			},
+			version: 4,
+			ledger: {
+				async recordEvaluation(_number, evaluation) {
+					captured = evaluation;
+				},
+			},
+		});
+		expect(captured?.decision).toBe("reject");
+		expect(captured?.reason).toContain("reject: no variant passes");
 	});
 });

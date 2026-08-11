@@ -237,10 +237,18 @@ describe("kernel prelude globals (JS worker)", () => {
 			});
 			const versions = await harness.versions();
 			const status = await gateway.status();
+			// Trusted-verdict ledger path (dead-code fix): the evaluator
+			// records a promote verdict, and promote applies it.
+			const recorded = await harness.recordEvaluation({ version: hyp.version, decision: "promote", reason: "heldout passed" });
+			const promoted = await harness.promote({ version: hyp.version });
+			const after = await harness.versions();
 			return JSON.stringify({
 				version: hyp.version,
 				ledger: versions.length,
 				methods: Array.isArray(status.methods),
+				recorded: recorded.decision,
+				promoted: promoted.promote,
+				activeHead: after.find(v => v.evaluation?.decision === "promote")?.number,
 			});
 		`;
 		const result = await executeJs(code, { cwd: tempDir.path(), sessionId, session });
@@ -249,6 +257,9 @@ describe("kernel prelude globals (JS worker)", () => {
 		expect(parsed.version).toBe(1);
 		expect(parsed.ledger).toBe(2);
 		expect(parsed.methods).toBe(true);
+		expect(parsed.recorded).toBe("promote");
+		expect(parsed.promoted).toBe(true);
+		expect(parsed.activeHead).toBe(1);
 	});
 
 	it("kernel bridge errors surface as cell failures", async () => {

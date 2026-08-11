@@ -140,24 +140,34 @@ export class LearnTool implements AgentTool<typeof learnSchema> {
 				})
 				.catch(error => logger.warn("kernel skill event failed", { error: String(error) }));
 			try {
-				await writeManagedSkill(params.skill);
+				const { staged } = await writeManagedSkill(params.skill);
+				// `skill.promoted` closes the lifecycle ONLY for a live skill —
+				// a staged candidate is still awaiting trusted evaluation.
+				if (!staged) {
+					void kernelHostFor(this.session)
+						.then(host => {
+							host.events.append(
+								{ kind: "skill.promoted", skillId: skill.name, title: skill.description ?? skill.name },
+								{ sessionId },
+							);
+						})
+						.catch(error => logger.warn("kernel skill event failed", { error: String(error) }));
+				}
+				const stagedNote = staged ? " (staged: not live until trusted evaluation promotes it)" : "";
+				const verb = skill.action === "create" ? "Created" : "Updated";
+				return {
+					content: [
+						{
+							type: "text",
+							text: `${memoryMessage}. ${verb} managed skill "${skill.name}".${stagedNote}`,
+						},
+					],
+					details: { skill: skill.name, staged },
+				};
 			} catch (err) {
 				const reason = err instanceof Error ? err.message : String(err);
 				throw new Error(`${memoryMessage}, but the managed skill could not be written: ${reason}`);
 			}
-			void kernelHostFor(this.session)
-				.then(host => {
-					host.events.append(
-						{ kind: "skill.promoted", skillId: skill.name, title: skill.description ?? skill.name },
-						{ sessionId },
-					);
-				})
-				.catch(error => logger.warn("kernel skill event failed", { error: String(error) }));
-			const verb = skill.action === "create" ? "Created" : "Updated";
-			return {
-				content: [{ type: "text", text: `${memoryMessage}. ${verb} managed skill "${skill.name}".` }],
-				details: { skill: skill.name },
-			};
 		}
 
 		return {

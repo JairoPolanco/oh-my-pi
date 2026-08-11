@@ -86,6 +86,39 @@ export interface WriteManagedSkillInput {
 	name: string;
 	description: string;
 	body: string;
+	/**
+	 * Promotion-gate (paste-9): when the gate is armed, only a `promote: true`
+	 * write lands in the live surface; everything else goes to `staging/`.
+	 * Ignored when the gate is off (direct write, legacy behavior).
+	 */
+	promote?: boolean;
+}
+
+/**
+ * Skill promotion evidence gate (paste-9, audit): a skill written by the
+ * model becomes LIVE the moment it lands on disk (discovery loads the whole
+ * managed dir). The audit's requirement — promotion only after trusted
+ * evaluation — is wired but OFF by default: the sandbox→replay→heldout
+ * pipeline does not exist yet, so arming the gate with no trusted evaluator
+ * would strand every learned skill in staging forever. When armed
+ * (`OMP_KERNEL_SKILL_PROMOTION_GATE=1`), writes land in `staging/` and only a
+ * `promote: true` write (or an explicit promote action from the trusted
+ * evaluator) moves the skill into the live surface.
+ */
+export function skillPromotionGateArmed(): boolean {
+	return Bun.env.OMP_KERNEL_SKILL_PROMOTION_GATE === "1";
+}
+
+/** Staging area for skills awaiting trusted evaluation (gate armed only). */
+export function getManagedSkillStagingDir(agentDir: string = getAgentDir()): string {
+	return path.join(getManagedSkillsDir(agentDir), "staging");
+}
+
+/** Resolve the live skill dir: active/ when the gate is armed, the root otherwise. */
+export function getManagedSkillActiveDir(agentDir: string = getAgentDir()): string {
+	return skillPromotionGateArmed()
+		? path.join(getManagedSkillsDir(agentDir), "active")
+		: getManagedSkillsDir(agentDir);
 }
 
 /**
@@ -122,6 +155,21 @@ async function assertManagedRootSafe(): Promise<void> {
 	if (rootStat?.isSymbolicLink()) {
 		throw new Error("The managed-skills root is a symlink; refusing to operate outside the managed directory.");
 	}
+	// The promotion gate's staging/active subdirs are trust boundaries too: a
+	// symlinked subdir would redirect writes (or discovery) outside the root.
+	if (skillPromotionGateArmed()) {
+		for (const sub of [getManagedSkillActiveDir(), getManagedSkillStagingDir()]) {
+			const subStat = await fs.lstat(sub).catch(err => {
+				if (isEnoent(err)) return null;
+				throw err;
+			});
+			if (subStat?.isSymbolicLink()) {
+				throw new Error(
+					"The managed-skills active/staging dir is a symlink; refusing to operate outside the managed directory.",
+				);
+			}
+		}
+	}
 }
 
 const UPDATE_FILE_OPEN_FLAGS = fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW;
@@ -149,7 +197,7 @@ async function openManagedSkillFileForUpdate(name: string, file: string) {
 }
 
 /** Create or update a managed `SKILL.md`. Returns the resolved file path. */
-export async function writeManagedSkill(input: WriteManagedSkillInput): Promise<{ path: string }> {
+export async function writeManagedSkill(input: WriteManagedSkillInput): Promise<{ path: string; staged: boolean }> {
 	const name = sanitizeSkillName(input.name);
 	const description = sanitizeManagedDescription(input.description);
 	const body = input.body.trim();
@@ -173,7 +221,8 @@ export async function writeManagedSkill(input: WriteManagedSkillInput): Promise<
 	}
 	return serializeSkillMutation(name, async () => {
 		await assertManagedRootSafe();
-		const dir = path.join(getManagedSkillsDir(), name);
+		const toStaging = skillPromotionGateArmed() && input.promote !== true;
+		const dir = path.join(toStaging ? getManagedSkillStagingDir() : getManagedSkillActiveDir(), name);
 		const file = path.join(dir, "SKILL.md");
 		// Reject a symlinked skill directory: an intermediate symlink would let the
 		// write escape the isolated managed root. lstat does not follow the final
@@ -199,16 +248,45 @@ export async function writeManagedSkill(input: WriteManagedSkillInput): Promise<
 				}
 				throw err;
 			}
-			return { path: file };
+			return { path: file, staged: toStaging };
 		}
 		// update: the file must already exist, be a plain managed file, and must
 		// not share an inode with a user-authored file via hard link. Open the
 		// checked file handle before truncating so a path swap after lstat cannot
 		// redirect the write into a symlink or newly hard-linked target.
-		const fileStat = await fs.lstat(file).catch(err => {
+		let fileStat = await fs.lstat(file).catch(err => {
 			if (isEnoent(err)) return null;
 			throw err;
 		});
+		// Promotion under the gate: a staged candidate moving live. The staging
+		// directory is moved so the skill (and its evaluated lineage) leaves
+		// staging atomically; the update content below is the evaluator's final
+		// body. This is the ONLY place a skill leaves staging; the move is
+		// serialized per-name so no interleaved write can race it.
+		if (fileStat === null && toStaging === false) {
+			const stagedDir = path.join(getManagedSkillStagingDir(), name);
+			const stagedFile = path.join(stagedDir, "SKILL.md");
+			const stagedStat = await fs.lstat(stagedFile).catch(err => {
+				if (isEnoent(err)) return null;
+				throw err;
+			});
+			if (stagedStat !== null) {
+				if (
+					stagedStat.isSymbolicLink() ||
+					(await fs.lstat(stagedDir).catch(err => (isEnoent(err) ? null : err)))?.isSymbolicLink()
+				) {
+					throw new Error(
+						`Managed skill "${name}" resolves through a symlink; refusing to promote outside the managed directory.`,
+					);
+				}
+				await fs.mkdir(path.dirname(file), { recursive: true });
+				await fs.rename(stagedDir, dir);
+				fileStat = await fs.lstat(file).catch(err => {
+					if (isEnoent(err)) return null;
+					throw err;
+				});
+			}
+		}
 		if (fileStat === null) {
 			throw new Error(`Managed skill "${name}" does not exist. Use action "create" to add it.`);
 		}
@@ -225,7 +303,7 @@ export async function writeManagedSkill(input: WriteManagedSkillInput): Promise<
 		} finally {
 			await handle.close();
 		}
-		return { path: file };
+		return { path: file, staged: toStaging };
 	});
 }
 
@@ -234,22 +312,30 @@ export async function deleteManagedSkill(name: string): Promise<void> {
 	const safe = sanitizeSkillName(name);
 	await serializeSkillMutation(safe, async () => {
 		await assertManagedRootSafe();
-		const dir = path.join(getManagedSkillsDir(), safe);
-		// Refuse to follow a symlinked skill directory (rm would delete the target).
-		const dirStat = await fs.lstat(dir).catch(err => {
-			if (isEnoent(err)) return null;
-			throw err;
-		});
-		if (dirStat?.isSymbolicLink()) {
-			throw new Error(`Managed skill "${safe}" is a symlink; refusing to delete outside the managed directory.`);
-		}
-		try {
-			await fs.rm(dir, { recursive: true });
-		} catch (err) {
-			if (isEnoent(err)) {
-				throw new Error(`Managed skill "${safe}" does not exist.`);
+		// The gate can leave a skill in staging (awaiting evaluation) or live;
+		// delete from whichever holds it.
+		const candidates = skillPromotionGateArmed()
+			? [path.join(getManagedSkillActiveDir(), safe), path.join(getManagedSkillStagingDir(), safe)]
+			: [path.join(getManagedSkillActiveDir(), safe)];
+		for (const dir of candidates) {
+			const dirStat = await fs.lstat(dir).catch(err => {
+				if (isEnoent(err)) return null;
+				throw err;
+			});
+			if (dirStat === null) continue;
+			if (dirStat.isSymbolicLink()) {
+				throw new Error(`Managed skill "${safe}" is a symlink; refusing to delete outside the managed directory.`);
 			}
-			throw err;
+			try {
+				await fs.rm(dir, { recursive: true });
+			} catch (err) {
+				if (isEnoent(err)) {
+					throw new Error(`Managed skill "${safe}" does not exist.`);
+				}
+				throw err;
+			}
+			return;
 		}
+		throw new Error(`Managed skill "${safe}" does not exist.`);
 	});
 }

@@ -13,7 +13,12 @@ const TASK = {
 
 async function runArm(arm: string): Promise<Record<string, unknown>> {
 	const shared = await discoverSharedInfra({ cwd: REPO });
-	const client = new InProcessClient({ cwd: REPO, model: MODEL, shared, tools: ["read", "grep", "glob", "bash", "eval"] });
+	const client = new InProcessClient({
+		cwd: REPO,
+		model: MODEL,
+		shared,
+		tools: ["read", "grep", "glob", "bash", "eval"],
+	});
 	try {
 		await client.start();
 		const t0 = performance.now();

@@ -172,6 +172,14 @@ export interface HarnessExperiment {
 	cohort: string;
 }
 
+/** A trusted evaluator recorded a verdict into the harness ledger (paste-8 dead-code fix). */
+export interface HarnessEvaluated {
+	kind: "harness.evaluated";
+	version: number;
+	decision: "promote" | "reject";
+	reason?: string;
+}
+
 /** The context engine materialized a view (blueprint §10–11). */
 export interface ContextMaterialized {
 	kind: "context.materialized";
@@ -197,4 +205,5 @@ export type HarnessEvent =
 	| SkillProposed
 	| SkillPromoted
 	| HarnessExperiment
+	| HarnessEvaluated
 	| ContextMaterialized;

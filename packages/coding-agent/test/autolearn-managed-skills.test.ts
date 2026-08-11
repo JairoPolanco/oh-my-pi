@@ -252,4 +252,50 @@ describe("managed-skills primitives", () => {
 			}
 		});
 	});
+
+	describe("skill promotion evidence gate", () => {
+		const gateEnv = "OMP_KERNEL_SKILL_PROMOTION_GATE";
+		const originalEnv = Bun.env[gateEnv];
+
+		afterEach(() => {
+			if (originalEnv === undefined) delete Bun.env[gateEnv];
+			else Bun.env[gateEnv] = originalEnv;
+		});
+
+		const activeFile = (name: string) => path.join(getManagedSkillsDir(), "active", name, "SKILL.md");
+		const stagingFile = (name: string) => path.join(getManagedSkillsDir(), "staging", name, "SKILL.md");
+
+		it("routes writes to staging and only promotes with the promote flag", async () => {
+			Bun.env[gateEnv] = "1";
+			const staged = await writeManagedSkill({ action: "create", name: "gated", description: "d", body: "b" });
+			expect(staged.staged).toBe(true);
+			expect(await Bun.file(stagingFile("gated")).exists()).toBe(true);
+			// Not live: discovery surface must not see it.
+			expect(await Bun.file(activeFile("gated")).exists()).toBe(false);
+
+			const promoted = await writeManagedSkill({
+				action: "update",
+				name: "gated",
+				description: "d",
+				body: "b",
+				promote: true,
+			});
+			expect(promoted.staged).toBe(false);
+			expect(await Bun.file(activeFile("gated")).exists()).toBe(true);
+		});
+
+		it("keeps the legacy direct-write path when the gate is off", async () => {
+			Bun.env[gateEnv] = "0";
+			const direct = await writeManagedSkill({ action: "create", name: "direct", description: "d", body: "b" });
+			expect(direct.staged).toBe(false);
+			expect(await Bun.file(skillFile("direct")).exists()).toBe(true);
+		});
+
+		it("delete removes a staged skill", async () => {
+			Bun.env[gateEnv] = "1";
+			await writeManagedSkill({ action: "create", name: "stageddel", description: "d", body: "b" });
+			await deleteManagedSkill("stageddel");
+			expect(await Bun.file(stagingFile("stageddel")).exists()).toBe(false);
+		});
+	});
 });

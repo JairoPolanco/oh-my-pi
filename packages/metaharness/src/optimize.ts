@@ -207,3 +207,33 @@ export function evaluateExperimentPromotion(
 		recommendation,
 	};
 }
+
+/**
+ * Record an experiment's trusted verdict into the harness ledger
+ * (dead-code fix). The metaharness is the TRUSTED evaluator: it computes the
+ * recommendation from real paired trials (never from the candidate's own
+ * claims), so recording it is the authoritative half of the promotion chain
+ * (`harness.recordEvaluation` bridge/gateway op → `harness.promote` applies).
+ * `ledger` is an adapter so the caller can wire either a direct
+ * `HarnessVersionLedger` or the gateway RPC surface.
+ */
+export async function recordExperimentVerdict(options: {
+	experiment: string;
+	recommendation: PromotionGateResult;
+	/** Version number in the ledger to record (the experiment's harness version). */
+	version: number;
+	ledger: {
+		recordEvaluation(
+			number: number,
+			evaluation: { decision: "promote" | "reject"; reason: string },
+		):
+			| Promise<{ version: number; decision?: string } | { number: number; evaluation?: { decision?: string } }>
+			| unknown;
+	};
+}): Promise<{ version: number; decision: "promote" | "reject"; reason: string }> {
+	const { experiment, recommendation, version, ledger } = options;
+	const decision = recommendation.promote ? "promote" : "reject";
+	const reason = recommendation.reason ?? `experiment '${experiment}' ${decision}`;
+	await ledger.recordEvaluation(version, { decision, reason });
+	return { version, decision, reason };
+}

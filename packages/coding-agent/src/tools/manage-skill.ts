@@ -85,7 +85,7 @@ export class ManageSkillTool implements AgentTool<typeof manageSkillSchema> {
 				details: { action: "create", name: params.name, shadowed: true },
 			};
 		}
-		const { path: skillPath } = await writeManagedSkill({
+		const { path: skillPath, staged } = await writeManagedSkill({
 			action: params.action,
 			name: params.name,
 			description: params.description,
@@ -94,9 +94,15 @@ export class ManageSkillTool implements AgentTool<typeof manageSkillSchema> {
 		await this.refreshSkills?.();
 		const relativePath = path.relative(getManagedSkillsDir(), skillPath);
 		const verb = params.action === "create" ? "Created" : "Updated";
+		const stagedNote = staged ? " (staged: not live until trusted evaluation promotes it)" : "";
 		return {
-			content: [{ type: "text", text: `${verb} managed skill "${params.name}" (managed-skills/${relativePath}).` }],
-			details: { action: params.action, name: params.name },
+			content: [
+				{
+					type: "text",
+					text: `${verb} managed skill "${params.name}" (managed-skills/${relativePath}).${stagedNote}`,
+				},
+			],
+			details: { action: params.action, name: params.name, staged },
 		};
 	}
 }

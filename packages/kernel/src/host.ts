@@ -215,6 +215,29 @@ export class KernelHost implements Kernel {
 				return { state: "running", lastHeartbeat: Date.now() };
 			},
 		});
+		// Trusted-verdict gateway method (dead-code fix): the metaharness
+		// evaluator records promotion/reject verdicts into the ledger over
+		// the control plane — the operator-scoped path for cross-process
+		// evaluation, mirroring `__kernel__.harness.recordEvaluation` for the
+		// RLM. Registered idempotently (the gateway is daemon-shared).
+		if (!this.gateway.methodNames().includes("harness.recordEvaluation")) {
+			this.gateway.registerMethod({
+				name: "harness.recordEvaluation",
+				scope: "harness",
+				execute: async (args: { version: number; decision: "promote" | "reject"; reason?: string }) => {
+					if (typeof args?.version !== "number" || (args?.decision !== "promote" && args?.decision !== "reject")) {
+						throw new Error(
+							"harness.recordEvaluation requires { version: number, decision: 'promote'|'reject' }",
+						);
+					}
+					const version = this.versions.recordEvaluation(args.version, {
+						decision: args.decision,
+						reason: typeof args.reason === "string" ? args.reason : `trusted evaluator ${args.decision}`,
+					});
+					return { version: version.number, decision: version.evaluation?.decision };
+				},
+			});
+		}
 	}
 
 	/** Detaches this host's event bus from the daemon gateway on close. */

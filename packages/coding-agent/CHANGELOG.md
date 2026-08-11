@@ -12,6 +12,9 @@
 ### Changed
 
 - Capability creation is host-owned: the RLM bridge has no `capabilities.grant` primitive (inspection via `capabilities.effective`, questions via `policy.authorize`); subagent capability ancestry is established synchronously before child execution, with a child ⊆ parent subset verification.
+- Managed-skill promotion evidence gate (wired, off by default): `OMP_KERNEL_SKILL_PROMOTION_GATE=1` routes `manage_skill`/`learn` writes into a `staging/` area where discovery never loads them; only a `promote: true` write (the trusted evaluator's final body) moves a skill live, and the `skill.promoted` event fires only for live skills. Off by default — the sandbox→replay→heldout pipeline is not connected, so arming it would strand skills.
+- RLM bridge `harness.recordEvaluation` op: records a trusted promote/reject verdict into the harness ledger (same capability gate as `harness.promote`; the candidate cannot self-certify); metaharness `recordExperimentVerdict` maps the optimizer's recommendation to that op.
+- Production gateway control-plane attachment: the session gate hook now calls `connectSessionToGateway` when `OMP_KERNEL_GATEWAY_PROJECT_DIR` is set (same opt-in flag as the daemon), registering the live runtime and streaming events to the daemon.
 - Verification commands are authorized through the session policy engine (`process.exec` capability, default deny) instead of the verifier spawning directly.
 - `@oh-my-pi/pi-kernel` declared as an explicit dependency.
 - RLM actors gain persistent lifecycle ops: `actors.park`/`actors.revive` (via OMP's AgentLifecycleManager) and `actors.abort` — long-lived workers are addressable across turns without new machinery.
