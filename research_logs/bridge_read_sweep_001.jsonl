@@ -1,0 +1,20 @@
+{
+ "experiment": "bridge-read-sweep-001",
+ "agent": "opencode-go/deepseek-v4-flash",
+ "surfaces": [
+  "profile",
+  "caps",
+  "routing",
+  "versions",
+  "actors",
+  "events",
+  "gateway"
+ ],
+ "ok": [],
+ "timedOut": false,
+ "stats": {
+  "calls": 2,
+  "tokens": 15662,
+  "cost": 0.00013424040000000002
+ }
+}

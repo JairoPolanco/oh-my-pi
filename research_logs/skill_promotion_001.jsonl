@@ -1,15 +1,15 @@
 {
  "experiment": "skill-promotion-001",
- "skill": "final-check",
- "evidenceSource": "synthetic",
+ "skill": "kernel-capability-gates",
+ "evidenceSource": "/Users/jairopolanco/Projects/oh-my-pi/research_logs/skill_trials_real_001.json",
  "pairedCount": 6,
- "heldOutCount": 40,
- "pairedGate": true,
+ "heldOutCount": 20,
+ "pairedGate": false,
  "heldOutReached": "signal",
  "heldOutPassed": true,
- "verdict": "promote",
- "reason": "promote: skill 'final-check' passes paired gate + held-out generalization",
+ "verdict": "reject",
+ "reason": "reject: skill 'kernel-capability-gates' fails paired gate (6 paired, 20 held-out trials)",
  "ledgerVersion": 1,
- "promoted": true,
- "date": "2026-08-11T18:39:30.525Z"
+ "promoted": false,
+ "date": "2026-08-11T18:56:37.508Z"
 }

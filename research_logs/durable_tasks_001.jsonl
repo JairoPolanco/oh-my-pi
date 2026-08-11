@@ -1,0 +1,14 @@
+{
+ "experiment": "durable-tasks-001",
+ "agent": "opencode-go/deepseek-v4-flash",
+ "kernelSessionId": "tasks-bench-shared",
+ "t1": {
+  "hasTask": true,
+  "calls": 7
+ },
+ "t2": {
+  "hasTask": true,
+  "calls": 10
+ },
+ "success": true
+}

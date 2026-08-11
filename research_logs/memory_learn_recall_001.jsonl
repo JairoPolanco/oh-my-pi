@@ -1,0 +1,15 @@
+{
+ "experiment": "memory-learn-recall-001",
+ "agent": "opencode-go/deepseek-v4-flash",
+ "kernelSessionId": "mem-bench-shared",
+ "fact": "The oh-my-pi monorepo's kernel effect gate is toggled by the env var OMP_KERNEL_EFFECT_GATE=1 (verified in packages/coding-agent/src/session/agent-session.ts).",
+ "learn": {
+  "id": "unknown",
+  "calls": 6
+ },
+ "recall": {
+  "surfaced": false,
+  "surfacedInResults": false,
+  "calls": 2
+ }
+}

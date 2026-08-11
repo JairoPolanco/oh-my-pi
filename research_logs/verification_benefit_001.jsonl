@@ -1,0 +1,37 @@
+{
+ "experiment": "verification-benefit-001",
+ "agent": "opencode-go/deepseek-v4-flash",
+ "task": "kernel-bridge exported names",
+ "truth": [
+  "kernelHostFor",
+  "kernelDirFor"
+ ],
+ "results": [
+  {
+   "arm": "A_baseline",
+   "timedOut": false,
+   "modelCalls": 3,
+   "toolCalls": 2,
+   "tokens": 19479,
+   "wallMs": 19264,
+   "cost": 0.0002287628,
+   "namesFound": 2,
+   "namesTotal": 2,
+   "contractVerified": false,
+   "success": true
+  },
+  {
+   "arm": "B_contract",
+   "timedOut": false,
+   "modelCalls": 6,
+   "toolCalls": 5,
+   "tokens": 57497,
+   "wallMs": 35346,
+   "cost": 0.0009526888000000001,
+   "namesFound": 2,
+   "namesTotal": 2,
+   "contractVerified": true,
+   "success": true
+  }
+ ]
+}

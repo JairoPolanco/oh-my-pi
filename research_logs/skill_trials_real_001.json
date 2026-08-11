@@ -1,0 +1,177 @@
+{
+ "skill": "kernel-capability-gates",
+ "paired": [
+  {
+   "taskId": "q-actors-send",
+   "baseline": {
+    "success": 1,
+    "cost": 0.0001144052,
+    "latencyMs": 3647,
+    "reliability": 1
+   },
+   "candidate": {
+    "success": 1,
+    "cost": 0.000558852,
+    "latencyMs": 3845,
+    "reliability": 1
+   }
+  },
+  {
+   "taskId": "q-routing-register",
+   "baseline": {
+    "success": 1,
+    "cost": 0.0000629104,
+    "latencyMs": 4040,
+    "reliability": 1
+   },
+   "candidate": {
+    "success": 1,
+    "cost": 0.00008937880000000001,
+    "latencyMs": 3982,
+    "reliability": 1
+   }
+  },
+  {
+   "taskId": "q-memory-recall",
+   "baseline": {
+    "success": 1,
+    "cost": 0.0000622104,
+    "latencyMs": 3198,
+    "reliability": 1
+   },
+   "candidate": {
+    "success": 1,
+    "cost": 0.00009325960000000001,
+    "latencyMs": 3654,
+    "reliability": 1
+   }
+  },
+  {
+   "taskId": "q-harness-promote",
+   "baseline": {
+    "success": 1,
+    "cost": 0.00030266600000000005,
+    "latencyMs": 6201,
+    "reliability": 1
+   },
+   "candidate": {
+    "success": 1,
+    "cost": 0.0001089788,
+    "latencyMs": 3851,
+    "reliability": 1
+   }
+  },
+  {
+   "taskId": "q-contract-create",
+   "baseline": {
+    "success": 1,
+    "cost": 0.00006532120000000001,
+    "latencyMs": 2926,
+    "reliability": 1
+   },
+   "candidate": {
+    "success": 1,
+    "cost": 0.00007414960000000001,
+    "latencyMs": 3560,
+    "reliability": 1
+   }
+  },
+  {
+   "taskId": "q-eval-tasks",
+   "baseline": {
+    "success": 1,
+    "cost": 0.0007316176,
+    "latencyMs": 14143,
+    "reliability": 1
+   },
+   "candidate": {
+    "success": 1,
+    "cost": 0.0004304244,
+    "latencyMs": 11837,
+    "reliability": 1
+   }
+  }
+ ],
+ "heldOut": [
+  {
+   "taskId": "h-0",
+   "success": 1
+  },
+  {
+   "taskId": "h-1",
+   "success": 1
+  },
+  {
+   "taskId": "h-2",
+   "success": 1
+  },
+  {
+   "taskId": "h-3",
+   "success": 1
+  },
+  {
+   "taskId": "h-4",
+   "success": 1
+  },
+  {
+   "taskId": "h-5",
+   "success": 1
+  },
+  {
+   "taskId": "h-6",
+   "success": 1
+  },
+  {
+   "taskId": "h-7",
+   "success": 1
+  },
+  {
+   "taskId": "h-8",
+   "success": 1
+  },
+  {
+   "taskId": "h-9",
+   "success": 1
+  },
+  {
+   "taskId": "h-10",
+   "success": 1
+  },
+  {
+   "taskId": "h-11",
+   "success": 1
+  },
+  {
+   "taskId": "h-12",
+   "success": 1
+  },
+  {
+   "taskId": "h-13",
+   "success": 1
+  },
+  {
+   "taskId": "h-14",
+   "success": 1
+  },
+  {
+   "taskId": "h-15",
+   "success": 1
+  },
+  {
+   "taskId": "h-16",
+   "success": 1
+  },
+  {
+   "taskId": "h-17",
+   "success": 1
+  },
+  {
+   "taskId": "h-18",
+   "success": 1
+  },
+  {
+   "taskId": "h-19",
+   "success": 1
+  }
+ ]
+}

@@ -287,6 +287,22 @@ Verified both halves live:
 - REJECT: real trials file with failed heldout (overfit) → pairedGate PASS but heldout FAIL → verdict reject → ledger v1 (reject) → skill STAYS staged.
 
 Cost: $0 (pure decision + file moves; the real-model trial collection is the metaharness's job, wired via the same gates).
+## Skill promotion real-model run (skill-promotion-real-001, supervised)
+
+The goal's second half: the mechanism pipeline exercised with REAL model trials. Skill under test: "kernel-capability-gates" — the op→capability map of the `__kernel__` bridge + eval-only denials (NOT in the default prompt; eval.md documents op names, not gates). 6 paired (sandbox vs replay) + 20 disjoint heldout questions; success = exact capability id in the answer.
+
+| Arm | Sessions | Success | Notes |
+|---|---|---|---|
+| sandbox (no skill) | 6 | 6/6 | model greps kernel-bridge.ts, derives ids; hard question (eval denial) 6 calls/59.9k/$0.0007 |
+| replay (skill) | 6 | 6/6 | same answers; hard question 5 calls/46.9k/$0.0004 |
+| heldout (skill) | 20 | 20/20 | disjoint ops, all hit |
+
+**Verdict: REJECT — correctly.** The gate's `minTargetImprovementPp: 1` refuses to promote because sandbox ALSO succeeded 6/6 (the source is greppable; the model derives the answers without the skill). Heldout passed 20/20, but no success improvement → paired gate FAIL. The skill cut the hard question's cost (6→5 calls, 59.9k→46.9k tokens) but cost savings alone don't clear the gate. **This is the pipeline's teeth working: it refused to promote a skill redundant with the codebase.** Trusted verdict recorded in the harness ledger (reject v1); skill stays staged.
+
+**Operational wiring**: the skill gate stays OFF in interactive omjai (arming would strand every learned skill in staging with no auto-promotion — the executor is a deliberate step, not a hook). Interactive sessions keep skills live immediately (stock); the evidence pipeline is invoked explicitly. The gateway daemon attach is now ON in omjai (`OMP_KERNEL_GATEWAY_PROJECT_DIR`, best-effort control-plane attach).
+
+**Cost**: ~$0.006 total (26 sessions) — far under the $0.05–0.15 target.
+
 ## Dead-code batch (dead-code-001, 48052173b) — every built feature now has a PRODUCTION caller, not just a mechanism:
 - **Gateway daemon**: `connectSessionToGateway` had zero production callers. Session gate hook now attaches the live runtime (session id + model) to the control plane when `OMP_KERNEL_GATEWAY_PROJECT_DIR` is set (same opt-in flag as the daemon); best-effort, missing broker never affects the turn.
 - **Trusted-verdict ledger**: `recordEvaluation` had no caller. New `__kernel__.harness.recordEvaluation` bridge op (same gate as promote — the candidate cannot self-certify), `harness.evaluated` event kind, operator-scoped `harness.recordEvaluation` gateway method on `KernelHost` (idempotent on the daemon-shared gateway), and metaharness `recordExperimentVerdict` mapping the optimizer's recommendation to the ledger. Verified end-to-end: propose → gateway verdict → promote applies → head advances.
