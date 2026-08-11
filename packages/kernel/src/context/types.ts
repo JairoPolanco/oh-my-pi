@@ -88,6 +88,13 @@ export interface CandidateItem {
 	reliability: number;
 	/** Materialize inline (true) or pass a handle (false). */
 	handleOnly?: boolean;
+	/**
+	 * All-or-nothing (paste-6 P0 #4): when false, the candidate is included
+	 * WHOLE or DROPPED — never partially truncated. Tool-call/result spans are
+	 * atomic units; a truncated span with the full span passed through would
+	 * reintroduce the accounting-vs-representation mismatch.
+	 */
+	truncatable?: boolean;
 	ref?: ArtifactRef;
 	content?: string;
 }

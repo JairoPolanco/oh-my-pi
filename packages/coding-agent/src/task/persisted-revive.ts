@@ -120,6 +120,15 @@ export function createPersistedSubagentReviverFactory(
 				restrictToolNames: restrictToolNames || undefined,
 				requireYieldTool: true,
 				systemPrompt: () => [init.systemPrompt],
+				// Restore the kernel authority tree id (paste-7 P0/P1): without
+				// it the revived child's `getKernelSessionId()` returns null,
+				// so kernelHostFor would key on the child's OWN session id and
+				// BOOTSTRAP it as a new main principal with the full baseline
+				// — silently escalating a parked child to root authority.
+				// With the inherited id it resolves the parent's live host (or
+				// a fresh host WITHOUT bootstrap when the parent process is
+				// gone — fail-closed, never re-rooted).
+				kernelSessionId: init.kernelSessionId,
 				// Old files predate persisted spawns: deny re-spawning rather than let
 				// createAgentSession default to wildcard ("*").
 				spawns: init.spawns ?? "",

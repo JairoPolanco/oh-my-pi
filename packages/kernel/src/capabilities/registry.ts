@@ -163,13 +163,16 @@ export class CapabilityRegistry {
 
 	/**
 	 * Grant a capability. Throws when the grant would violate monotonicity:
-	 * the principal's parent chain (its UPPER BOUND) must already cover the
-	 * capability.
+	 * the principal's PARENT'S ACTUAL EFFECTIVE authority must cover the
+	 * capability (paste-7 P0 #1). The bound is `effective(parent)` — the
+	 * parent's own direct grants — NEVER the full ancestor chain: a read-only
+	 * delegated child must not be able to mint a write capability its parent
+	 * does not possess by leaning on a grandparent's grant.
 	 */
 	grant(principal: PrincipalId, cap: Capability): void {
 		const parent = this.#parents.get(principal);
 		if (parent !== undefined) {
-			const parentSet = this.upperBound(parent);
+			const parentSet = this.effective(parent);
 			const covered = parentSet.some(p => capabilityCovers(p, cap));
 			if (!covered) {
 				throw new Error(
@@ -210,18 +213,19 @@ export class CapabilityRegistry {
 	}
 
 	/**
-	 * Least-privilege child derivation (paste-4 P0 #4, §54):
+	 * Least-privilege child derivation (paste-4 P0 #4, paste-7 P0 #1):
 	 *
-	 *     C_child = C_requested ∩ C_parent_upper_bound
+	 *     C_child = C_requested ∩ C_parent_EFFECTIVE
 	 *
-	 * Every requested capability that the parent's upper bound covers is
-	 * granted to the child; anything the parent cannot cover is dropped, never
-	 * an error (the child simply does not get more than its parent holds).
-	 * Returns the capabilities actually granted.
+	 * Every requested capability that the parent's ACTUAL authority (its own
+	 * direct grants) covers is granted to the child; anything the parent
+	 * itself does not hold is dropped — never silently inherited from a
+	 * grandparent. A read-only delegated child cannot derive a write
+	 * capability it does not possess. Returns the capabilities granted.
 	 */
 	deriveChildCapabilities(child: PrincipalId, requested: readonly Capability[]): Capability[] {
 		const parent = this.#parents.get(child);
-		const bound = parent !== undefined ? this.upperBound(parent) : requested;
+		const bound = parent !== undefined ? this.effective(parent) : requested;
 		const granted: Capability[] = [];
 		for (const cap of requested) {
 			const covered = bound.some(p => capabilityCovers(p, cap));

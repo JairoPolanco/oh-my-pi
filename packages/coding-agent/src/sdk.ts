@@ -537,6 +537,13 @@ export interface CreateAgentSessionOptions {
 	parentAgentId?: string;
 	/** Inherited eval executor session id for subagents sharing parent eval state. */
 	parentEvalSessionId?: string;
+	/**
+	 * Constitutional kernel authority id (paste-6 P0 #1). Subagents inherit
+	 * the ROOT session's value so the whole actor tree shares one KernelHost
+	 * + capability tree; absent on the root. The bridge's kernelHostFor keys
+	 * on this and only bootstraps the root's main principal.
+	 */
+	kernelSessionId?: string;
 
 	/** Session manager. Default: session stored under the configured agentDir sessions root */
 	sessionManager?: SessionManager;
@@ -3423,6 +3430,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			providerSessionId: options.providerSessionId,
 			providerPromptCacheKeySource,
 			parentEvalSessionId: options.parentEvalSessionId,
+			kernelSessionId: options.kernelSessionId,
 			advisorTools,
 			// Same per-call `grep` seam the primary bridge gets, built against the
 			// advisor's own tool session so a `pi_grep` frame's context width and

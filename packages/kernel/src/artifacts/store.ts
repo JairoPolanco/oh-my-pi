@@ -12,9 +12,13 @@
  * to its content is corrupt), and provenance for events to reference.
  */
 
-import { createHash } from "node:crypto";
-
-/** Digest algorithm. BLAKE3 is preferred where available; BLAKE2b-256 is the portable fallback. */
+/**
+ * Digest algorithm. BLAKE2b-256 is a NATIVE Bun primitive (verified against
+ * `Bun.CryptoHasher.algorithms`) — not a portable Node fallback. The
+ * content-addressed identity layer must not depend on an algorithm alias
+ * that standard Node's `node:crypto` lacks, so the hash goes through Bun's
+ * guaranteed primitive with an explicit availability assertion (paste-5 P0).
+ */
 export type HashAlgorithm = "blake2b256";
 
 /** Content hash of an artifact's bytes, hex-encoded. */
@@ -39,9 +43,22 @@ export interface ArtifactMetadata {
 	kind?: string;
 }
 
+/**
+ * The hash primitive backing the constitutional artifact identity layer.
+ * Verified at module load: if the runtime lacks blake2b256 (e.g. a bare
+ * Node embedding), fail loudly NOW rather than minting artifacts under a
+ * silently broken digest.
+ */
+function artifactHasher(): Bun.CryptoHasher {
+	if (!Bun.CryptoHasher.algorithms.includes("blake2b256")) {
+		throw new Error("artifact store requires blake2b256, which the runtime's Bun.CryptoHasher does not provide");
+	}
+	return new Bun.CryptoHasher("blake2b256");
+}
+
 /** Hash content bytes deterministically. */
 export function hashContent(content: Uint8Array): ArtifactId {
-	return createHash("blake2b256").update(content).digest("hex");
+	return artifactHasher().update(content).digest("hex");
 }
 
 /** Hash a string (UTF-8 encoded). */

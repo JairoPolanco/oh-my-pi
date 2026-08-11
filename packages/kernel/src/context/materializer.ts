@@ -235,8 +235,12 @@ export class ContextMaterializer {
 		if (measured <= available) {
 			return { item: this.#toItem(candidate, measured), cost: measured };
 		}
-		// Does not fit whole: truncate the CONTENT to the affordable size and
-		// re-measure the truncated representation (4 chars ≈ 1 token).
+		// Does not fit whole. A NON-TRUNCATABLE candidate (tool spans, atomic
+		// units — paste-6 P0 #4) is DROPPED, never partially truncated:
+		// all-or-nothing. Only truncatable candidates get their content cut.
+		if (candidate.truncatable === false) return null;
+		// Truncate the CONTENT to the affordable size and re-measure the
+		// truncated representation (4 chars ≈ 1 token).
 		const truncationTokens = Math.max(0, available);
 		if (truncationTokens <= 0) return null;
 		const truncated = truncateChars(content, truncationTokens * 4);

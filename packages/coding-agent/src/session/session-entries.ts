@@ -227,6 +227,17 @@ export interface SessionInitEntry extends SessionEntryBase {
 	spawns?: string;
 	/** The agent's `readSummarize` setting (`false` = read summarization disabled); absent uses the session default. */
 	readSummarize?: boolean;
+	/**
+	 * Kernel authority tree id (paste-7 P0/P1). The whole actor tree shares ONE
+	 * kernel authority tree keyed by the root's kernel session id; subagents
+	 * inherit it so they resolve the parent's KernelHost — never a fresh host
+	 * that bootstraps the child as a new "main" root with full baseline
+	 * capabilities. Persisted here so a COLD-REVIVED child keeps its inherited
+	 * authority id + direct grants instead of re-bootstrapping as root.
+	 * Absent on pre-paste-7 files (root sessions, which key on their own
+	 * session id).
+	 */
+	kernelSessionId?: string;
 }
 
 /** Mode change entry - tracks agent mode transitions (e.g. plan mode). */

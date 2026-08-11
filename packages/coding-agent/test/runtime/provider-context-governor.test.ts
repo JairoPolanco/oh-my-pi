@@ -24,12 +24,12 @@ function toolCallMessage(text: string, index: number): Message {
 	} as unknown as Message;
 }
 
-function toolResultMessage(index: number): Message {
+function toolResultMessage(index: number, text = `result ${index}`): Message {
 	return {
 		role: "toolResult",
 		toolCallId: `call-${index - 1}`,
 		toolName: "bash",
-		content: [{ type: "text", text: `result ${index}` }],
+		content: [{ type: "text", text }],
 		isError: false,
 		timestamp: index,
 	} as unknown as Message;
@@ -161,9 +161,9 @@ describe("ProviderContextGovernor", () => {
 
 	test("P0 #2: mandatory structure is budgeted FIRST, never a post-budget fixup", async () => {
 		// A window too small for the mandatory structure alone: the developer
-		// message + current turn + tool span must ALL survive regardless of the
-		// optional history, and optional history is what gets squeezed — not
-		// the other way around.
+		// message + current turn must ALL survive regardless of the optional
+		// history, and optional history is what gets squeezed — not the other
+		// way around.
 		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
 		const smallModel = { contextWindow: 400 } as unknown as Model; // history budget 300
 		const messages = [
@@ -172,9 +172,144 @@ describe("ProviderContextGovernor", () => {
 			textMessage("user", "u".repeat(800), 2), // ≈ 200 tokens, mandatory (CURRENT turn)
 		];
 		const result = await governor.transform({ messages }, smallModel);
-		expect(result.messages.some(m => m === messages[0])).toBe(true); // developer
-		expect(result.messages.some(m => m === messages[2])).toBe(true); // current turn
+		// Developer and current-turn survive as roles (content may be truncated
+		// to fit the hard historyBudget — new objects, so identity checks are
+		// wrong; paste-7 P0/P1).
+		const roles = result.messages.map(m => m.role);
+		expect(roles.filter(r => r === "developer")).toHaveLength(1);
+		expect(roles.filter(r => r === "user")).toHaveLength(1);
 		// The optional history is what the budget squeezed (or dropped).
-		expect(result.messages.some(m => m === messages[1])).toBe(false);
+		expect(roles.includes("assistant")).toBe(false);
+		// The hard invariant is the HISTORY budget (model − reserves = 300),
+		// not the full model window.
+		const sentTokens = result.messages.reduce((sum, message) => sum + textTokens(message), 0);
+		expect(sentTokens).toBeLessThanOrEqual(300);
+	});
+
+	test("historical tool spans are atomic candidates, NOT mandatory (paste-5 P0)", async () => {
+		// 20 historical tool calls/results must be EVICTABLE as whole spans —
+		// not permanently mandatory. Only an immediate unresolved exchange
+		// (the current turn inside a span) is mandatory.
+		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
+		const tight = { contextWindow: 600 } as unknown as Model; // history budget 450
+		// Each span ≈ 75 tokens (300-char result) — 20 spans ≈ 1500 tokens
+		// against a 450 budget forces mass eviction.
+		const messages = [
+			textMessage("developer", "i", 0),
+			...Array.from({ length: 20 }, (_, i) => [
+				toolCallMessage(`call ${i}`, 1 + i * 2),
+				toolResultMessage(2 + i * 2, `result ${i} `.repeat(60)),
+			]).flat(),
+			textMessage("user", "done", 100), // current turn (mandatory)
+		];
+		const result = await governor.transform({ messages }, tight);
+		// The current turn survives.
+		expect(result.messages.some(m => m === messages[messages.length - 1])).toBe(true);
+		// Historical spans were evicted — far fewer than all 20 survived.
+		const assistant = result.messages.filter(m => m.role === "assistant" && m !== messages[messages.length - 1]);
+		expect(assistant.length).toBeLessThan(20);
+		// Atomicity: every surviving tool result has its call (no orphans).
+		const callIds = new Set(
+			result.messages
+				.filter(m => m.role === "assistant")
+				.map(m => (m.content as { type: string; id: string }[]).find(b => b.type === "toolCall")?.id)
+				.filter(Boolean),
+		);
+		for (const m of result.messages.filter(m => m.role === "toolResult")) {
+			expect(callIds.has((m as { toolCallId: string }).toolCallId)).toBe(true);
+		}
+	});
+
+	test("hard final budget: never returns an over-limit request (paste-5 P0)", async () => {
+		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
+		// Mandatory structure alone (developer + current turn) exceeds even the
+		// model window: the result MUST still fit B_model — truncate the
+		// current input rather than silently overflow.
+		const tiny = { contextWindow: 300 } as unknown as Model;
+		const messages = [
+			textMessage("developer", "d".repeat(2000), 0), // ≈ 500 tokens
+			textMessage("user", "u".repeat(2000), 1), // ≈ 500 tokens, current turn
+		];
+		const result = await governor.transform({ messages }, tiny);
+		const sentTokens = result.messages.reduce((sum, message) => sum + textTokens(message), 0);
+		expect(sentTokens).toBeLessThanOrEqual(300); // hard invariant: ≤ B_model
+		expect(result.messages.length).toBe(2); // structure kept, content truncated
+	});
+
+	test("tool spans are all-or-nothing: never partially truncated (paste-6 P0 #4)", async () => {
+		// A single historical span too large for the budget must be DROPPED
+		// whole, never truncated at 18 tokens while the full ~1000-token span
+		// is passed to the provider.
+		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
+		const tiny = { contextWindow: 500 } as unknown as Model;
+		const bigSpan = [
+			toolCallMessage("call", 1),
+			toolResultMessage(2, "r".repeat(3000)), // ≈ 750 tokens
+		];
+		const messages = [
+			textMessage("developer", "i", 0),
+			...bigSpan,
+			textMessage("user", "done", 100), // current turn
+		];
+		const result = await governor.transform({ messages }, tiny);
+		// The span was dropped whole — no orphaned tool result, no truncated
+		// call/result pair.
+		expect(result.messages.some(m => m === bigSpan[0])).toBe(false);
+		expect(result.messages.some(m => m === bigSpan[1])).toBe(false);
+		// Current turn + developer survive.
+		expect(result.messages.some(m => m === messages[0])).toBe(true);
+		expect(result.messages.some(m => m === messages[messages.length - 1])).toBe(true);
+	});
+
+	test("final eviction never splits a tool span (paste-6 P0 #5)", async () => {
+		// Force the hard-budget fallback: select a span, then make the final
+		// pass evict. The eviction must drop the WHOLE span, never one member.
+		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
+		const model = { contextWindow: 900 } as unknown as Model;
+		const messages = [
+			textMessage("developer", "d".repeat(800), 0), // ≈ 200 tokens, mandatory
+			toolCallMessage("call 1", 1),
+			toolResultMessage(2, "r1 ".repeat(120)), // span 1 ≈ 65 tokens
+			toolCallMessage("call 2", 3),
+			toolResultMessage(4, "r2 ".repeat(120)), // span 2 ≈ 65 tokens
+			textMessage("user", "u".repeat(800), 5), // ≈ 200 tokens, current
+		];
+		const result = await governor.transform({ messages }, model);
+		const assistantCount = result.messages.filter(m => m.role === "assistant").length;
+		const resultCount = result.messages.filter(m => m.role === "toolResult").length;
+		// Atomic: assistant calls and tool results always balance — no orphan.
+		expect(assistantCount).toBe(resultCount);
+		// And under this tight budget at least one span was evicted as a unit.
+		expect(assistantCount).toBeLessThan(3);
+	});
+
+	test("non-truncatable structural overflow throws ContextOverflowError (paste-7 P0/P1)", async () => {
+		// A CURRENT-turn assistant message whose tool-call argument JSON alone
+		// exceeds the budget cannot be fixed by truncating text — truncation
+		// preserves toolCall blocks. The VM must THROW, never silently return
+		// an over-limit request.
+		Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV] = "1";
+		const { ContextOverflowError } = await import("@oh-my-pi/pi-kernel");
+		const tiny = { contextWindow: 200 } as unknown as Model; // history budget 150
+		const messages = [
+			textMessage("developer", "i", 0),
+			textMessage("user", "go", 1),
+			// LAST message = immediate unresolved exchange → mandatory, and its
+			// structural toolCall JSON cannot be truncated away.
+			{
+				role: "assistant",
+				content: [
+					{ type: "text", text: "run it" },
+					{ type: "toolCall", id: "t1", name: "bash", arguments: { payload: "x".repeat(2000) } },
+				],
+				api: "openai",
+				provider: "anthropic",
+				model: "claude-4",
+				usage: {},
+				stopReason: "tool_use",
+				timestamp: 2,
+			} as unknown as Message,
+		];
+		await expect(governor.transform({ messages }, tiny)).rejects.toBeInstanceOf(ContextOverflowError);
 	});
 });

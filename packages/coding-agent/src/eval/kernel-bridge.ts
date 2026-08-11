@@ -21,6 +21,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import {
+	type Capability,
 	type CompletionContract,
 	ContextMaterializer,
 	type ContextRequest,
@@ -180,12 +181,37 @@ function sessionLiveModel(session: ToolSession): { provider: string; model: stri
  * land in the same store and event log.
  */
 export async function kernelHostFor(session: ToolSession): Promise<KernelHost> {
-	const key = session.getSessionId?.() ?? session.cwd;
-	let host = HOSTS.get(key);
+	// The whole actor tree shares ONE kernel authority tree (paste-6 P0 #1):
+	// subagents inherit the root's kernel session id, so every descendant
+	// resolves the SAME KernelHost — never a fresh host per child that would
+	// bootstrap the child as a new "main" root with full baseline capabilities
+	// (which would bypass the least-privilege child derivation).
+	const kernelKey = session.getKernelSessionId?.() ?? session.getSessionId?.() ?? session.cwd;
+	// Only the ROOT session is bootstrapped as the main principal. A
+	// subagent (inherited kernel id) resolves the parent's host, so its
+	// authority is exactly what the spawn derivation granted it.
+	const isRoot = session.getKernelSessionId?.() == null;
+	let host = HOSTS.get(kernelKey);
 	if (!host) {
-		host = new KernelHost(kernelDirFor(session));
+		// The host bootstraps the MAIN actor's baseline with the session's
+		// canonical principal identity (OMP's MAIN_AGENT_ID is "Main", capital
+		// M) — never the hard-coded lowercase "main", or the bootstrap and the
+		// real actor diverge and the gate default-denies the actual agent
+		// (paste-5 P0).
+		host = new KernelHost(kernelDirFor(session), {
+			mainPrincipal: session.getAgentId?.() ?? "main",
+			// Security state is ALWAYS built (paste-7 P0/P1): the verifier
+			// authorizes through the EffectBroker regardless of the rollout
+			// flag, so it must have a coherent principal model. The gate env
+			// only controls whether normal OMP TOOLS are blocked.
+			bootstrapMain: isRoot,
+			// The authorization root is the session's WORKSPACE (cwd), never
+			// the kernel storage dir (paste-7 P0 #5) — verifier/bash resources
+			// canonicalize against the real workspace.
+			workspaceRoot: session.cwd,
+		});
 		await host.warm();
-		HOSTS.set(key, host);
+		HOSTS.set(kernelKey, host);
 	}
 	return host;
 }
@@ -847,26 +873,196 @@ export async function authorizeToolEffect(opts: {
 	actor: string;
 	tool: string;
 	args: Record<string, unknown>;
+	/** Workspace root; resources are canonicalized against it (paste-5 P0). */
+	workspaceRoot?: string;
 }): Promise<{ blocked: boolean; reason?: string }> {
-	const broker = new EffectBroker(opts.host.policy, OMP_TOOL_EFFECT_MAPPER, { denyUnknown: true });
+	const broker = new EffectBroker(opts.host.policy, OMP_TOOL_EFFECT_MAPPER, {
+		denyUnknown: true,
+		workspaceRoot: opts.workspaceRoot,
+	});
 	const decision = broker.authorize(opts.actor, { tool: opts.tool, args: opts.args });
 	if (decision.allow) return { blocked: false };
 	return { blocked: true, reason: decision.reason };
 }
 
 /** Tool names with NO external side effect — explicitly classified as pure
- *  so constitutional mode can allow them without a capability grant. */
+ *  so constitutional mode can allow them without a capability grant. `board`
+ *  and `goal` are NOT pure (durable state mutation); read-only state access
+ *  is capability-controlled (paste-7 P0/P1): recall/reflect/vibe_list are
+ *  mapped to memory.read/agent.read, not free.
+ */
 export const PURE_TOOL_NAMES: ReadonlySet<string> = new Set([
 	"todo", // plan bookkeeping, no external effect
 	"yield", // turn control
 	"ask", // request user input
-	"board", // durable work-graph reads/writes are governed by task events, not fs/network
-	"goal",
-	"vibe_list", // read-only roster
-	"vibe_wait", // wait for a peer
-	"recall", // read-only memory
-	"reflect", // read-only memory analysis
 ]);
+
+/**
+ * Derive the capabilities a child ASKS for from its tool set (paste-5 P0).
+ * This is the capability-planning layer: a read-only scout requests fs.read,
+ * an implementation child requests fs.read + fs.write + process.exec scoped
+ * to the workspace, a reviewer requests no writes. The spawn path intersects
+ * these with the parent's upper bound — the child gets exactly the tools it
+ * was granted, never the parent's whole set.
+ */
+export function deriveCapabilitiesFromTools(toolNames: readonly string[], _workspaceRoot: string): Capability[] {
+	const requested: Capability[] = [];
+	const scope = `repo/**`;
+	for (const name of toolNames) {
+		if (PURE_TOOL_NAMES.has(name)) continue; // pure tools need no grant
+		switch (name) {
+			case "read":
+			case "grep":
+			case "glob":
+			case "lsp":
+			case "inspect_image":
+			case "ast_grep":
+			case "security_scan":
+			case "debug":
+				if (!requested.some(c => c.id === "fs.read")) {
+					requested.push({ id: "fs.read", scope, effect: "read" });
+				}
+				break;
+			case "write":
+			case "edit":
+			case "ast_edit":
+				if (!requested.some(c => c.id === "fs.write")) {
+					requested.push({ id: "fs.write", scope, effect: "write" });
+				}
+				break;
+			case "bash":
+			case "python":
+			case "eval":
+				if (!requested.some(c => c.id === "process.exec")) {
+					requested.push({ id: "process.exec", scope, effect: "execute" });
+				}
+				break;
+			case "fetch":
+			case "web_search":
+			case "github":
+			case "browser":
+				if (!requested.some(c => c.id === "network")) {
+					requested.push({ id: "network", scope: "*", effect: "network" });
+				}
+				break;
+			case "task":
+				// TaskTool spawns subagents — agent.spawn (paste-7 P0 #3).
+				if (!requested.some(c => c.id === "agent.spawn")) {
+					requested.push({ id: "agent.spawn", scope: "actor", effect: "spawn" });
+				}
+				break;
+			case "board":
+				// Durable work graph: reads and mutations are distinct
+				// capabilities (paste-7 P0 #3).
+				if (!requested.some(c => c.id === "task.write")) {
+					requested.push({ id: "task.write", scope: "board", effect: "write" });
+				}
+				if (!requested.some(c => c.id === "task.claim")) {
+					requested.push({ id: "task.claim", scope: "board", effect: "write" });
+				}
+				if (!requested.some(c => c.id === "task.read")) {
+					requested.push({ id: "task.read", scope: "board", effect: "read" });
+				}
+				break;
+			case "hub":
+				// Multiplexed broker: request the full surface (paste-7 P0 #3).
+				if (!requested.some(c => c.id === "agent.read")) {
+					requested.push({ id: "agent.read", scope: "roster", effect: "read" });
+				}
+				if (!requested.some(c => c.id === "job.read")) {
+					requested.push({ id: "job.read", scope: "job", effect: "read" });
+				}
+				if (!requested.some(c => c.id === "agent.message")) {
+					requested.push({ id: "agent.message", scope: "actor", effect: "spawn" });
+				}
+				if (!requested.some(c => c.id === "process.control")) {
+					requested.push({ id: "process.control", scope: "repo/**", effect: "execute" });
+				}
+				if (!requested.some(c => c.id === "process.read")) {
+					requested.push({ id: "process.read", scope: "repo/**", effect: "read" });
+				}
+				if (!requested.some(c => c.id === "job.control")) {
+					requested.push({ id: "job.control", scope: "job", effect: "execute" });
+				}
+				break;
+			case "vibe_spawn":
+				if (!requested.some(c => c.id === "agent.spawn")) {
+					requested.push({ id: "agent.spawn", scope: "actor", effect: "spawn" });
+				}
+				break;
+			case "vibe_send":
+				if (!requested.some(c => c.id === "agent.message")) {
+					requested.push({ id: "agent.message", scope: "actor", effect: "spawn" });
+				}
+				break;
+			case "vibe_kill":
+				if (!requested.some(c => c.id === "agent.kill")) {
+					requested.push({ id: "agent.kill", scope: "actor", effect: "execute" });
+				}
+				break;
+			case "vibe_list":
+			case "vibe_wait":
+				if (!requested.some(c => c.id === "agent.read")) {
+					requested.push({ id: "agent.read", scope: "roster", effect: "read" });
+				}
+				break;
+			case "learn":
+				// Always memory.write; with a skill payload also skill.write
+				// (paste-7 P0 #3). Planner sees names only → request both.
+				if (!requested.some(c => c.id === "memory.write")) {
+					requested.push({ id: "memory.write", scope: "facts", effect: "write" });
+				}
+				if (!requested.some(c => c.id === "skill.write")) {
+					requested.push({ id: "skill.write", scope: "propose", effect: "write" });
+				}
+				break;
+			case "manage_skill":
+				if (!requested.some(c => c.id === "skill.write")) {
+					requested.push({ id: "skill.write", scope: "propose", effect: "write" });
+				}
+				break;
+			case "memory_edit":
+			case "retain":
+				if (!requested.some(c => c.id === "memory.write")) {
+					requested.push({ id: "memory.write", scope: "facts", effect: "write" });
+				}
+				break;
+			case "recall":
+			case "reflect":
+				if (!requested.some(c => c.id === "memory.read")) {
+					requested.push({ id: "memory.read", scope: "facts", effect: "read" });
+				}
+				break;
+			case "checkpoint":
+			case "rewind":
+				if (!requested.some(c => c.id === "session.state")) {
+					requested.push({ id: "session.state", scope: "session", effect: "write" });
+				}
+				break;
+			case "goal":
+				if (!requested.some(c => c.id === "goal.read")) {
+					requested.push({ id: "goal.read", scope: "goal", effect: "read" });
+				}
+				if (!requested.some(c => c.id === "goal.write")) {
+					requested.push({ id: "goal.write", scope: "goal", effect: "write" });
+				}
+				break;
+			case "computer":
+				if (!requested.some(c => c.id === "computer.read")) {
+					requested.push({ id: "computer.read", scope: "screen", effect: "read" });
+				}
+				if (!requested.some(c => c.id === "computer.control")) {
+					requested.push({ id: "computer.control", scope: "input", effect: "execute" });
+				}
+				break;
+			default:
+				// Unknown tool: request a conservative process.exec on the tool
+				// name so the child's grant is explicit, not silent.
+				requested.push({ id: "process.exec", scope: `tool:${name}`, effect: "execute" });
+		}
+	}
+	return requested;
+}
 
 /**
  * OMP's exhaustive tool effect classification (paste-4 P0 #3). Every builtin
@@ -875,8 +1071,8 @@ export const PURE_TOOL_NAMES: ReadonlySet<string> = new Set([
  * in constitutional mode. Extend this list when new tools ship — the broker
  * must never silently pass an unknown effectful tool.
  */
-export const OMP_TOOL_EFFECT_MAPPER: ToolEffectMapper = effect => {
+export const OMP_TOOL_EFFECT_MAPPER: ToolEffectMapper = (effect, root) => {
 	const { tool } = effect;
 	if (PURE_TOOL_NAMES.has(tool)) return PURE_EFFECT; // explicitly pure → allow, op: null
-	return mapToolEffectToOperation(effect);
+	return mapToolEffectToOperation(effect, root);
 };

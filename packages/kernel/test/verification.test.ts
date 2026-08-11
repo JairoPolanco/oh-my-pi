@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import { ArtifactStore } from "../src/artifacts";
+import { KernelHost } from "../src/host";
 import { type CompletionContract, DeterministicVerificationEngine } from "../src/verification";
 
 const dir = `${import.meta.dir}/tmp-verification`;
@@ -176,5 +177,70 @@ describe("DeterministicVerificationEngine", () => {
 			artifacts: [],
 		});
 		expect(observed).toEqual([undefined]); // host gate falls back to "kernel"
+	});
+});
+
+describe("KernelHost verifier gate (paste-6 P0 #3)", () => {
+	const hostDir = `${import.meta.dir}/tmp-verification-host`;
+
+	afterEach(async () => {
+		await fs.rm(hostDir, { recursive: true, force: true });
+	});
+
+	test("verifier commands authorize via the canonical EffectBroker cwd resource, not the executable name", async () => {
+		const host = new KernelHost(hostDir, { mainPrincipal: "Main", bootstrapMain: true, workspaceRoot: dir });
+		await host.warm();
+		// The main baseline holds process.exec:repo/**. A verification
+		// command running inside the workspace must pass — the resource is
+		// the cwd the command runs in, NOT `command[0]` ("bun" vs `repo/**`
+		// would never match).
+		const report = await host.verifier.verify(contract({ checks: [{ kind: "command", command: ["true"] }] }), {
+			cwd: dir,
+			root: dir,
+			artifacts: [],
+			actor: "Main",
+		});
+		expect(report.pass).toBe(true);
+		await host.close();
+	});
+
+	test("verifier commands are denied outside the workspace root", async () => {
+		const host = new KernelHost(hostDir, { mainPrincipal: "Main", bootstrapMain: true });
+		await host.warm();
+		const report = await host.verifier.verify(contract({ checks: [{ kind: "command", command: ["true"] }] }), {
+			cwd: "/etc",
+			root: dir,
+			artifacts: [],
+		});
+		expect(report.pass).toBe(false);
+		await host.close();
+	});
+});
+
+describe("KernelHost workspace root (paste-7 P0 #5)", () => {
+	const storageDir = `${import.meta.dir}/tmp-verification-storage`;
+	const workspace = "/projects/foo";
+
+	afterEach(async () => {
+		await fs.rm(storageDir, { recursive: true, force: true });
+	});
+
+	test("workspace root is explicit, never inferred from the kernel storage dir", async () => {
+		// Storage dir (~/.omp/sessions/.../kernel) and authorization root
+		// (/projects/foo) are different. Canonicalizing against storage would
+		// mark the real workspace as `outside:` and deny every command.
+		const host = new KernelHost(storageDir, {
+			mainPrincipal: "Main",
+			bootstrapMain: true,
+			workspaceRoot: workspace,
+		});
+		await host.warm();
+		host.capabilities.bootstrap("Main", [{ id: "process.exec", scope: "repo/**", effect: "execute" }]);
+		// A command running AT the workspace root must be authorized — the
+		// resource canonicalizes against `/projects/foo`, not the storage dir.
+		expect(
+			host.effects.authorize("Main", { tool: "bash", args: { command: "bun test", cwd: workspace } }).allow,
+		).toBe(true);
+		await host.close();
 	});
 });

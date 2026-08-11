@@ -107,7 +107,8 @@ describe("CapabilityRegistry monotonicity", () => {
 
 	test("child does NOT inherit the parent chain; effective = direct grants only (least privilege)", () => {
 		// Audit §54: linking a child to a parent must not hand it the parent's
-		// whole authority. The parent chain is an UPPER BOUND, not a grant.
+		// whole authority. The parent chain is an UPPER BOUND for
+		// introspection, never a grant source.
 		const registry = new CapabilityRegistry();
 		registry.grant("root", { id: "network", scope: "api.github.com", effect: "network" });
 		registry.setParent("worker", "root");
@@ -116,24 +117,34 @@ describe("CapabilityRegistry monotonicity", () => {
 		// No direct grants → no effective capabilities.
 		expect(registry.effective("scout")).toHaveLength(0);
 		expect(registry.effective("worker")).toHaveLength(0);
-		// The chain is visible as the upper bound for grant validation.
+		// The chain is visible as the upper bound (audit/introspection).
 		expect(registry.upperBound("scout").some(c => c.id === "network")).toBe(true);
-		// A child can be granted a capability WITHIN its parent's bound.
-		registry.grant("scout", { id: "network", scope: "api.github.com", effect: "network" });
-		expect(registry.effective("scout").some(c => c.id === "network")).toBe(true);
+		// But the GRANT bound is the parent's EFFECTIVE authority (paste-7
+		// P0 #1): worker holds nothing, so scout cannot mint network through
+		// root (a grandparent).
+		expect(() => registry.grant("scout", { id: "network", scope: "api.github.com", effect: "network" })).toThrow(
+			/monotonicity violation/,
+		);
 	});
 
-	test("grant validates against the parent's UPPER BOUND, not just direct grants", () => {
+	test("grant bound is the parent's EFFECTIVE authority, never the ancestor chain (paste-7 P0 #1)", () => {
 		const registry = new CapabilityRegistry();
 		registry.grant("root", { id: "fs.read", scope: "repo/**", effect: "read" });
 		registry.setParent("worker", "root");
 		registry.setParent("scout", "worker");
-		// Scout's parent (worker) has no direct grants, but the chain covers it.
+		// Scout's parent (worker) has no direct grants, so even though root
+		// (grandparent) holds fs.read, the grant MUST be refused — the read
+		// authority was never delegated down.
+		expect(() => registry.grant("scout", { id: "fs.read", scope: "repo/src/**", effect: "read" })).toThrow(
+			/monotonicity violation/,
+		);
+		// Once worker actually holds fs.read, scout's grant is legal.
+		registry.grant("worker", { id: "fs.read", scope: "repo/**", effect: "read" });
 		registry.grant("scout", { id: "fs.read", scope: "repo/src/**", effect: "read" });
 		expect(registry.effective("scout")).toHaveLength(1);
 	});
 
-	test("deriveChildCapabilities grants exactly requested ∩ parent upper bound (paste-4 P0 #4)", () => {
+	test("deriveChildCapabilities grants exactly requested ∩ parent EFFECTIVE (paste-7 P0 #1)", () => {
 		const registry = new CapabilityRegistry();
 		registry.grant("parent", { id: "fs.read", scope: "repo/**", effect: "read" });
 		registry.setParent("child", "parent");
@@ -149,6 +160,27 @@ describe("CapabilityRegistry monotonicity", () => {
 		expect(registry.effective("child")).toEqual(granted);
 		// The dropped capabilities never enter the child's authority.
 		expect(registry.effective("child").some(c => c.id === "process.exec")).toBe(false);
+	});
+
+	test("grandchild cannot regain a privilege its parent was denied (paste-7 P0 #1)", () => {
+		// Root holds read+write; worker is delegated READ ONLY; scout (child
+		// of worker) must NOT be able to derive a write capability — the
+		// grant ceiling is worker's ACTUAL authority, not the ancestor chain.
+		const registry = new CapabilityRegistry();
+		registry.bootstrap("root", [
+			{ id: "fs.read", scope: "repo/**", effect: "read" },
+			{ id: "fs.write", scope: "repo/**", effect: "write" },
+		]);
+		registry.setParent("worker", "root");
+		registry.deriveChildCapabilities("worker", [{ id: "fs.read", scope: "repo/**", effect: "read" }]);
+		registry.setParent("scout", "worker");
+
+		const granted = registry.deriveChildCapabilities("scout", [
+			{ id: "fs.read", scope: "repo/src/**", effect: "read" }, // worker holds → granted
+			{ id: "fs.write", scope: "repo/out/**", effect: "write" }, // worker lacks → DROPPED
+		]);
+		expect(granted.map(c => c.id).sort()).toEqual(["fs.read"]);
+		expect(registry.effective("scout").some(c => c.id === "fs.write")).toBe(false);
 	});
 
 	test("bootstrap establishes a baseline for a parentless principal (main actor)", () => {

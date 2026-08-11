@@ -53,6 +53,10 @@ describe("SessionManager.peekSessionInit", () => {
 			spawns: "task",
 			readSummarize: false,
 			restrictToolNames: true,
+			// Kernel authority tree id survives the round-trip so a cold
+			// revive rejoins the SAME tree (paste-7 P0/P1) — never re-boots
+			// as a fresh main principal.
+			kernelSessionId: "kernel-tree-42",
 		});
 		// Flush buffered entries (header + inits) so the lock-free peek can read them off disk.
 		manager.appendMessage(assistantMessage("flush"));
@@ -65,6 +69,7 @@ describe("SessionManager.peekSessionInit", () => {
 		expect(peek?.init?.spawns).toBe("task");
 		expect(peek?.init?.readSummarize).toBe(false);
 		expect(peek?.init?.restrictToolNames).toBe(true);
+		expect(peek?.init?.kernelSessionId).toBe("kernel-tree-42");
 	});
 
 	it("returns init: null for a session file with no session_init (a main/legacy session)", async () => {

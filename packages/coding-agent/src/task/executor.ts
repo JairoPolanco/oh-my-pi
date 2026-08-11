@@ -462,6 +462,8 @@ export interface ExecutorOptions {
 	parentMnemopiSessionState?: MnemopiSessionState;
 	/** Parent agent's eval executor session id. Subagents reuse it so eval state is shared. */
 	parentEvalSessionId?: string;
+	/** Root constitutional kernel authority id (paste-6 P0 #1). Subagents inherit it so the whole actor tree shares one KernelHost + capability tree. */
+	parentKernelSessionId?: string;
 	/**
 	 * Parent agent's OpenTelemetry configuration. When defined, the subagent's
 	 * loop is started with the same tracer/hooks but its own agent identity
@@ -3068,6 +3070,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				localProtocolOptions: options.localProtocolOptions,
 				telemetry: subagentTelemetry,
 				parentEvalSessionId: options.parentEvalSessionId,
+				kernelSessionId: options.parentKernelSessionId,
 				onFirstChatDispatch: () => {
 					firstChatDispatchAt ??= performance.now();
 				},
@@ -3153,6 +3156,11 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				outputSchema,
 				outputSchemaMode: options.outputSchemaMode,
 				restrictToolNames: restrictToolNames || undefined,
+				// Children inherit the kernel authority tree id (paste-7 P0/P1);
+				// roots have none (they key on their own session id). Persisted
+				// so cold revives rejoin the SAME authority tree instead of
+				// re-bootstrapping as a new main principal.
+				kernelSessionId: session.getKernelSessionId?.() ?? undefined,
 			});
 
 			abortSignal.addEventListener(

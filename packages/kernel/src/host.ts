@@ -56,9 +56,26 @@ export class KernelHost implements Kernel {
 	readonly versions: HarnessVersionLedger;
 	/** Gateway control plane (Phase 12, §92). */
 	readonly gateway: Gateway;
+	/** Canonical principal identity for the session's main agent (paste-5 P0). */
+	readonly mainPrincipal: string;
+	/** Workspace root for effect resource canonicalization (paste-7 P0 #5). */
+	readonly workspaceRoot: string;
 
-	constructor(dir: string) {
+	constructor(dir: string, options: { mainPrincipal?: string; bootstrapMain?: boolean; workspaceRoot?: string } = {}) {
 		this.dir = dir;
+		// The main agent's canonical identity comes from the SESSION (OMP's
+		// MAIN_AGENT_ID is "Main", capital M) — never hard-coded "main" here,
+		// or the bootstrap and the actual actor diverge and the gate
+		// default-denies the real agent (paste-5 P0).
+		this.mainPrincipal = options.mainPrincipal ?? "main";
+		// Storage location and authorization root are DIFFERENT concepts
+		// (paste-7 P0 #5): `dir` is the kernel storage dir (e.g.
+		// ~/.omp/sessions/.../kernel), NOT the agent workspace. Canonicalizing
+		// verifier/bash resources against the storage dir would mark every
+		// real workspace path as `outside:` and deny it. The workspace root
+		// must be passed explicitly by the session host.
+		this.workspaceRoot = options.workspaceRoot ?? path.dirname(dir);
+		const bootstrapMain = options.bootstrapMain ?? Bun.env.OMP_KERNEL_EFFECT_GATE === "1";
 		this.artifacts = new ArtifactStore(path.join(dir, "artifacts"));
 		this.tasks = new SqliteTaskStore(path.join(dir, "tasks.db"));
 		this.contracts = new SqliteContractStore(path.join(dir, "contracts.db"));
@@ -67,19 +84,22 @@ export class KernelHost implements Kernel {
 		this.capabilities = new CapabilityRegistry();
 		this.memory = new InMemoryMemoryBackend();
 		this.policy = new PolicyEngine(this.capabilities);
-		this.effects = new EffectBroker(this.policy);
+		this.effects = new EffectBroker(this.policy, undefined, { workspaceRoot: this.workspaceRoot });
 		this.models = new RuleBasedModelRegistry();
 		// Verification commands go through the session policy: the verifier has
 		// no independent execution authority. A `process.exec` capability must
 		// cover the command, or the check is refused (blueprint §7). The actor
 		// identity is passed IMMUTABLY per verify call (never a mutable host
-		// field) so concurrent verifications authorize against their own caller.
+		// field) so concurrent verifications authorize against their own
+		// caller. Commands traverse the SAME canonical EffectBroker as the
+		// bash tool (paste-6 P0 #3): the resource is the workspace cwd the
+		// command runs in, canonicalized against the workspace root — not the
+		// raw executable name ("bun" vs `repo/**` would never match).
 		this.verifier = new DeterministicVerificationEngine(
 			(command, cwd, actor) =>
-				this.policy.authorize(actor ?? "kernel", {
-					id: "process.exec",
-					effect: "execute",
-					resource: command[0] ?? cwd,
+				this.effects.authorize(actor ?? "kernel", {
+					tool: "bash",
+					args: { command: command.join(" "), cwd },
 				}).allow,
 		);
 		this.versions = new HarnessVersionLedger(path.join(dir, "harness.db"));
@@ -89,12 +109,36 @@ export class KernelHost implements Kernel {
 		// read + write + exec within the project, network for remote ops —
 		// NOT a global grant. Subagents derive from this via
 		// `deriveChildCapabilities` (requested ∩ bound).
-		if (Bun.env.OMP_KERNEL_EFFECT_GATE === "1") {
-			this.capabilities.bootstrap("main", [
+		if (bootstrapMain) {
+			this.capabilities.bootstrap(this.mainPrincipal, [
 				{ id: "fs.read", scope: "repo/**", effect: "read" },
 				{ id: "fs.write", scope: "repo/**", effect: "write" },
 				{ id: "process.exec", scope: "repo/**", effect: "execute" },
+				{ id: "process.control", scope: "repo/**", effect: "execute" },
+				{ id: "process.read", scope: "repo/**", effect: "read" },
 				{ id: "network", scope: "*", effect: "network" },
+				// Typed capabilities for governed state/agent effects (paste-6
+				// P0/P1, paste-7 P0/P1): read authority is capability-
+				// controlled — the main agent gets read AND write variants so
+				// children can derive scoped subsets.
+				{ id: "agent.spawn", scope: "actor", effect: "spawn" },
+				{ id: "agent.message", scope: "actor", effect: "spawn" },
+				{ id: "agent.kill", scope: "actor", effect: "execute" },
+				{ id: "agent.read", scope: "roster", effect: "read" },
+				{ id: "task.write", scope: "board", effect: "write" },
+				{ id: "task.claim", scope: "board", effect: "write" },
+				{ id: "task.read", scope: "board", effect: "read" },
+				{ id: "job.control", scope: "job", effect: "execute" },
+				{ id: "job.read", scope: "job", effect: "read" },
+				{ id: "memory.write", scope: "facts", effect: "write" },
+				{ id: "memory.read", scope: "facts", effect: "read" },
+				{ id: "skill.write", scope: "propose", effect: "write" },
+				{ id: "skill.read", scope: "skills", effect: "read" },
+				{ id: "session.state", scope: "session", effect: "write" },
+				{ id: "goal.read", scope: "goal", effect: "read" },
+				{ id: "goal.write", scope: "goal", effect: "write" },
+				{ id: "computer.read", scope: "screen", effect: "read" },
+				{ id: "computer.control", scope: "input", effect: "execute" },
 			]);
 		}
 		// ONE daemon-scoped gateway above all session hosts (blueprint §92):

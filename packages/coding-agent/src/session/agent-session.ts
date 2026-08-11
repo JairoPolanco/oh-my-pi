@@ -457,6 +457,8 @@ export class AgentSession {
 	#commandMetadataChangedListeners: CommandMetadataChangedListener[] = [];
 	#sessionChangeCallbacks = new Set<() => void>();
 	#observedSessionId: string | undefined;
+	/** Constitutional kernel authority id inherited from the root session (paste-6 P0 #1). */
+	#kernelSessionId: string | undefined;
 
 	/** Messages queued to be included with the next user prompt as context ("asides"). */
 	#pendingNextTurnMessages: CustomMessage[] = [];
@@ -1300,6 +1302,7 @@ export class AgentSession {
 		this.#loopGuards = new LoopGuards(streamGuardsHost);
 		this.#agentId = config.agentId;
 		this.#agentKind = config.agentKind ?? "main";
+		this.#kernelSessionId = config.kernelSessionId;
 		this.#scoutAllowedBySpawnPolicy = config.scoutAllowedBySpawnPolicy ?? true;
 		this.#providerSessionId = config.providerSessionId;
 		this.#inheritedProviderPromptCacheKey =
@@ -3254,14 +3257,16 @@ export class AgentSession {
 					hasUI: false,
 					getSessionFile: () => this.sessionManager.getSessionFile() ?? null,
 					getSessionId: () => this.sessionId,
+					getKernelSessionId: () => this.getKernelSessionId(),
 					getAgentId: () => this.getAgentId(),
 				} as never;
 				const host = await kernelHostFor(adapter);
 				const gate = await authorizeToolEffect({
 					host,
-					actor: this.getAgentId?.() ?? "main",
+					actor: this.getAgentId?.() ?? host.mainPrincipal,
 					tool: ctx.tool.name,
 					args: ctx.args as Record<string, unknown>,
+					workspaceRoot: this.sessionManager.getCwd(),
 				});
 				if (gate.blocked) {
 					return {
@@ -4620,6 +4625,11 @@ export class AgentSession {
 	}
 	getEvalKernelOwnerId(): string {
 		return this.#eval.getKernelOwnerId();
+	}
+	/** Constitutional kernel authority id (paste-6 P0 #1): null on the root,
+	 *  inherited value on subagents so the actor tree shares one KernelHost. */
+	getKernelSessionId(): string | null {
+		return this.#kernelSessionId ?? null;
 	}
 
 	/** Current session display name, if set */

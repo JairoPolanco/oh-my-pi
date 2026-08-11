@@ -242,6 +242,14 @@ export interface ToolSession {
 	trackEvalExecution?<T>(execution: Promise<T>, abortController: AbortController): Promise<T>;
 	/** Get session ID */
 	getSessionId?: () => string | null;
+	/**
+	 * Constitutional kernel authority id (paste-6 P0 #1): the ROOT session's
+	 * kernel host key. Subagents inherit the parent's value, so the whole
+	 * actor tree shares ONE KernelHost + capability tree — never a fresh host
+	 * per child that would bootstrap the child as a new "main" root. Returns
+	 * null on the root (its own getSessionId is the authority key).
+	 */
+	getKernelSessionId?: () => string | null;
 	/** Get Hindsight runtime state for this agent session. */
 	getHindsightSessionState?: () => HindsightSessionState | undefined;
 	/** Get Mnemopi runtime state for this agent session. */

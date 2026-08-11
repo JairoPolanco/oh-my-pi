@@ -73,6 +73,7 @@ async function createPersistedSession(cwd: string, restrictToolNames?: boolean, 
 		restrictToolNames,
 		modelRole,
 		resolvedModel: modelRole ? "anthropic/claude-sonnet-4-5" : undefined,
+		kernelSessionId: "kernel-tree-42",
 	});
 	manager.appendMessage({
 		role: "assistant",
@@ -276,5 +277,26 @@ describe("persisted subagent revival", () => {
 		rpcRegistry.dispose();
 		AgentLifecycleManager.resetGlobalForTests();
 		AgentRegistry.resetGlobalForTests();
+	});
+
+	it("restores the persisted kernelSessionId on cold revive so the child never re-bootstraps as root (paste-7 P0/P1)", async () => {
+		const cwd = makeTempDir("@pi-kernel-revive-");
+		const sessionFile = await createPersistedSession(cwd);
+		let capturedOptions: CreateAgentSessionOptions | undefined;
+		vi.spyOn(sdkModule, "createAgentSession").mockImplementation(async options => {
+			capturedOptions = options;
+			return { session: createRevivedSession([]).session } as CreateAgentSessionResult;
+		});
+
+		const ref = createRef(sessionFile);
+		const reviver = await createFactory(cwd)(ref);
+		if (!reviver) throw new Error("Expected a persisted reviver");
+		await reviver(ref);
+
+		// Without the inherited id, the revived child's getKernelSessionId()
+		// returns null → kernelHostFor treats it as a NEW root and bootstraps
+		// the full main baseline (authority escalation on resume). The id must
+		// survive the round-trip verbatim.
+		expect(capturedOptions?.kernelSessionId).toBe("kernel-tree-42");
 	});
 });

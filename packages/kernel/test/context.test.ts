@@ -172,6 +172,24 @@ describe("ContextMaterializer", () => {
 		expect(view.usedTokens).toBe(estimateTokens(view.rendered.content));
 	});
 
+	test("non-truncatable candidates are all-or-nothing: dropped whole, never partially cut (paste-6 P0 #4)", async () => {
+		// A tool span that cannot fit its budget must NOT survive as a
+		// truncated fragment — atomic units are whole-fit-or-drop.
+		const materializer = new ContextMaterializer();
+		const view = materializer.materialize({
+			tokenBudget: 100,
+			candidates: [
+				candidate({ id: "atomic", tokens: 1000, content: "z".repeat(4000), truncatable: false }),
+				candidate({ id: "cuttable", tokens: 1000, content: "y".repeat(4000), truncatable: true }),
+			],
+		});
+		expect(view.items.find(i => i.id === "atomic")).toBeUndefined();
+		const cut = view.items.find(i => i.id === "cuttable");
+		expect(cut).toBeDefined();
+		expect(cut!.content!.length).toBeLessThan(4000);
+		expect(cut!.tokens).toBe(estimateTokens(cut!.content ?? ""));
+	});
+
 	test("objective and instructions are real inputs, not inert fields (audit regression)", () => {
 		const materializer = new ContextMaterializer();
 		const view = materializer.materialize({

@@ -223,6 +223,12 @@ export interface AgentSessionConfig {
 	obfuscator?: SecretObfuscator;
 	/** Inherited eval executor session id from a parent agent. */
 	parentEvalSessionId?: string;
+	/**
+	 * Constitutional kernel authority id (paste-6 P0 #1): subagents inherit
+	 * the ROOT session's value so the whole actor tree shares one KernelHost
+	 * + capability tree; absent on the root.
+	 */
+	kernelSessionId?: string;
 	/** Logical owner for retained eval kernels created by this session. */
 	evalKernelOwnerId?: string;
 	/** Async job manager owned and disposed by this session. */

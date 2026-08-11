@@ -10,7 +10,7 @@ import path from "node:path";
 import type { Capability } from "@oh-my-pi/pi-kernel";
 import { $env, prompt, Snowflake } from "@oh-my-pi/pi-utils";
 import { resolveAgentModelPatterns, resolveAgentModelSource, resolveExplicitModelRole } from "../config/model-resolver";
-import { kernelHostFor } from "../eval/kernel-bridge";
+import { deriveCapabilitiesFromTools, kernelHostFor } from "../eval/kernel-bridge";
 import type { LocalProtocolOptions } from "../internal-urls";
 import { registerArtifactsDir } from "../internal-urls/registry-helpers";
 import { MCPManager } from "../mcp/manager";
@@ -195,6 +195,56 @@ function resolveSchema(request: StructuredSubagentRequest, agent: AgentDefinitio
 	}
 	return { schema: undefined, source: "none", mode, outputSchemaOverridesAgent: false };
 }
+
+/**
+ * Resolve the child's EFFECTIVE tool names for capability planning (paste-6
+ * P0 #2). `tools: undefined` in an agent's frontmatter means "the normal
+ * default tool surface" in OMP semantics — NOT an empty set. When the agent
+ * declares no tools, the default surface is the standard builtin set, so the
+ * generic task worker is not granted zero capabilities. Plan mode further
+ * restricts to the plan-mode surface.
+ */
+function resolveChildToolNames(policy: EffectiveSubagentPolicy): readonly string[] {
+	if (policy.planMode) {
+		return [...PLAN_MODE_TOOLS, ...(policy.effectiveAgent.tools ?? []).filter(tool => tool === "ast_grep")];
+	}
+	return policy.effectiveAgent.tools && policy.effectiveAgent.tools.length > 0
+		? policy.effectiveAgent.tools
+		: DEFAULT_CHILD_TOOL_NAMES;
+}
+
+/** Default child tool surface (the standard builtins, sans hidden/vibe extras). */
+const DEFAULT_CHILD_TOOL_NAMES: readonly string[] = [
+	"read",
+	"bash",
+	"edit",
+	"ast_grep",
+	"ast_edit",
+	"ask",
+	"debug",
+	"eval",
+	"github",
+	"glob",
+	"grep",
+	"lsp",
+	"inspect_image",
+	"browser",
+	"computer",
+	"checkpoint",
+	"rewind",
+	"security_scan",
+	"task",
+	"hub",
+	"todo",
+	"web_search",
+	"write",
+	"memory_edit",
+	"retain",
+	"recall",
+	"reflect",
+	"learn",
+	"manage_skill",
+];
 
 function createPlanModeAgent(agent: AgentDefinition): AgentDefinition {
 	const tools = [...PLAN_MODE_TOOLS, ...(agent.tools ?? []).filter(tool => tool === "ast_grep")];
@@ -453,6 +503,7 @@ function buildExecutorOptions(
 		parentMnemopiSessionState: session.getMnemopiSessionState?.(),
 		parentTelemetry: session.getTelemetry?.(),
 		parentEvalSessionId: request.shareEvalSession === false ? undefined : (session.getEvalSessionId?.() ?? undefined),
+		parentKernelSessionId: session.getKernelSessionId?.() ?? session.getSessionId?.() ?? undefined,
 		parentAgentId: session.getAgentId?.() ?? MAIN_AGENT_ID,
 		parentServiceTier: session.getServiceTierByFamily ? (session.getServiceTierByFamily() ?? null) : undefined,
 	};
@@ -576,12 +627,17 @@ export async function runStructuredSubagent(request: StructuredSubagentRequest):
 			const parentAgentId = request.session.getAgentId?.() ?? null;
 			const host = await kernelHostFor(request.session);
 			host.capabilities.setParent(id, parentAgentId ?? undefined);
-			// Least-privilege bootstrap (paste-4 P0 #4): C_child = requested ∩
-			// parent-upper-bound. The child starts with ZERO direct authority
-			// and receives exactly the requested capabilities its parent can
-			// cover — never the parent's whole set. This is what makes the
-			// EffectBroker gate usable: governed operations have real grants.
-			host.capabilities.deriveChildCapabilities(id, request.requestedCapabilities ?? []);
+			// Least-privilege bootstrap (paste-4 P0 #4, paste-5 P0): C_child =
+			// requested ∩ parent-upper-bound. The child starts with ZERO direct
+			// authority and receives exactly the capabilities it needs for its
+			// tool set (derived from the effective agent's tools when the
+			// caller didn't specify an explicit request) — never the parent's
+			// whole set. This is what makes the EffectBroker gate usable:
+			// governed operations have real grants.
+			const requested =
+				request.requestedCapabilities ??
+				deriveCapabilitiesFromTools(resolveChildToolNames(policy), request.session.cwd);
+			host.capabilities.deriveChildCapabilities(id, requested);
 			host.events.append(
 				{ kind: "agent.spawned", actorId: id, parentId: parentAgentId ?? undefined, semantics: "spawn" },
 				{ sessionId: request.session.getSessionId?.() ?? "default" },
