@@ -253,6 +253,15 @@ Every feature we built now has real-model or mechanism evidence: effect gate ✅
 - FinanceClaw failures-as-events: gate fail-closes to a block result, never throws upward (verified in `#beforeToolCall` catch path).
 - PrimeAgent/pi RLM programmatic surface: `__kernel__` namespaces now documented in eval.md so the model knows it exists.
 
+## Dead-code batch (dead-code-001, 48052173b)
+
+Three control-plane gaps closed — every built feature now has a PRODUCTION caller, not just a mechanism:
+- **Gateway daemon**: `connectSessionToGateway` had zero production callers. Session gate hook now attaches the live runtime (session id + model) to the control plane when `OMP_KERNEL_GATEWAY_PROJECT_DIR` is set (same opt-in flag as the daemon); best-effort, missing broker never affects the turn.
+- **Trusted-verdict ledger**: `recordEvaluation` had no caller. New `__kernel__.harness.recordEvaluation` bridge op (same gate as promote — the candidate cannot self-certify), `harness.evaluated` event kind, operator-scoped `harness.recordEvaluation` gateway method on `KernelHost` (idempotent on the daemon-shared gateway), and metaharness `recordExperimentVerdict` mapping the optimizer's recommendation to the ledger. Verified end-to-end: propose → gateway verdict → promote applies → head advances.
+- **Skill promotion evidence gate**: `manage_skill`/`learn` writes became live instantly (the write was the promotion — the audit smell). Wired but OFF by default (`OMP_KERNEL_SKILL_PROMOTION_GATE=1`): writes land in `staging/` (invisible to discovery), only a `promote: true` write moves a skill live, `skill.promoted` fires only for live skills, staging/active added to the symlink trust boundary. Kept off until the sandbox→replay→heldout pipeline connects (paste-9 directive).
+
+**Regression:** kernel 172, coding-agent affected suites 434, metaharness 62, repo `check:ts` 18/18. Cost: $0 (no model runs).
+
 
 
 
