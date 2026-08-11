@@ -26,8 +26,23 @@ Worst-seed success is the honest metric (a good mean can hide a collapsed seed):
 - Short edit tasks barely exercise the Context VM's spillover (few messages per session); long-horizon benchmarking is the untested half.
 - Cost: ~$0.20 total across all 8 runs (deepseek-v4-flash at $0.07/1M in).
 
+## Paired task-level analysis (3 seeds, free — already-collected data)
+
+| Task | A fails | B fails | C fails | D fails |
+|---|---|---|---|---|
+| structural-remove-case-label-002 | 1 seed | 0 | 0 | 0 |
+| structural-wrap-redundant-if-010 | 1 seed | 1 seed | 0 | 0 |
+| multi-composite-multi-edit-006 | 0 | 1 seed | 0 | 0 |
+| structural-move-distant-block-006 | 0 | 1 seed | 0 | 0 |
+
+- Context-VM-only (B) did NOT fix baseline's failures and introduced 2 new single-seed ones — on short tasks context pressure never matters, so B ≈ noise. Consistent with the audit's read: B passed its non-regression test, nothing more.
+- Gate arms (C, D) fixed EVERY baseline failure on all seeds, and tool composition shifted: C edit attempts 1.76/task vs A 2.05 (−14%), D reads 1.80 vs A 2.27 (−21%). No tool was denied on the happy path (read/edit/write all baseline-covered), so this looks like fewer wasteful re-reads/re-edits — the audit's "capability structure as implicit behavior regularizer" hypothesis — not blocked actions.
+
+## Cost (reconciled after audit flag)
+
+Earlier "$0.20 for 8 runs" undercounted. Actual: **352 task-runs, 9,682,674 input tokens → $0.75 (1x) / $1.50 (2x listed)** across 8 CLI invocations (4 single-run + 4 three-seed). See `benchmark_ledger.md` for the per-invocation table.
+
 ## Decision support
 
-- **Enable the effect gate by default? No yet** — correctness is fine (100% here), but the token delta needs the full sample. It's safe to dogfood on (no regression, zero workspace pollution after the fix).
-- **Context governance**: keep flag-gated; no short-task regression observed, long-horizon benefit untested.
-- Next: full-sample single arm (A vs C on 106 tasks, 1 seed) to firm up the token/success delta.
+- **Effect gate: HOLD (promising signal).** No regression, zero seed failures, token/tool-call deltas consistent with behavior regularization — but 22 tasks is too small to claim causality. Do NOT promote to default yet; the audit explicitly says don't grow this benchmark — the next regime is long-horizon context stress (3–5 rich tasks, A vs B only), which is also far cheaper than a 636-run full-sample sweep.
+- **Context governance: HOLD.** Short-task non-regression confirmed; benefit untested by design.
