@@ -762,7 +762,21 @@ export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any
 	/** Short one-line summary used for tool discovery indexes. */
 	summary?: string;
 	/**
-	 * Concurrency mode for tool scheduling when multiple calls are in one turn.
+	/**
+	 * Replay safety for crash recovery (durable effect sandwich slice 2): may
+	 * this tool be re-executed after a crash that left its result unpersisted?
+	 * - `"safe"` — pure/idempotent (read, grep, glob, search): re-running after
+	 *   a crash is harmless and recovers the result.
+	 * - `"never"` — side-effecting (write, edit, bash, task, …): re-running can
+	 *   DUPLICATE the effect. Default when absent. After a crash, an unsettled
+	 *   `"never"` tool is surfaced as an explicit interrupted result, never
+	 *   auto-re-run.
+	 *
+	 * Bias hard toward `"never"`: a wrong `"never"` loses a result (recoverable),
+	 * a wrong `"safe"` duplicates an effect (unrecoverable).
+	 */
+	replay?: "safe" | "never";
+	/** Concurrency mode for tool scheduling when multiple calls are in one turn.
 	 * - "shared": can run alongside other shared tools (default)
 	 * - "exclusive": runs alone; other tools wait until it finishes
 	 * - function: resolved per call from the (raw, pre-validation) arguments

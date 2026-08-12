@@ -104,6 +104,7 @@ interface GlobTarget {
 
 export class GlobTool implements AgentTool<typeof findSchema, GlobToolDetails> {
 	readonly name = "glob";
+	readonly replay = "safe" as const;
 	readonly approval = "read" as const;
 	readonly loadMode = "essential";
 	readonly label = "Glob";

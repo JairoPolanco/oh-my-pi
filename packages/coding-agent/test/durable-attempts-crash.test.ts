@@ -10,7 +10,11 @@ import { AuthStorage } from "@oh-my-pi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@oh-my-pi/pi-coding-agent/session/session-manager";
 import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
 import { getActiveProfile, getConfigRootDir, setProfile } from "@oh-my-pi/pi-utils/dirs";
-import { DURABLE_ATTEMPT_CUSTOM_TYPE, reconcileDurableAttempts } from "../src/session/durable-attempts";
+import {
+	DURABLE_ATTEMPT_CUSTOM_TYPE,
+	reconcileDurableAttempts,
+	reconcileToolEffects,
+} from "../src/session/durable-attempts";
 
 const tempDirs: string[] = [];
 let sharedModelRegistry: ModelRegistry;
@@ -123,6 +127,92 @@ describe("durable effect sandwich — crash window (integration)", () => {
 			expect(reconciliation.settledByRecord).toHaveLength(1);
 			expect(reconciliation.interrupted).toHaveLength(0);
 			expect(reconciliation.maxAttemptNumber).toBe(3);
+		} finally {
+			await session.dispose();
+		}
+	});
+
+	it("surfaces a crash-interrupted replay:never tool to the model on restore", async () => {
+		// A tool STARTED executing (side effect may have happened) but crashed
+		// before its result persisted. On restore, the dangling toolCall must
+		// NOT silently vanish: an explicit interrupted result tells the model
+		// the outcome is unknown and the effect must not be blindly re-run.
+		const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), `pi-durable-tool-crash-${Snowflake.next()}-`));
+		tempDirs.push(tempDir);
+		const cwd = path.join(tempDir, "project");
+		const agentDir = path.join(tempDir, "agent");
+		fs.mkdirSync(cwd, { recursive: true });
+		fs.mkdirSync(agentDir, { recursive: true });
+
+		const crashedManager = SessionManager.create(cwd, path.join(agentDir, "sessions"));
+		// The assistant message emitted a toolCall to `write` (replay: never)…
+		crashedManager.appendMessage({
+			role: "assistant",
+			provider: "anthropic",
+			model: "mock",
+			api: "anthropic-messages",
+			content: [{ type: "toolCall", id: "tool-write-1", name: "write", arguments: { path: "x.txt" } }],
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "toolUse",
+			timestamp: Date.now(),
+		} as unknown as Parameters<SessionManager["appendMessage"]>[0]);
+		// …and the tool intent was recorded, but the process died before the
+		// result persisted (no toolResult message, no settled record).
+		crashedManager.appendCustomEntry(DURABLE_ATTEMPT_CUSTOM_TYPE, {
+			kind: "tool",
+			toolCallId: "tool-write-1",
+			toolName: "write",
+			replay: "never",
+			resultEntryId: "tool-result-1",
+			startedAt: Date.now(),
+			status: "in_flight",
+		});
+		const sessionFile = crashedManager.getSessionFile()!;
+		await crashedManager.ensureOnDisk();
+
+		const restoredManager = SessionManager.create(cwd, path.join(agentDir, "sessions"));
+		await restoredManager.setSessionFile(sessionFile);
+
+		const { session } = await createAgentSession({
+			cwd,
+			agentDir,
+			modelRegistry: sharedModelRegistry,
+			settings: Settings.isolated(),
+			sessionManager: restoredManager,
+			disableExtensionDiscovery: true,
+			skills: [],
+			contextFiles: [],
+			promptTemplates: [],
+			slashCommands: [],
+			enableMCP: false,
+			enableLsp: false,
+		});
+
+		try {
+			const branch = restoredManager.getBranch();
+			// The interrupted result was appended so the model sees the outcome
+			// is unknown (never silently stripped).
+			const interrupted = branch.filter(
+				(entry): entry is Extract<typeof entry, { type: "message" }> =>
+					entry.type === "message" &&
+					entry.message.role === "toolResult" &&
+					(entry.message.details as { __synthetic?: boolean } | undefined)?.__synthetic === true &&
+					(entry.message.details as { source?: string } | undefined)?.source === "tool_interrupted",
+			);
+			expect(interrupted).toHaveLength(1);
+			expect((interrupted[0]!.message as { toolCallId: string }).toolCallId).toBe("tool-write-1");
+
+			// The effect is classified interrupted, never rerunnable.
+			const effects = reconcileToolEffects(branch);
+			expect(effects.interrupted).toHaveLength(1);
+			expect(effects.rerunnable).toHaveLength(0);
 		} finally {
 			await session.dispose();
 		}

@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import type { Usage } from "@oh-my-pi/pi-ai";
 import {
 	type DurableAttemptRecord,
+	type DurableToolRecord,
 	type DurableUsageRecord,
 	reconcileDurableAttempts,
+	reconcileToolEffects,
 } from "../src/session/durable-attempts";
 import type { CustomEntry, SessionEntry } from "../src/session/session-entries";
 
@@ -172,5 +174,119 @@ describe("reconcileDurableAttempts", () => {
 		expect(result.usageToFold).toHaveLength(0);
 		expect(result.interrupted).toHaveLength(0);
 		expect(result.maxAttemptNumber).toBe(0);
+	});
+});
+
+function toolEntry(tool: DurableToolRecord): SessionEntry {
+	return {
+		type: "custom",
+		customType: "kernel_attempt",
+		data: tool,
+		id: `t-${tool.toolCallId}`,
+		parentId: null,
+		timestamp: "t",
+	} as CustomEntry<DurableToolRecord>;
+}
+
+function tool(over: Partial<DurableToolRecord> = {}): DurableToolRecord {
+	return {
+		kind: "tool",
+		toolCallId: "call-1",
+		toolName: "write",
+		replay: "never",
+		resultEntryId: "res-1",
+		startedAt: 1000,
+		status: "in_flight",
+		...over,
+	};
+}
+
+function toolResultEntry(id: string, toolCallId: string): SessionEntry {
+	return {
+		type: "message",
+		id,
+		parentId: null,
+		timestamp: "t",
+		message: {
+			role: "toolResult",
+			toolCallId,
+			toolName: "write",
+			content: [{ type: "text", text: "ok" }],
+			isError: false,
+		},
+	} as unknown as SessionEntry;
+}
+
+describe("reconcileToolEffects (durable effect sandwich slice 2)", () => {
+	test("started-but-unsettled replay:never tool is interrupted (never auto-re-run)", () => {
+		// Crash after tool.execute started but before the result persisted: the
+		// side effect may have happened — the effect is interrupted, never
+		// rerunnable.
+		const entries: SessionEntry[] = [toolEntry(tool())];
+		const result = reconcileToolEffects(entries);
+
+		expect(result.interrupted).toHaveLength(1);
+		expect(result.rerunnable).toHaveLength(0);
+		expect(result.settled).toHaveLength(0);
+	});
+
+	test("started-but-unsettled replay:safe tool is rerunnable (result recoverable)", () => {
+		// A pure read (read/grep/glob) that crashed before its result persisted
+		// can be safely re-executed to recover the result.
+		const entries: SessionEntry[] = [toolEntry(tool({ replay: "safe", toolName: "read" }))];
+		const result = reconcileToolEffects(entries);
+
+		expect(result.rerunnable).toHaveLength(1);
+		expect(result.interrupted).toHaveLength(0);
+	});
+
+	test("settled tool (result message present) is never rerunnable or interrupted", () => {
+		// The result message persisted under the pre-provisioned entry id — the
+		// tool completed; no double-execution signal on restore.
+		const entries: SessionEntry[] = [toolEntry(tool()), toolResultEntry("res-1", "call-1")];
+		const result = reconcileToolEffects(entries);
+
+		expect(result.settled).toHaveLength(1);
+		expect(result.rerunnable).toHaveLength(0);
+		expect(result.interrupted).toHaveLength(0);
+	});
+
+	test("settled tool with a DIFFERENT result id than provisioned is still unsettled (correlation integrity)", () => {
+		// The result entry must match the pre-provisioned id; a mismatched entry
+		// means the crash window — the record is the authority.
+		const entries: SessionEntry[] = [
+			toolEntry(tool({ resultEntryId: "res-1" })),
+			toolResultEntry("other-id", "call-1"),
+		];
+		const result = reconcileToolEffects(entries);
+
+		expect(result.interrupted).toHaveLength(1);
+		expect(result.settled).toHaveLength(0);
+	});
+
+	test("multiple tools reconcile independently", () => {
+		const entries: SessionEntry[] = [
+			toolEntry(tool({ toolCallId: "c1", replay: "safe", resultEntryId: "r1" })),
+			toolEntry(tool({ toolCallId: "c2", replay: "never", resultEntryId: "r2" })),
+			toolEntry(tool({ toolCallId: "c3", replay: "never", resultEntryId: "r3" })),
+			toolResultEntry("r3", "c3"),
+		];
+		const result = reconcileToolEffects(entries);
+
+		expect(result.rerunnable.map(t => t.toolCallId)).toEqual(["c1"]);
+		expect(result.interrupted.map(t => t.toolCallId)).toEqual(["c2"]);
+		expect(result.settled.map(t => t.toolCallId)).toEqual(["c3"]);
+	});
+
+	test("empty and non-tool entries reconcile to nothing", () => {
+		expect(reconcileToolEffects([]).interrupted).toHaveLength(0);
+		expect(reconcileToolEffects([]).rerunnable).toHaveLength(0);
+		const entries: SessionEntry[] = [
+			{ type: "custom", customType: "other", id: "x", parentId: null, timestamp: "t" },
+			messageEntry("m1"),
+		];
+		const result = reconcileToolEffects(entries);
+		expect(result.interrupted).toHaveLength(0);
+		expect(result.settled).toHaveLength(0);
 	});
 });

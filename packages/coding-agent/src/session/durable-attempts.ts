@@ -51,7 +51,7 @@ export interface DurableUsageRecord {
 	usage: Usage;
 }
 
-export type DurableAttemptData = DurableAttemptRecord | DurableUsageRecord;
+export type DurableAttemptData = DurableAttemptRecord | DurableUsageRecord | DurableToolRecord;
 
 /** Result of reconciling a session's durable attempt entries on restore. */
 export interface DurableAttemptReconciliation {
@@ -108,9 +108,10 @@ export function reconcileDurableAttempts(entries: readonly SessionEntry[]): Dura
 		if (data.kind === "attempt") {
 			attempts.set(data.attemptId, data);
 			if (data.attemptNumber > maxAttemptNumber) maxAttemptNumber = data.attemptNumber;
-		} else {
+		} else if (data.kind === "usage") {
 			usageByResponse.set(data.responseEntryId, data);
 		}
+		// kind === "tool" records are reconciled by reconcileToolEffects.
 	}
 
 	const usageToFold: Usage[] = [];
@@ -135,6 +136,75 @@ export function reconcileDurableAttempts(entries: readonly SessionEntry[]): Dura
 	}
 
 	return { usageToFold, maxAttemptNumber, interrupted, settledByMessage, settledByRecord };
+}
+
+// ============================================================================
+// Tool-effect durability (durable effect sandwich slice 2)
+// ============================================================================
+
+/**
+ * A tool that STARTED executing but whose result never persisted. The record
+ * is written BEFORE `tool.execute` fires, so a crash mid-execution leaves a
+ * durable trail: restore knows the side effect may have happened and must not
+ * blindly re-run a `replay: "never"` tool.
+ */
+export interface DurableToolRecord {
+	kind: "tool";
+	/** The toolCall id from the assistant message that requested the call. */
+	toolCallId: string;
+	toolName: string;
+	/** Crash-replay policy resolved from the tool's `replay` declaration; absent = "never". */
+	replay: "safe" | "never";
+	/** Pre-provisioned entry id the toolResult message will use. */
+	resultEntryId: string;
+	startedAt: number;
+	status: "in_flight";
+}
+
+/** Result of reconciling a session's durable tool records on restore. */
+export interface ToolEffectReconciliation {
+	/**
+	 * Started-but-unsettled `replay: "safe"` tools — safe to re-execute to
+	 * recover the result. The restore path may re-issue these.
+	 */
+	rerunnable: DurableToolRecord[];
+	/**
+	 * Started-but-unsettled `replay: "never"` tools — the side effect may have
+	 * happened; NEVER auto-re-run. The restore path must surface an explicit
+	 * interrupted result so the model knows the outcome is unknown.
+	 */
+	interrupted: DurableToolRecord[];
+	/** Tools whose result message is durable — no action. */
+	settled: DurableToolRecord[];
+}
+
+/**
+ * Pure reconciliation over the session's durable tool records. A record is
+ * settled when a message entry with its pre-provisioned result id exists on
+ * the branch; otherwise the tool started but its result never persisted.
+ */
+export function reconcileToolEffects(entries: readonly SessionEntry[]): ToolEffectReconciliation {
+	const ids = entryIds(entries);
+	const tools: DurableToolRecord[] = [];
+	for (const entry of entries) {
+		if (!isDurableAttemptEntry(entry) || entry.data === undefined) continue;
+		const data = entry.data;
+		if (data.kind === "tool") tools.push(data);
+	}
+
+	const rerunnable: DurableToolRecord[] = [];
+	const interrupted: DurableToolRecord[] = [];
+	const settled: DurableToolRecord[] = [];
+	for (const tool of tools) {
+		if (ids.has(tool.resultEntryId)) {
+			settled.push(tool);
+		} else if (tool.replay === "safe") {
+			rerunnable.push(tool);
+		} else {
+			interrupted.push(tool);
+		}
+	}
+	return { rerunnable, interrupted, settled };
 }
 
 /** True when the response entry is a durable message (not just a pre-provisioned id). */

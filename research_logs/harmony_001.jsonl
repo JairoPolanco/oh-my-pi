@@ -5,11 +5,11 @@
   {
    "arm": "B_harmony",
    "timedOut": false,
-   "modelCalls": 12,
-   "toolCalls": 12,
-   "tokens": 169250,
-   "wallMs": 46942,
-   "cost": 0.005487710000000001,
+   "modelCalls": 9,
+   "toolCalls": 9,
+   "tokens": 125556,
+   "wallMs": 40702,
+   "cost": 0.00492571,
    "pass": true,
    "steps": {
     "1": true,
@@ -25,9 +25,6 @@
    "toolsUsed": [
     "read",
     "read",
-    "eval",
-    "eval",
-    "eval",
     "eval",
     "eval",
     "eval",

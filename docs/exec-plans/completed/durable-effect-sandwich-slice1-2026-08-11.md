@@ -87,4 +87,22 @@ Measured (2026-08-11, this branch, main @ `9c37a955a`):
 
 ## Completion Summary
 
-(To be filled on completion: what changed / evidence of improvement / remaining risk / follow-up debt.)
+**Status: slice 1 COMPLETE (2026-08-11).**
+
+**What changed:**
+- New `packages/coding-agent/src/session/durable-attempts.ts`: the attempt/usage record types (`kernel_attempt` CustomEntry — non-LLM-context, extension-scoped) and the PURE reconciliation function. Reconciliation classifies each in_flight attempt as settled-by-record (usage record present → fold its usage ONLY when the response message is absent), settled-by-message (message present → message-attached usage covers billing, nothing folds), or interrupted (neither → no invented usage).
+- `agent-session.ts`: pre-provision hook on `addBeforeModelCallHook` writes the in_flight attempt (with a pre-provisioned response entry id + durable attempt number) before EVERY provider request; `#appendSessionMessage` consumes the pending attempt — the response message is appended under the pre-provisioned id, then the usage record is appended at settlement; the message_end assistant block clears pending as the definitive settlement fallback (covers persist-skipped messages so a retry gets its own record). Constructor reconciles the loaded branch: folds reconstructed usage into the session manager totals and seeds the retry counter.
+- `session-manager.ts`: `appendMessage(message, { entryId })` optional pre-provisioned id; `foldReconciledUsage` → index fold.
+- `turn-recovery.ts`: `seedDurableAttemptCount(maxDurableAttempt)` — seeds `#retryAttempt = max(0, maxDurableAttempt - 1)` so the retry cap applies identically post-crash.
+
+**Evidence:**
+- 10 regression tests (3 files): 8 pure-reconciliation invariants (usage-never-lost, no-double-bill, settled-by-message, interrupted-no-invented-usage, max-attempt seed, multi-record fold, empty, non-attempt-ignored); 1 crash-window integration (real session: records written to disk, abandoned, successor session restores → usage folded + reconciliation classifies correctly); 1 live-wiring (real Agent + mock stream: prompt fires pre-provision, message settles under the pre-provisioned id, usage record correlates exactly, reconcile sees settled-by-record with zero fold).
+- Full regression: check:ts 18/18, kernel 181, agent 484, coding-agent session 145 + touched suites.
+- Cost-neutrality: harmony probe B arm gpt-5.6-luna max AFTER change = 12 calls / 169k / $0.0055 / 7/7 vs BEFORE = 13 calls / 190k / $0.0064 / 7/7 — within noise, no measurable overhead (trajectory-tap parity).
+
+**Remaining risk / follow-up debt (moved to next slices, NOT part of this plan's scope):**
+- Tool-effect durability (`tool_started` intent records, `replay: safe` declarations) — slice 2.
+- Lanes + bounded restore + deterministic drive mode — slice 3.
+- Provider stream resumption — explicitly a non-goal (harness-v2.md:39).
+- The microsecond response-receipt→usage-append window remains the accepted "unknown provider effect" (identical to pi).
+- `packages.zip` (46MB) at repo root: untracked, not ours, awaiting user decision.

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { Agent } from "@oh-my-pi/pi-agent-core";
+import { Agent, type AgentTool } from "@oh-my-pi/pi-agent-core";
 import { createMockModel } from "@oh-my-pi/pi-ai/providers/mock";
 import { getBundledModel } from "@oh-my-pi/pi-catalog/models";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
@@ -15,8 +15,10 @@ import { removeSyncWithRetries, Snowflake } from "@oh-my-pi/pi-utils";
 import {
 	DURABLE_ATTEMPT_CUSTOM_TYPE,
 	type DurableAttemptRecord,
+	type DurableToolRecord,
 	type DurableUsageRecord,
 	reconcileDurableAttempts,
+	reconcileToolEffects,
 } from "../src/session/durable-attempts";
 
 let tempDir: string;
@@ -91,6 +93,65 @@ describe("durable effect sandwich — pre-provision + settle wiring", () => {
 		expect(reconciliation.settledByRecord).toHaveLength(1);
 		expect(reconciliation.settledByMessage).toHaveLength(0);
 		expect(reconciliation.usageToFold).toHaveLength(0);
+		expect(reconciliation.interrupted).toHaveLength(0);
+	});
+
+	it("pre-provisions a tool intent before execute and settles it under the result id", async () => {
+		const model = getBundledModel("anthropic", "claude-sonnet-4-5")!;
+		// The model emits ONE toolCall to "read" (a replay-safe pure read), then
+		// a final text turn after the result.
+		const mock = createMockModel({
+			responses: [
+				{ content: [{ type: "toolCall", name: "read", arguments: { path: "a.txt" } }] },
+				{ content: ["done reading"] },
+			],
+		});
+		const readTool: AgentTool<any> = {
+			name: "read",
+			label: "Read",
+			description: "Read a file",
+			replay: "safe",
+			parameters: { type: "object", properties: { path: { type: "string" } } },
+			execute: async () => ({ content: [{ type: "text", text: "file contents" }] }),
+		};
+		const agent = new Agent({
+			getApiKey: () => "test-key",
+			initialState: { model, systemPrompt: ["Test"], tools: [readTool] },
+			convertToLlm,
+			streamFn: mock.stream,
+		});
+		authStorage = await AuthStorage.create(path.join(tempDir, "auth.db"));
+		authStorage.setRuntimeApiKey("anthropic", "test-key");
+		const manager = SessionManager.inMemory();
+
+		session = new AgentSession({
+			agent,
+			sessionManager: manager,
+			settings: Settings.isolated(),
+			modelRegistry: new ModelRegistry(authStorage),
+		});
+
+		await session.prompt("read a.txt");
+
+		const branch = manager.getBranch();
+		const records = branch
+			.filter(
+				(entry): entry is Extract<typeof entry, { type: "custom" }> =>
+					entry.type === "custom" && entry.customType === DURABLE_ATTEMPT_CUSTOM_TYPE,
+			)
+			.map(entry => entry.data) as Array<DurableAttemptRecord | DurableUsageRecord | DurableToolRecord>;
+
+		// A tool intent was pre-provisioned with the read tool's replay safety.
+		const toolRecords = records.filter((record): record is DurableToolRecord => record.kind === "tool");
+		expect(toolRecords).toHaveLength(1);
+		expect(toolRecords[0]!.toolName).toBe("read");
+		expect(toolRecords[0]!.replay).toBe("safe");
+
+		// The result message settled under the pre-provisioned result id — the
+		// tool is classified settled (never rerunnable/interrupted).
+		const reconciliation = reconcileToolEffects(branch);
+		expect(reconciliation.settled).toHaveLength(1);
+		expect(reconciliation.rerunnable).toHaveLength(0);
 		expect(reconciliation.interrupted).toHaveLength(0);
 	});
 });

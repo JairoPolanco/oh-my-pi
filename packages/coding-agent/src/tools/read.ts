@@ -388,6 +388,7 @@ type ReadParams = ReadToolInput;
  */
 export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 	readonly name = "read";
+	readonly replay = "safe" as const;
 	readonly approval = (args: unknown): ToolTier =>
 		pathTargetsSsh(String((args as { path?: unknown }).path ?? "")) ? "exec" : "read";
 	readonly label = "Read";

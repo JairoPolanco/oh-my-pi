@@ -268,7 +268,13 @@ import {
 	shouldPromptCodexAutoRedeem,
 } from "./codex-auto-reset";
 import { recordCredentialPin, seedCredentialPins } from "./credential-pin";
-import { DURABLE_ATTEMPT_CUSTOM_TYPE, type DurableAttemptRecord, reconcileDurableAttempts } from "./durable-attempts";
+import {
+	DURABLE_ATTEMPT_CUSTOM_TYPE,
+	type DurableAttemptRecord,
+	type DurableToolRecord,
+	reconcileDurableAttempts,
+	reconcileToolEffects,
+} from "./durable-attempts";
 import { EvalRunner, type EvalRunnerHost } from "./eval-runner";
 import {
 	collectPendingToolCalls,
@@ -581,6 +587,10 @@ export class AgentSession {
 	#detachDurableAttemptBeforeModelCall: (() => void) | undefined;
 	/** In-flight durable attempt awaiting its response's settlement (see durable-attempts.ts). */
 	#pendingDurableAttempt: DurableAttemptRecord | undefined;
+	/** Pending tool intents keyed by toolCallId awaiting their result's settlement (slice 2). */
+	#pendingToolEffects = new Map<string, DurableToolRecord>();
+	/** Restore-classified rerunnable tool effects (replay-safe, result recoverable). */
+	#rerunnableToolEffects: DurableToolRecord[] = [];
 
 	#transformContext: (messages: AgentMessage[], signal?: AbortSignal) => AgentMessage[] | Promise<AgentMessage[]>;
 	#onPayload: SimpleStreamOptions["onPayload"] | undefined;
@@ -1075,11 +1085,15 @@ export class AgentSession {
 			withBashBranchTransition: operation => this.#bash.withBranchTransition(operation),
 		};
 		this.#recovery = new TurnRecovery(recoveryHost, { initialRetryFallback: config.initialRetryFallback });
-		// Durable effect sandwich slice 1: reconcile pre-provisioned attempt
-		// records left by a crashed process. Folds usage records whose response
+		// Durable effect sandwich slices 1+2: reconcile pre-provisioned records
+		// left by a crashed process. Slice 1 folds usage records whose response
 		// message is absent (crash between usage-append and message-persist) and
-		// seeds the retry counter so a mid-saga crash does not reset the budget.
-		// Best-effort: reconciliation failure must never block session start.
+		// seeds the retry counter. Slice 2 classifies started-but-unsettled tool
+		// effects: replay-safe tools are rerunnable (result recoverable), and
+		// replay-never tools are surfaced as explicit interrupted results so the
+		// model learns the side effect may have happened instead of the call
+		// silently vanishing. Best-effort: reconciliation failure must never
+		// block session start.
 		try {
 			const branch = this.sessionManager.getBranch();
 			const reconciliation = reconcileDurableAttempts(branch);
@@ -1087,6 +1101,9 @@ export class AgentSession {
 				this.sessionManager.foldReconciledUsage(usage);
 			}
 			this.#recovery.seedDurableAttemptCount(reconciliation.maxAttemptNumber);
+			const toolEffects = reconcileToolEffects(branch);
+			this.#restoreInterruptedToolEffects(toolEffects.interrupted);
+			this.#rerunnableToolEffects = toolEffects.rerunnable;
 		} catch (error) {
 			logger.warn("durable attempt reconciliation failed (best-effort)", { error: String(error) });
 		}
@@ -2300,6 +2317,74 @@ export class AgentSession {
 		}
 	}
 
+	/**
+	 * Pre-provision a durable tool-effect record BEFORE the tool executes
+	 * (durable effect sandwich slice 2). The record names the toolCall, its
+	 * crash-replay policy, and the result entry id settlement will use — so a
+	 * crash mid-execution leaves a durable trail: restore knows the side
+	 * effect may have happened and must not blindly re-run a `replay: "never"`
+	 * tool. Best-effort — a persistence failure must never block the tool.
+	 */
+	#preProvisionToolEffect(ctx: BeforeToolCallContext): void {
+		try {
+			const resultEntryId = crypto.randomUUID().slice(-8);
+			const record: DurableToolRecord = {
+				kind: "tool",
+				toolCallId: ctx.toolCall.id,
+				toolName: ctx.tool.name,
+				replay: ctx.tool.replay === "safe" ? "safe" : "never",
+				resultEntryId,
+				startedAt: Date.now(),
+				status: "in_flight",
+			};
+			this.sessionManager.appendCustomEntry(DURABLE_ATTEMPT_CUSTOM_TYPE, record);
+			this.#pendingToolEffects.set(ctx.toolCall.id, record);
+		} catch (error) {
+			logger.warn("durable tool-effect pre-provision failed (best-effort)", { error: String(error) });
+		}
+	}
+
+	/**
+	 * Surface a crash-interrupted tool effect to the model (durable effect
+	 * sandwich slice 2). The tool STARTED (side effect may have happened) but
+	 * its result never persisted; `replay: "never"` means we must not re-run
+	 * it. Without this, the dangling toolCall would be silently stripped from
+	 * context (session-context.ts) and the model would never learn the effect
+	 * happened — orphaned work. The synthetic result carries
+	 * `executed: false` + `source: "tool_interrupted"` so the retry lookback
+	 * treats it like the existing synthetic results (never re-run mid-batch).
+	 */
+	#restoreInterruptedToolEffects(interrupted: DurableToolRecord[]): void {
+		if (interrupted.length === 0) return;
+		for (const record of interrupted) {
+			try {
+				const message: ToolResultMessage = {
+					role: "toolResult",
+					toolCallId: record.toolCallId,
+					toolName: record.toolName,
+					content: [
+						{
+							type: "text",
+							text: `Tool execution was interrupted by a crash before its result could be saved. The tool ${record.toolName} may have partially executed — do NOT blindly re-run it; inspect current state (files, processes) before deciding what to do.`,
+						},
+					],
+					details: {
+						__synthetic: true,
+						source: "tool_interrupted",
+						executed: false,
+						toolName: record.toolName,
+						startedAt: record.startedAt,
+					},
+					isError: true,
+					timestamp: record.startedAt,
+				};
+				this.#appendSessionMessage(message);
+			} catch (error) {
+				logger.warn("interrupted tool-effect restore failed (best-effort)", { error: String(error) });
+			}
+		}
+	}
+
 	#appendSessionMessage(
 		message:
 			| Message
@@ -2311,20 +2396,30 @@ export class AgentSession {
 	): string {
 		const cache = this.#persistedMessageKeys;
 		const wasFresh = cache !== undefined && cache.anchor === this.#persistedMessageKeysAnchor();
-		// Durable effect sandwich slice 1: the pre-provisioned attempt's response
-		// entry id is used when THIS message is the response — so restore can
-		// correlate the durable message to its attempt (and fold its usage if the
-		// usage record never landed). Cleared after consumption; a non-response
-		// message leaves the pending attempt untouched for the real response.
-		const pending = this.#pendingDurableAttempt;
+		// Durable effect sandwich slice 2: a toolResult settles its pre-provisioned
+		// tool-effect record — the result message appends under the record's
+		// result entry id, so restore correlates the durable result to the intent
+		// and never classifies a completed tool as interrupted/rerunnable.
+		const maybeToolResult = message as unknown as { toolCallId?: unknown };
+		const pendingTool =
+			typeof maybeToolResult.toolCallId === "string"
+				? this.#pendingToolEffects.get(maybeToolResult.toolCallId)
+				: undefined;
 		const entryId = this.sessionManager.appendMessage(
 			message,
-			message.role === "assistant" && pending ? { entryId: pending.responseEntryId } : undefined,
+			message.role === "assistant" && this.#pendingDurableAttempt
+				? { entryId: this.#pendingDurableAttempt.responseEntryId }
+				: pendingTool
+					? { entryId: pendingTool.resultEntryId }
+					: undefined,
 		);
 		if (message.role === "assistant") {
 			(message as PersistedAssistantMessage)[kPersistedSessionEntryId] = entryId;
 		}
-		if (message.role === "assistant" && pending) {
+		if (pendingTool) {
+			this.#pendingToolEffects.delete(maybeToolResult.toolCallId as string);
+		}
+		if (message.role === "assistant" && this.#pendingDurableAttempt) {
 			// The response settled: record its usage durably (the usage record is
 			// the recovery authority when the message's own usage is later pruned
 			// or the message entry is absent after a crash). Only fold it on
@@ -2334,7 +2429,7 @@ export class AgentSession {
 				try {
 					this.sessionManager.appendCustomEntry(DURABLE_ATTEMPT_CUSTOM_TYPE, {
 						kind: "usage",
-						attemptId: pending.attemptId,
+						attemptId: this.#pendingDurableAttempt.attemptId,
 						responseEntryId: entryId,
 						usage,
 					});
@@ -3336,6 +3431,13 @@ export class AgentSession {
 	 * execution still emit there).
 	 */
 	async #beforeToolCall(ctx: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> {
+		// Durable effect sandwich slice 2: record tool INTENT before execution.
+		// A crash mid-`tool.execute` leaves the side effect durable but the
+		// result unpersisted; the record tells restore whether re-execution is
+		// safe (replay: "safe" pure reads) or must surface as interrupted
+		// (replay: "never" side-effecting — never auto-re-run). Best-effort:
+		// a persistence failure must never block the tool.
+		this.#preProvisionToolEffect(ctx);
 		// Kernel EffectBroker interposition (audit #7, blueprint §7/§75): when
 		// the gate is on, EVERY tool effect traverses the kernel broker before
 		// OMP's own approval machinery. Default deny — the actor's capabilities
