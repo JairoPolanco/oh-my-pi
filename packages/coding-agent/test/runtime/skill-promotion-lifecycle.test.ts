@@ -86,7 +86,7 @@ describe("SkillPromotionLifecycle", () => {
 		// settings each probe session receives.
 		const probeSettings: unknown[] = [];
 		vi.spyOn(sdkModule, "createAgentSession").mockImplementation(async options => {
-			probeSettings.push(options.settings);
+			probeSettings.push(options?.settings);
 			return {
 				session: fakeReplaySession("I completed the task using good-skill guidance."),
 				modelFallbackMessage: undefined,
