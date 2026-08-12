@@ -11,7 +11,7 @@
 
 import type { ActorId } from "../actors";
 import type { ArtifactRef } from "../artifacts";
-import type { ContextView } from "../context";
+import type { ContextView, EvictedSpan } from "../context";
 import type { SessionId } from "../sessions";
 import type { VerificationReport } from "../verification";
 import type { TaskId } from "../workflow";
@@ -186,6 +186,14 @@ export interface ContextMaterialized {
 	view: ContextView;
 }
 
+/** The context engine evicted spans on a hard-budget pass (round-2 F3). */
+export interface ContextEvicted {
+	kind: "context.evicted";
+	spans: EvictedSpan[];
+	budget: number;
+	usedTokens: number;
+}
+
 /** Union of all harness events (blueprint §6). */
 export type HarnessEvent =
 	| SessionStarted
@@ -206,4 +214,5 @@ export type HarnessEvent =
 	| SkillPromoted
 	| HarnessExperiment
 	| HarnessEvaluated
-	| ContextMaterialized;
+	| ContextMaterialized
+	| ContextEvicted;

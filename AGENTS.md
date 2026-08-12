@@ -268,6 +268,14 @@ Test the contract the system exposes — not the easiest internal detail to asse
 - Don't add tests for tiny low-risk changes unless they protect a real contract or fix a regression-prone edge case.
 - Prefer focused package-local verification for the changed area.
 
+### Verification commands (read before running a full suite)
+
+- **Typecheck + lint (TS):** `bun run check:ts` (biome `check` + workspace typechecks). This is the fast gate for a changed package.
+- **Aggregate `bun check` caveat:** `bun check` also runs `check:rs`; the Rust leg can fail environmentally (e.g. `audiopus_sys` native build → exit 101) even when no TS code changed. A red aggregate is NOT proof of a TS regression — run `bun run check:ts` to isolate.
+- **Fix lanes:** `bun run fix:ts` (biome `check --write --unsafe --changed`) and `bun run fmt:ts` (format). Run these when `check:ts` reports formatting/lint violations; biome output itself suggests the `--write` lane. CAUTION: the `--unsafe` fixes are not scoped reliably — observed biome deleting an unused-private-member field declaration in an unrelated file during a fix run. After `fix:ts`, review `git diff` for collateral changes before continuing.
+- **Full test suites:** `bun run test` (alias `bun run ci:test:ts`) runs `scripts/ci-test-ts.ts` — the ONLY sanctioned full-suite execution model. It partitions tests into global-state buckets and chunks them; per-bucket variants exist (`ci:test:coding-agent:heavy`, `ci:test:coding-agent:singleton`, `ci:test:coding-agent:ui`, `ci:test:coding-agent:runtime`, `ci:test:coding-agent:native`, `ci:test:ts:workspace`). Plain `bun test <package>` is NOT the CI model: whole-package parallel runs hit pre-existing cross-file races (kernel-SQLite `SQLITE_IOERR_VNODE`, settings/managed-skills singleton collisions) and can report ~90 flaky failures that reproduce on a clean base. If you need a full-suite signal, use the buckets and compare failure sets against the base commit.
+- **Smoke:** `bun run ci:test:smoke` (binary/worker wiring probe).
+
 ## Changelog
 
 Location: `packages/*/CHANGELOG.md` (per package).

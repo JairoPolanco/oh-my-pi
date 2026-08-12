@@ -23,6 +23,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
 	type Capability,
+	CONTEXT_EVICTED_EVENT_KIND,
 	type CompletionContract,
 	ContextMaterializer,
 	type ContextRequest,
@@ -418,7 +419,22 @@ export interface BridgeOpSchema {
 	returns: string;
 }
 
-const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
+export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
+	"bridge.ops": {
+		name: "bridge.ops",
+		returns: "op name[] (derived from the dispatch table)",
+		args: {},
+	},
+	"bridge.schema": {
+		name: "bridge.schema",
+		returns: "BridgeOpSchema",
+		args: { name: { kind: "string", required: true, description: "Op name, e.g. contract.verify" } },
+	},
+	"capabilities.effective": {
+		name: "capabilities.effective",
+		returns: "capability id:scope[]",
+		args: { actor: { kind: "string", required: false, description: "Actor id (defaults to session principal)" } },
+	},
 	"ctx.materialize": {
 		name: "ctx.materialize",
 		returns: "ContextView (token-budgeted selection over candidates)",
@@ -427,6 +443,40 @@ const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 			objective: { kind: "string", required: false, description: "Selection objective" },
 			candidates: { kind: "object[]", required: false, description: "Candidate handles to materialize" },
 		},
+	},
+	"actors.abort": {
+		name: "actors.abort",
+		returns: "{ aborted }",
+		args: { id: { kind: "string", required: true, description: "Actor id to abort" } },
+	},
+	"actors.list": {
+		name: "actors.list",
+		returns: "visible actor refs",
+		args: {},
+	},
+	"actors.park": {
+		name: "actors.park",
+		returns: "{ parked }",
+		args: { id: { kind: "string", required: true, description: "Actor id to park" } },
+	},
+	"actors.revive": {
+		name: "actors.revive",
+		returns: "{ revived, live }",
+		args: { id: { kind: "string", required: true, description: "Actor id to revive" } },
+	},
+	"actors.send": {
+		name: "actors.send",
+		returns: "delivery receipt with messageId",
+		args: {
+			to: { kind: "string", required: true, description: "Recipient actor id" },
+			kind: { kind: "string", required: true, description: "Message kind" },
+			payload: { kind: "any", required: false, description: "Message payload" },
+		},
+	},
+	"actors.status": {
+		name: "actors.status",
+		returns: "ActorStatus",
+		args: { id: { kind: "string", required: false, description: "Actor id (defaults to session principal)" } },
 	},
 	"artifacts.put": {
 		name: "artifacts.put",
@@ -473,6 +523,11 @@ const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 		returns: "DurableTask[]",
 		args: { state: { kind: "string", required: false, description: "Filter by state" } },
 	},
+	"tasks.ready": {
+		name: "tasks.ready",
+		returns: "DurableTask[] (ready subset)",
+		args: {},
+	},
 	"events.query": {
 		name: "events.query",
 		returns: "recent kernel events",
@@ -502,6 +557,64 @@ const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 			query: { kind: "string", required: false, description: "Search query" },
 			scope: { kind: "string", required: false, description: "project|session|global" },
 		},
+	},
+	"memory.reject": {
+		name: "memory.reject",
+		returns: "{ rejected }",
+		args: { id: { kind: "string", required: true, description: "Proposed fact id" } },
+	},
+	"memory.stale": {
+		name: "memory.stale",
+		returns: "{ stale }",
+		args: { id: { kind: "string", required: true, description: "Proposed fact id" } },
+	},
+	"policy.authorize": {
+		name: "policy.authorize",
+		returns: "{ allow, reason? }",
+		args: {
+			id: { kind: "string", required: true, description: "Capability id" },
+			effect: { kind: "string", required: true, description: "read|write|execute|network|secret|spawn" },
+			resource: { kind: "string", required: true, description: "Resource to authorize" },
+			actor: { kind: "string", required: false, description: "Actor id (defaults to session principal)" },
+			host: { kind: "string", required: false, description: "Optional resource host" },
+			size: { kind: "number", required: false, description: "Optional resource size" },
+		},
+	},
+	"routing.record": {
+		name: "routing.record",
+		returns: "{ recorded }",
+		args: {
+			model: { kind: "string", required: true, description: "Model id" },
+			contextTokens: { kind: "number", required: false, description: "Request context tokens" },
+			outputTokens: { kind: "number", required: false, description: "Response output tokens" },
+			latencyMs: { kind: "number", required: false, description: "Response latency" },
+		},
+	},
+	"routing.register": {
+		name: "routing.register",
+		returns: "{ registered }",
+		args: {
+			role: { kind: "string", required: true, description: "Routing role" },
+			provider: { kind: "string", required: true, description: "Provider id" },
+			model: { kind: "string", required: true, description: "Model id" },
+		},
+	},
+	"routing.resolve": {
+		name: "routing.resolve",
+		returns: "routing decision",
+		args: {
+			role: { kind: "string", required: true, description: "Routing role" },
+			taskComplexity: { kind: "number", required: false, description: "0-1 task complexity" },
+			uncertainty: { kind: "number", required: false, description: "0-1 uncertainty" },
+			expectedToolCount: { kind: "number", required: false, description: "Expected tool calls" },
+			requiredContext: { kind: "number", required: false, description: "Required context tokens" },
+			risk: { kind: "number", required: false, description: "0-1 risk" },
+		},
+	},
+	"routing.stats": {
+		name: "routing.stats",
+		returns: "per-model stats + contract pass rate",
+		args: {},
 	},
 	"contract.create": {
 		name: "contract.create",
@@ -557,7 +670,7 @@ const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 		name: "harness.recordEvaluation",
 		returns: "version",
 		args: {
-			version: { kind: "string", required: true, description: "Hypothesis version" },
+			version: { kind: "number", required: true, description: "Hypothesis version" },
 			decision: { kind: "string", required: true, description: "promote|reject" },
 			reason: { kind: "string", required: false, description: "Evaluation rationale" },
 		},
@@ -565,7 +678,7 @@ const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 	"harness.promote": {
 		name: "harness.promote",
 		returns: "version",
-		args: { version: { kind: "string", required: true, description: "Hypothesis version (trusted verdict only)" } },
+		args: { version: { kind: "number", required: true, description: "Hypothesis version (trusted verdict only)" } },
 	},
 	"harness.versions": {
 		name: "harness.versions",
@@ -584,9 +697,10 @@ const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 	},
 };
 
-/** All bridge op names (for `bridge.ops()`). */
+/** All bridge op names (for `bridge.ops()`). DERIVED from the dispatch
+ * table — the inventory can never drift from the handlers (round-2 F2). */
 export function listBridgeOps(): string[] {
-	return Object.keys(BRIDGE_OP_SCHEMAS).sort();
+	return Object.keys(BRIDGE_HANDLERS).sort();
 }
 
 /** The arg schema for one bridge op (for `bridge.schema({op})`). */
@@ -599,707 +713,739 @@ export function bridgeOpSchema(op: string): BridgeOpSchema | undefined {
  * surfaces: context materialization, content-addressed artifacts, durable
  * tasks, and the event log.
  */
+type BridgeHandler = (args: KernelBridgeArgs, options: KernelBridgeOptions, host: KernelHost, actor: string) => unknown;
+
+/**
+ * Dispatch table for kernel bridge ops — the SINGLE source of truth for the
+ * op inventory (recursive audit round-2 F2): `listBridgeOps()` derives from
+ * these keys, so the schema table and the dispatch can never silently drift
+ * (the schema table used to list 19 ops while the switch handled 36). Add a
+ * new op by adding a handler HERE + a matching entry in
+ * {@link BRIDGE_OP_SCHEMAS}; the completeness test pins the two in sync.
+ */
+const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
+	// Introspection (dogfooding finding #2): argument shapes are
+	// discoverable, not guesswork.
+	"bridge.ops": async (_args, _options, _host, _actor) => {
+		return listBridgeOps();
+	},
+	"bridge.schema": async (args, _options, _host, _actor) => {
+		const name = requireArg(args, "name");
+		if (typeof name !== "string") throw new Error("__kernel__.bridge.schema requires string 'name'");
+		const schema = bridgeOpSchema(name);
+		if (!schema) {
+			throw new Error(
+				`__kernel__.bridge.schema: no schema for '${name}' (available: ${listBridgeOps().join(", ")})`,
+			);
+		}
+		return schema;
+	},
+	"ctx.materialize": async (args, options, host, _actor) => {
+		// Conservative Context VM (blueprint §11): candidates in, token-budgeted
+		// view out. Callers pass handles (artifact refs) rather than copies.
+		const request: ContextRequest = {
+			tokenBudget: typeof args.tokenBudget === "number" ? args.tokenBudget : 32_000,
+			objective: typeof args.objective === "string" ? args.objective : undefined,
+			candidates: Array.isArray(args.candidates) ? (args.candidates as ContextRequest["candidates"]) : [],
+		};
+		const view = await CONTEXT_ENGINE.materialize(request, {
+			// Round-2 F3: hard-budget eviction is an observable event — the
+			// agent that referenced a span can query events.query for
+			// `context.evicted` instead of detecting loss by noticing absence.
+			onEvict: (evicted, evictedView) => {
+				host.events.append(
+					{
+						kind: CONTEXT_EVICTED_EVENT_KIND,
+						spans: evicted,
+						budget: evictedView.budget,
+						usedTokens: evictedView.usedTokens,
+					},
+					{ sessionId: options.session.getSessionId?.() ?? "default" },
+				);
+			},
+		});
+		host.events.append(
+			{ kind: "context.materialized", view },
+			{ sessionId: options.session.getSessionId?.() ?? "default" },
+		);
+		return view;
+	},
+	"artifacts.put": async (args, options, host, actor) => {
+		requireCapability(host, actor, "artifact.write", "write", "artifacts");
+		const text = requireArg(args, "text");
+		if (typeof text !== "string") throw new Error("__kernel__.artifacts.put requires string 'text'");
+		const record = await host.artifacts.putText(text, {
+			kind: typeof args.kind === "string" ? args.kind : undefined,
+		});
+		// Mirror into the session's artifact manager (one artifact system,
+		// §19, audit #10): the session alias is a hardlink to THIS canonical
+		// blob — one physical copy, visible through OMP's artifact surface
+		// (artifact:// URLs, session listing) under a sequential id.
+		const sessionArtifactId = await mirrorSessionArtifact(options.session, host, record);
+		return { id: record.id, bytes: record.bytes, sessionArtifactId };
+	},
+	"artifacts.read": async (args, options, host, actor) => {
+		requireCapability(host, actor, "artifact.read", "read", "artifacts");
+		const id = requireArg(args, "id");
+		if (typeof id !== "string") throw new Error("__kernel__.artifacts.read requires string 'id'");
+		const text = await host.artifacts.readText(id);
+		if (text === null) {
+			// Fall back to the session's own artifacts (tool outputs spilled
+			// by OMP, and mirrored RLM artifacts) so both systems read the
+			// same store.
+			const sessionText = await readSessionArtifact(options.session, id);
+			if (sessionText === null) throw new Error(`artifact not found: ${id}`);
+			return { id, text: sessionText };
+		}
+		return { id, text };
+	},
+	"artifacts.has": async (args, options, host, actor) => {
+		requireCapability(host, actor, "artifact.read", "read", "artifacts");
+		const id = requireArg(args, "id");
+		if (typeof id !== "string") throw new Error("__kernel__.artifacts.has requires string 'id'");
+		if (await host.artifacts.has(id)) return true;
+		return (await readSessionArtifact(options.session, id)) !== null;
+	},
+	"tasks.create": async (args, options, host, actor) => {
+		requireCapability(host, actor, "task.write", "write", "board");
+		const id = requireArg(args, "id");
+		const objective = requireArg(args, "objective");
+		if (typeof id !== "string" || typeof objective !== "string") {
+			throw new Error("__kernel__.tasks.create requires string 'id' and string 'objective'");
+		}
+		const dependencies = Array.isArray(args.dependencies) ? (args.dependencies as string[]) : [];
+		const task = await host.tasks.create({
+			id,
+			objective,
+			dependencies,
+			assignee: typeof args.assignee === "string" ? args.assignee : undefined,
+		});
+		host.events.append(
+			{ kind: "task.state", taskId: task.id, from: "triage", to: task.state },
+			{ sessionId: options.session.getSessionId?.() ?? "default" },
+		);
+		return task;
+	},
+	"tasks.transition": async (args, _options, host, actor) => {
+		requireCapability(host, actor, "task.write", "write", "board");
+		const id = requireArg(args, "id") as TaskId;
+		const to = requireArg(args, "to");
+		if (!TASK_STATES.includes(to as TaskState)) {
+			throw new Error(
+				`__kernel__.tasks.transition: invalid state '${to}', expected one of ${TASK_STATES.join(", ")}`,
+			);
+		}
+		const before = await host.tasks.get(id);
+		if (!before) throw new Error(`task not found: ${id}`);
+		// The actor is the nominal worker: fenced writes (pi quality) let the
+		// durable-holder path reject stale writers. Model-driven transitions
+		// on unclaimed tasks are unrestricted (no lease held).
+		const task = await host.tasks.transition(id, to as TaskState, undefined, actor);
+		host.events.append({ kind: "task.state", taskId: id, from: before.state, to: task.state });
+		return task;
+	},
+	"tasks.list": async (args, _options, host, actor) => {
+		requireCapability(host, actor, "task.read", "read", "board");
+		const state =
+			typeof args.state === "string" && TASK_STATES.includes(args.state as TaskState)
+				? (args.state as TaskState)
+				: undefined;
+		const tasks = await host.tasks.list(state);
+		return tasks.map(task => ({
+			id: task.id,
+			objective: task.objective,
+			state: task.state,
+			dependencies: task.dependencies,
+			attempts: task.attempts.length,
+			assignee: task.assignee ?? null,
+		}));
+	},
+	"tasks.ready": async (_args, _options, host, actor) => {
+		requireCapability(host, actor, "task.read", "read", "board");
+		const tasks = await host.tasks.ready();
+		return tasks.map(task => ({ id: task.id, objective: task.objective }));
+	},
+	"events.query": async (args, _options, host, actor) => {
+		requireCapability(host, actor, "event.read", "read", "events");
+		const kind = typeof args.kind === "string" ? args.kind : undefined;
+		const limit = typeof args.limit === "number" ? args.limit : 50;
+		const events = kind ? host.events.query(e => e.payload.kind === kind) : [...host.events.all];
+		return events.slice(-limit).map(e => ({
+			id: e.id,
+			kind: e.payload.kind,
+			timestamp: e.timestamp,
+			sessionId: e.sessionId,
+			// Full payload (round-2 F3): `context.evicted` events carry
+			// the dropped spans — the agent must be able to read them.
+			payload: e.payload,
+		}));
+	},
+	"actors.status": async (args, options, host, actor) => {
+		requireCapability(host, actor, "agent.read", "read", "roster");
+		// Parent-visible liveness (blueprint §29): project the registry's
+		// live refs onto the kernel ActorStatus shape.
+		const registry = options.session.agentRegistry ?? AgentRegistry.global();
+		const actorId = typeof args.id === "string" ? args.id : (options.session.getAgentId?.() ?? null);
+		if (!actorId) throw new Error("__kernel__.actors.status requires 'id'");
+		const ref = registry.get(actorId);
+		if (!ref) throw new Error(`actor not found: ${actorId}`);
+		return actorStatusFromRef(ref);
+	},
+	"actors.list": async (_args, options, host, actor) => {
+		requireCapability(host, actor, "agent.read", "read", "roster");
+		const registry = options.session.agentRegistry ?? AgentRegistry.global();
+		return registry
+			.listVisibleTo(options.session.getAgentId?.() ?? MAIN_AGENT_ID)
+			.map(ref => ({ id: ref.id, displayName: ref.displayName, ...actorStatusFromRef(ref) }));
+	},
+	"actors.send": async (args, options, host, actor) => {
+		requireCapability(host, actor, "agent.message", "spawn", "actor");
+		const to = requireArg(args, "to");
+		const kind = requireArg(args, "kind");
+		if (typeof to !== "string" || typeof kind !== "string") {
+			throw new Error("__kernel__.actors.send requires string 'to' and string 'kind'");
+		}
+		// The transport sender is the SESSION's identity — never caller-
+		// supplied (audit: the JSON body's from/to must not be forgeable).
+		// The recipient may be any live peer; the sender is bound here.
+		const from = options.session.getAgentId?.() ?? "eval";
+		const message = makeAgentMessage(from, to, kind, args.payload);
+		const receipt = await IrcBus.global().send({
+			from: message.from,
+			to: message.to,
+			body: encodeAgentMessage(message),
+		});
+		host.events.append(
+			{ kind: "agent.message", from: message.from, to: message.to, text: `[${kind}]` },
+			{ sessionId: options.session.getSessionId?.() ?? "default" },
+		);
+		return { ...receipt, messageId: message.id };
+	},
+	"actors.park": async (args, options, host, actor) => {
+		requireCapability(host, actor, "agent.kill", "execute", "actor");
+		// Persistent actor lifecycle (§32): park = intentionally suspend but
+		// keep the ref + session file for later revival. Uses OMP's lifecycle
+		// manager — do NOT replace it.
+		const actorId = requireArg(args, "id");
+		if (typeof actorId !== "string") throw new Error("__kernel__.actors.park requires string 'id'");
+		const lifecycle = options.session.agentLifecycle?.() ?? AgentLifecycleManager.global();
+		await lifecycle.park(actorId);
+		return { parked: actorId };
+	},
+	"actors.revive": async (args, options, host, actor) => {
+		requireCapability(host, actor, "agent.kill", "execute", "actor");
+		const actorId = requireArg(args, "id");
+		if (typeof actorId !== "string") throw new Error("__kernel__.actors.revive requires string 'id'");
+		const lifecycle = options.session.agentLifecycle?.() ?? AgentLifecycleManager.global();
+		const session = await lifecycle.ensureLive(actorId);
+		return { revived: actorId, live: session !== undefined };
+	},
+	"actors.abort": async (args, options, host, actor) => {
+		requireCapability(host, actor, "agent.kill", "execute", "actor");
+		const actorId = requireArg(args, "id");
+		if (typeof actorId !== "string") throw new Error("__kernel__.actors.abort requires string 'id'");
+		const registry = options.session.agentRegistry ?? AgentRegistry.global();
+		const ref = registry.get(actorId);
+		if (!ref) throw new Error(`actor not found: ${actorId}`);
+		await ref.session?.abort();
+		registry.setStatus(actorId, "aborted");
+		return { aborted: actorId };
+	},
+	// NOTE: no `capabilities.grant` bridge op. The model may inspect
+	// (`capabilities.effective`) and ask (`policy.authorize`), but the
+	// trusted host owns capability creation — grants happen only in the
+	// spawn derivation path (structured-subagent), where the host computes
+	// child = requested ∩ parent. A model-facing grant primitive would let
+	// an actor mint permissions outside monotonicity.
+	"capabilities.effective": async (args, options, host, _actor) => {
+		const targetActor = typeof args.actor === "string" ? args.actor : (options.session.getAgentId?.() ?? "eval");
+		return host.capabilities.effective(targetActor).map(cap => `${cap.id}:${cap.scope}`);
+	},
+	"memory.propose": async (args, options, host, actor) => {
+		requireCapability(host, actor, "memory.write", "write", "facts");
+		const fact = requireArg(args, "fact");
+		if (typeof fact !== "string") throw new Error("__kernel__.memory.propose requires string 'fact'");
+		// Prefer the session's live memory backend (mnemopi) so RLM and
+		// OMP's own recall/learn/retain see the SAME facts (§19: no
+		// split-brain). Falls back to the kernel in-memory backend.
+		const live = sessionLiveMemory(options.session);
+		if (live) {
+			const id = live.remember(fact, typeof args.confidence === "number" ? args.confidence : 0.8);
+			if (id) {
+				memoryOwner(options.session).set(id, "mnemopi");
+				host.events.append(
+					{
+						kind: "memory.proposed",
+						factId: id,
+						text: fact,
+						scope: args.scope === "user" || args.scope === "global" ? args.scope : "project",
+					},
+					{ sessionId: options.session.getSessionId?.() ?? "default" },
+				);
+				return { id, state: "committed", backend: "mnemopi" };
+			}
+		}
+		const proposed = await host.memory.propose({
+			fact,
+			confidence: typeof args.confidence === "number" ? args.confidence : 0.8,
+			scope: args.scope === "user" || args.scope === "global" ? args.scope : "project",
+			evidence: [],
+			observedAt: Date.now(),
+			expires: typeof args.expires === "number" ? args.expires : null,
+			decay: typeof args.decay === "string" ? (args.decay as never) : "architecture",
+		});
+		memoryOwner(options.session).set(proposed.id, "kernel");
+		host.events.append(
+			{ kind: "memory.proposed", factId: proposed.id, text: proposed.fact, scope: proposed.scope },
+			{ sessionId: options.session.getSessionId?.() ?? "default" },
+		);
+		return { id: proposed.id, state: proposed.state };
+	},
+	"memory.commit": async (args, options, host, actor) => {
+		requireCapability(host, actor, "memory.write", "write", "facts");
+		const id = requireArg(args, "id");
+		if (typeof id !== "string") throw new Error("__kernel__.memory.commit requires string 'id'");
+		// Lifecycle routes to the OWNING backend (paste-4 P1). A mnemopi
+		// fact was committed at propose time (mnemopi has no staged
+		// lifecycle) — commit is an idempotent success there, never a
+		// kernel-store call for a fact the kernel never saw.
+		if (memoryOwner(options.session).get(id) === "mnemopi") {
+			return { committed: id, backend: "mnemopi" };
+		}
+		await host.memory.commit(id);
+		host.events.append({ kind: "memory.committed", factId: id });
+		return { committed: id };
+	},
+	"memory.reject": async (args, options, host, actor) => {
+		requireCapability(host, actor, "memory.write", "write", "facts");
+		const id = requireArg(args, "id");
+		if (typeof id !== "string") throw new Error("__kernel__.memory.reject requires string 'id'");
+		// Mnemopi has no staged lifecycle to reject — surfacing that is
+		// honest, silently touching the kernel store for a foreign id is not.
+		if (memoryOwner(options.session).get(id) === "mnemopi") {
+			throw new Error(`memory.reject unsupported: fact ${id} lives in mnemopi, which has no staged lifecycle`);
+		}
+		await host.memory.reject(id);
+		return { rejected: id };
+	},
+	"memory.stale": async (args, options, host, actor) => {
+		requireCapability(host, actor, "memory.write", "write", "facts");
+		const id = requireArg(args, "id");
+		if (typeof id !== "string") throw new Error("__kernel__.memory.stale requires string 'id'");
+		if (memoryOwner(options.session).get(id) === "mnemopi") {
+			throw new Error(`memory.stale unsupported: fact ${id} lives in mnemopi, which has no staged lifecycle`);
+		}
+		await host.memory.markStale(id);
+		return { stale: id };
+	},
+	"memory.recall": async (args, options, host, actor) => {
+		requireCapability(host, actor, "memory.read", "read", "facts");
+		// Prefer the session's live memory backend so RLM recall sees the
+		// same facts as OMP's own recall/learn (§19).
+		const live = sessionLiveMemory(options.session);
+		if (live) {
+			const results = await live.recall(typeof args.query === "string" ? args.query : "");
+			return results.map(item => ({
+				id: item.id,
+				fact: item.content,
+				confidence: 1,
+				scope: "project",
+				observedAt: item.timestamp ? Date.parse(item.timestamp) : Date.now(),
+				state: "committed",
+			}));
+		}
+		const results = await host.memory.recall({
+			scope: args.scope === "user" || args.scope === "global" ? args.scope : undefined,
+			similarity: typeof args.similarity === "number" ? args.similarity : undefined,
+		});
+		return results.map(fact => ({
+			id: fact.id,
+			fact: fact.fact,
+			confidence: fact.confidence,
+			scope: fact.scope,
+			observedAt: fact.observedAt,
+			state: fact.state,
+		}));
+	},
+	"contract.create": async (args, _options, host, actor) => {
+		requireCapability(host, actor, "contract.write", "write", "contracts");
+		// Phase 8 (§40, §76): register a completion contract for later
+		// verification. Checks run against the session cwd; required evidence
+		// is matched against artifacts the caller provides at verify time.
+		const id = requireArg(args, "id");
+		if (typeof id !== "string") throw new Error("__kernel__.contract.create requires string 'id'");
+		const objective = requireArg(args, "objective");
+		if (typeof objective !== "string") throw new Error("__kernel__.contract.create requires string 'objective'");
+		const checks = Array.isArray(args.checks) ? (args.checks as never[]) : [];
+		const requiredEvidence = Array.isArray(args.requiredEvidence) ? (args.requiredEvidence as never[]) : [];
+		// Shape validation (dogfooding finding: a bare string check slipped
+		// through and crashed verify with `r.pass` on undefined). Each check
+		// must be an object with a KNOWN kind — reject early with a clear
+		// error instead of failing later in the engine.
+		const CHECK_KINDS = new Set(["command", "fileExists", "fileAbsent", "pattern", "json"]);
+		for (const check of checks) {
+			if (check === null || typeof check !== "object") {
+				throw new Error(
+					`__kernel__.contract.create: check must be an object { kind, ... }, got ${JSON.stringify(check)}`,
+				);
+			}
+			const kind = (check as { kind?: unknown }).kind;
+			if (typeof kind !== "string" || !CHECK_KINDS.has(kind)) {
+				throw new Error(
+					`__kernel__.contract.create: unknown check kind ${JSON.stringify(kind)} (expected one of ${[...CHECK_KINDS].join(", ")})`,
+				);
+			}
+			// Command checks must carry an array command (dogfooding finding):
+			// a string slipped through kind-only validation and crashed the
+			// verifier host at `command.join(" ")` (host.ts:144) instead of
+			// refusing cleanly. Reject the malformed shape here.
+			if (kind === "command" && !Array.isArray((check as { command?: unknown }).command)) {
+				throw new Error(
+					'__kernel__.contract.create: command check requires a string[] \'command\' (e.g. ["bun", "test", ...])',
+				);
+			}
+		}
+		const contractRecord: CompletionContract = {
+			id,
+			objective,
+			requirements: Array.isArray(args.requirements) ? (args.requirements as string[]) : [],
+			claims: [],
+			checks,
+			requiredEvidence,
+			verificationLevel: (typeof args.verificationLevel === "number" &&
+			args.verificationLevel >= 0 &&
+			args.verificationLevel <= 4
+				? args.verificationLevel
+				: 1) as CompletionContract["verificationLevel"],
+		};
+		await host.contracts.put(contractRecord);
+		return { id, checks: checks.length, evidence: requiredEvidence.length };
+	},
+	"contract.verify": async (args, options, host, actor) => {
+		requireCapability(host, actor, "contract.read", "read", "contracts");
+		// Evidence-first verification (§43): the report leads with artifacts,
+		// not the worker's prose.
+		const id = requireArg(args, "id");
+		if (typeof id !== "string") throw new Error("__kernel__.contract.verify requires string 'id'");
+		const contract = await host.contracts.get(id);
+		if (!contract) throw new Error(`contract not found: ${id}`);
+		const artifacts = Array.isArray(args.evidence)
+			? (args.evidence as { id: string; kind?: string }[]).map(a => ({
+					id: a.id,
+					kind: a.kind,
+				}))
+			: [];
+		// Verify AS the calling actor — passed immutably per invocation so
+		// command checks authorize against THIS caller's effective
+		// capabilities (default deny without a process.exec grant), never a
+		// mutable host field another concurrent verification could race.
+		const report = await host.verifier.verify(contract, {
+			cwd: options.session.cwd,
+			root: options.session.cwd,
+			actor: options.session.getAgentId?.() ?? "eval",
+			artifacts,
+		});
+		// V3/V4 (§41, audit #17, paste-4 P1): the CONTRACT's verification
+		// level determines verification — the caller cannot opt out of the
+		// independent reviewer a level-3+ contract mandates (a caller
+		// preference must never downgrade the contract). `reviewerModel`
+		// remains a caller affordance for §42's independent-model-family
+		// requirement; `review: false` is ignored for level ≥3.
+		if (report.pass && contract.verificationLevel >= 3) {
+			// Lazy import: the reviewer pulls in the task/structured-subagent
+			// graph, which re-enters tools/index — importing at module top
+			// level would cycle (tools/learn → kernel-bridge → reviewer).
+			const { runContractReviewer } = await import("../runtime/contract-reviewer");
+			const review = await runContractReviewer(options.session, contract, {
+				reviewerModel: typeof args.reviewerModel === "string" ? args.reviewerModel : undefined,
+				signal: options.signal,
+			});
+			if (review) {
+				report.review = review;
+				report.pass = review.pass;
+			} else {
+				// A level-3+ contract whose independent review could not run
+				// is NOT verified — no verdict means failure, not a silent
+				// downgrade to deterministic-only (paste-4 P1).
+				report.pass = false;
+				report.review = {
+					reviewerModel: "unavailable",
+					pass: false,
+					note: "independent reviewer could not run",
+				};
+			}
+		}
+		host.events.append(
+			{ kind: "verification.completed", report },
+			{ sessionId: options.session.getSessionId?.() ?? "default" },
+		);
+		return report;
+	},
+	"routing.resolve": async (args, options, host, actor) => {
+		requireCapability(host, actor, "routing.read", "read", "routing");
+		// Phase 9 (§45–47): rule-based routing. The registry stays
+		// interpretable; learned statistics replace it later.
+		const role = requireArg(args, "role");
+		if (typeof role !== "string") throw new Error("__kernel__.routing.resolve requires string 'role'");
+		const features = {
+			taskComplexity: typeof args.taskComplexity === "number" ? args.taskComplexity : 0.5,
+			uncertainty: typeof args.uncertainty === "number" ? args.uncertainty : 0.5,
+			expectedToolCount: typeof args.expectedToolCount === "number" ? args.expectedToolCount : 3,
+			requiredContext: typeof args.requiredContext === "number" ? args.requiredContext : 8_000,
+			risk: typeof args.risk === "number" ? args.risk : 0.3,
+		};
+		// One model/execution backend (§19): when the session has a live
+		// configured model, route through it — the RLM plans against the
+		// model OMP is ACTUALLY running, not a parallel kernel-only table.
+		// The kernel role registry stays the fallback for bare eval
+		// sessions that expose no configured model.
+		const live = sessionLiveModel(options.session);
+		if (live) return host.models.resolveWith(live.provider, live.model, features);
+		return host.models.resolve(role as never, features);
+	},
+	"routing.register": async (args, _options, host, actor) => {
+		requireCapability(host, actor, "routing.write", "write", "routing");
+		const role = requireArg(args, "role");
+		const provider = requireArg(args, "provider");
+		const model = requireArg(args, "model");
+		if (typeof role !== "string" || typeof provider !== "string" || typeof model !== "string") {
+			throw new Error("__kernel__.routing.register requires string 'role', 'provider', 'model'");
+		}
+		host.models.register(role as never, provider, model);
+		return { registered: `${role} → ${provider}/${model}` };
+	},
+	"routing.stats": async (_args, _options, host, actor) => {
+		requireCapability(host, actor, "routing.read", "read", "routing");
+		// §46 statistics from the event log: per-model call volume, tokens,
+		// latency, plus overall contract pass rate. Rule-based start; the
+		// learned bandit replaces the resolver later, not the accounting.
+		const requests = host.events.query(e => e.payload.kind === "model.request");
+		const responses = host.events.query(e => e.payload.kind === "model.response");
+		const byModel = new Map<
+			string,
+			{ calls: number; inputTokens: number; outputTokens: number; latencyMs: number }
+		>();
+		for (const env of requests) {
+			const payload = env.payload as { model: string; contextTokens: number };
+			const stats = byModel.get(payload.model) ?? { calls: 0, inputTokens: 0, outputTokens: 0, latencyMs: 0 };
+			stats.calls += 1;
+			stats.inputTokens += payload.contextTokens;
+			byModel.set(payload.model, stats);
+		}
+		for (const env of responses) {
+			const payload = env.payload as { model: string; outputTokens: number; latencyMs: number };
+			const stats = byModel.get(payload.model) ?? { calls: 0, inputTokens: 0, outputTokens: 0, latencyMs: 0 };
+			stats.outputTokens += payload.outputTokens;
+			stats.latencyMs += payload.latencyMs;
+			byModel.set(payload.model, stats);
+		}
+		const verifications = host.events.query(e => e.payload.kind === "verification.completed");
+		let contractPasses = 0;
+		let contractRuns = 0;
+		for (const env of verifications) {
+			const payload = env.payload as { report: { pass: boolean } };
+			contractRuns += 1;
+			if (payload.report.pass) contractPasses += 1;
+		}
+		return {
+			models: [...byModel.entries()].map(([model, stats]) => ({
+				model,
+				calls: stats.calls,
+				inputTokens: stats.inputTokens,
+				outputTokens: stats.outputTokens,
+				latencyMs: stats.latencyMs,
+			})),
+			contracts: {
+				runs: contractRuns,
+				passes: contractPasses,
+				passRate: contractRuns > 0 ? contractPasses / contractRuns : 0,
+			},
+		};
+	},
+	"routing.record": async (args, _options, host, actor) => {
+		// Feed routing statistics: log a model request + response pair.
+		// A uniform capability OS (paste-9): telemetry injection is a
+		// routing-write effect, gated like every other mutation.
+		requireCapability(host, actor, "routing.write", "write", "routing");
+		const model = requireArg(args, "model");
+		if (typeof model !== "string") throw new Error("__kernel__.routing.record requires string 'model'");
+		host.events.append({
+			kind: "model.request",
+			model,
+			contextTokens: typeof args.contextTokens === "number" ? args.contextTokens : 0,
+		});
+		host.events.append({
+			kind: "model.response",
+			model,
+			outputTokens: typeof args.outputTokens === "number" ? args.outputTokens : 0,
+			latencyMs: typeof args.latencyMs === "number" ? args.latencyMs : 0,
+		});
+		return { recorded: model };
+	},
+	"policy.authorize": async (args, options, host, _actor) => {
+		// Phase 10 (§53–55, §75): capability-based authorization, default deny.
+		const id = requireArg(args, "id");
+		const effect = requireArg(args, "effect");
+		const resource = requireArg(args, "resource");
+		if (typeof id !== "string" || typeof effect !== "string" || typeof resource !== "string") {
+			throw new Error("__kernel__.policy.authorize requires string 'id', 'effect', 'resource'");
+		}
+		const targetActor = typeof args.actor === "string" ? args.actor : (options.session.getAgentId?.() ?? "eval");
+		return host.policy.authorize(targetActor, {
+			id,
+			effect: effect as never,
+			resource,
+			host: typeof args.host === "string" ? args.host : undefined,
+			size: typeof args.size === "number" ? args.size : undefined,
+		});
+	},
+	"security.profile": async (args, options, host, _actor) => {
+		// Phase 10 (§90): the session's effective capability surface and the
+		// derived policy tier (main = moderate, subagent = derived minimum).
+		const targetActor = typeof args.actor === "string" ? args.actor : (options.session.getAgentId?.() ?? "eval");
+		const isSubagent = (options.session.taskDepth ?? 0) > 0;
+		return {
+			actor: targetActor,
+			tier: isSubagent ? "subagent-minimum" : "main-moderate",
+			capabilities: host.capabilities.effective(targetActor).map(cap => `${cap.id}:${cap.scope}`),
+			policy: "default-deny",
+		};
+	},
+	"harness.hypothesis": async (args, options, host, actor) => {
+		// Phase 11 (§66): commit a falsifiable hypothesis for a harness change.
+		// A dedicated harness-proposal capability (paste-9): mutating the
+		// version ledger is a capability-governed effect like any other.
+		requireCapability(host, actor, "harness.propose", "write", "harness");
+		// Editable components only — constitutional layers are refused here.
+		const component = requireArg(args, "component");
+		const observation = requireArg(args, "observation");
+		const hypothesisText = requireArg(args, "hypothesis");
+		if (typeof component !== "string" || typeof observation !== "string" || typeof hypothesisText !== "string") {
+			throw new Error("__kernel__.harness.hypothesis requires string 'component', 'observation', 'hypothesis'");
+		}
+		if (!isEditable(component as HarnessComponent)) {
+			throw new Error(`component '${component}' is constitutional and cannot be self-modified`);
+		}
+		const predictions = Array.isArray(args.prediction)
+			? (args.prediction as { metric: string; expectedDelta: number; tolerance: number }[])
+			: [];
+		const hypothesis: Hypothesis = {
+			id: crypto.randomUUID(),
+			component: component as HarnessComponent,
+			observation,
+			hypothesis: hypothesisText,
+			prediction: predictions,
+			change: { id: typeof args.change === "string" ? args.change : "pending" },
+			evaluationSlice: typeof args.evaluationSlice === "string" ? args.evaluationSlice : "general",
+			author: options.session.getAgentId?.() ?? "eval",
+			createdAt: Date.now(),
+		};
+		const version = host.versions.propose(hypothesis.change, hypothesis, hypothesis.author);
+		host.events.append(
+			{
+				kind: "harness.experiment",
+				experimentId: version.number.toString(),
+				hypothesis: hypothesisText,
+				cohort: component,
+			},
+			{ sessionId: options.session.getSessionId?.() ?? "default" },
+		);
+		return { version: version.number, component, hypothesisId: hypothesis.id };
+	},
+	"harness.promote": async (args, _options, host, actor) => {
+		// Phase 11 (§64): apply a TRUSTED evaluation verdict. The RLM must
+		// not be its own judge (audit): it may propose hypotheses and read
+		// state, but the authoritative promotion verdict is recorded by the
+		// external metaharness evaluator from real trials — never computed
+		// from comparison statistics the model itself submits. Accepting
+		// caller-supplied `comparisons` here would let the candidate
+		// fabricate the evidence that activates its own mutation.
+		// A separate promotion capability (paste-9): even applying an
+		// already-trusted verdict is a governed effect — distinct from
+		// proposing.
+		requireCapability(host, actor, "harness.promote", "execute", "harness");
+		if (Array.isArray(args.comparisons) && args.comparisons.length > 0) {
+			throw new Error(
+				"harness.promote refuses self-certified comparisons: the evaluation verdict must come from the trusted metaharness evaluator, not the candidate",
+			);
+		}
+		const version = requireArg(args, "version");
+		if (typeof version !== "number") throw new Error("__kernel__.harness.promote requires number 'version'");
+		const recorded = host.versions.get(version);
+		if (!recorded) throw new Error(`harness version ${version} not found`);
+		// Apply the recorded verdict if and only if a trusted source already
+		// marked it promote. Pending/rejected versions never activate.
+		if (recorded.evaluation?.decision === "promote") {
+			host.versions.promote(version);
+			return { version, promote: true, reason: recorded.evaluation.reason };
+		}
+		return {
+			version,
+			promote: false,
+			reason: `evaluation is ${recorded.evaluation?.decision ?? "pending"}; awaiting trusted verdict`,
+		};
+	},
+	"harness.recordEvaluation": async (args, options, host, actor) => {
+		// Phase 11 (§64) trusted-verdict bridge (dead-code fix): the
+		// metaharness evaluator records its promotion/reject verdict into
+		// the ledger, and `harness.promote` applies it. Recording is as
+		// authoritative as applying — same capability gate. The verdict
+		// shape is the optimizer's `recommendation` mapped to the
+		// kernel's evaluation contract; the RLM cannot self-certify.
+		requireCapability(host, actor, "harness.promote", "execute", "harness");
+		const version = requireArg(args, "version");
+		const decision = requireArg(args, "decision");
+		if (typeof version !== "number") throw new Error("__kernel__.harness.recordEvaluation requires number 'version'");
+		if (decision !== "promote" && decision !== "reject") {
+			throw new Error("__kernel__.harness.recordEvaluation: decision must be 'promote' or 'reject'");
+		}
+		const reason =
+			typeof args.reason === "string"
+				? args.reason
+				: decision === "promote"
+					? "trusted evaluator promote"
+					: "trusted evaluator reject";
+		const recorded = host.versions.recordEvaluation(version, { decision, reason });
+		host.events.append(
+			{
+				kind: "harness.evaluated",
+				version,
+				decision,
+				reason,
+			},
+			{ sessionId: options.session.getSessionId?.() ?? "default" },
+		);
+		return { version, decision, reason: recorded.evaluation?.reason };
+	},
+	"harness.versions": async (_args, _options, host, actor) => {
+		// Phase 11 (§70): the harness version ledger — bisectable history.
+		// Read capability for uniformity (paste-9).
+		requireCapability(host, actor, "harness.read", "read", "harness");
+		return host.versions.all.map(v => ({
+			number: v.number,
+			parent: v.parent,
+			hypothesis: v.hypothesis ? { component: v.hypothesis.component, observation: v.hypothesis.observation } : null,
+			evaluation: v.evaluation,
+			rollbackTarget: v.rollbackTarget,
+		}));
+	},
+	"gateway.status": async (_args, _options, host, _actor) => {
+		// Phase 12 (§58, §92): control-plane surface — runtimes + method roster.
+		return {
+			runtimes: host.gateway.listRuntimes(),
+			methods: host.gateway.methodNames(),
+		};
+	},
+};
+
 export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBridgeOptions): Promise<unknown> {
 	const host = await kernelHostFor(options.session);
 	const actor = bridgeActor(options.session);
-	switch (args.op) {
-		// Introspection (dogfooding finding #2): argument shapes are
-		// discoverable, not guesswork.
-		case "bridge.ops": {
-			return listBridgeOps();
-		}
-		case "bridge.schema": {
-			const name = requireArg(args, "name");
-			if (typeof name !== "string") throw new Error("__kernel__.bridge.schema requires string 'name'");
-			const schema = bridgeOpSchema(name);
-			if (!schema) {
-				throw new Error(
-					`__kernel__.bridge.schema: no schema for '${name}' (available: ${listBridgeOps().join(", ")})`,
-				);
-			}
-			return schema;
-		}
-		case "ctx.materialize": {
-			// Conservative Context VM (blueprint §11): candidates in, token-budgeted
-			// view out. Callers pass handles (artifact refs) rather than copies.
-			const request: ContextRequest = {
-				tokenBudget: typeof args.tokenBudget === "number" ? args.tokenBudget : 32_000,
-				objective: typeof args.objective === "string" ? args.objective : undefined,
-				candidates: Array.isArray(args.candidates) ? (args.candidates as ContextRequest["candidates"]) : [],
-			};
-			const view = await CONTEXT_ENGINE.materialize(request);
-			host.events.append(
-				{ kind: "context.materialized", view },
-				{ sessionId: options.session.getSessionId?.() ?? "default" },
-			);
-			return view;
-		}
-		case "artifacts.put": {
-			requireCapability(host, actor, "artifact.write", "write", "artifacts");
-			const text = requireArg(args, "text");
-			if (typeof text !== "string") throw new Error("__kernel__.artifacts.put requires string 'text'");
-			const record = await host.artifacts.putText(text, {
-				kind: typeof args.kind === "string" ? args.kind : undefined,
-			});
-			// Mirror into the session's artifact manager (one artifact system,
-			// §19, audit #10): the session alias is a hardlink to THIS canonical
-			// blob — one physical copy, visible through OMP's artifact surface
-			// (artifact:// URLs, session listing) under a sequential id.
-			const sessionArtifactId = await mirrorSessionArtifact(options.session, host, record);
-			return { id: record.id, bytes: record.bytes, sessionArtifactId };
-		}
-		case "artifacts.read": {
-			requireCapability(host, actor, "artifact.read", "read", "artifacts");
-			const id = requireArg(args, "id");
-			if (typeof id !== "string") throw new Error("__kernel__.artifacts.read requires string 'id'");
-			const text = await host.artifacts.readText(id);
-			if (text === null) {
-				// Fall back to the session's own artifacts (tool outputs spilled
-				// by OMP, and mirrored RLM artifacts) so both systems read the
-				// same store.
-				const sessionText = await readSessionArtifact(options.session, id);
-				if (sessionText === null) throw new Error(`artifact not found: ${id}`);
-				return { id, text: sessionText };
-			}
-			return { id, text };
-		}
-		case "artifacts.has": {
-			requireCapability(host, actor, "artifact.read", "read", "artifacts");
-			const id = requireArg(args, "id");
-			if (typeof id !== "string") throw new Error("__kernel__.artifacts.has requires string 'id'");
-			if (await host.artifacts.has(id)) return true;
-			return (await readSessionArtifact(options.session, id)) !== null;
-		}
-		case "tasks.create": {
-			requireCapability(host, actor, "task.write", "write", "board");
-			const id = requireArg(args, "id");
-			const objective = requireArg(args, "objective");
-			if (typeof id !== "string" || typeof objective !== "string") {
-				throw new Error("__kernel__.tasks.create requires string 'id' and string 'objective'");
-			}
-			const dependencies = Array.isArray(args.dependencies) ? (args.dependencies as string[]) : [];
-			const task = await host.tasks.create({
-				id,
-				objective,
-				dependencies,
-				assignee: typeof args.assignee === "string" ? args.assignee : undefined,
-			});
-			host.events.append(
-				{ kind: "task.state", taskId: task.id, from: "triage", to: task.state },
-				{ sessionId: options.session.getSessionId?.() ?? "default" },
-			);
-			return task;
-		}
-		case "tasks.transition": {
-			requireCapability(host, actor, "task.write", "write", "board");
-			const id = requireArg(args, "id") as TaskId;
-			const to = requireArg(args, "to");
-			if (!TASK_STATES.includes(to as TaskState)) {
-				throw new Error(
-					`__kernel__.tasks.transition: invalid state '${to}', expected one of ${TASK_STATES.join(", ")}`,
-				);
-			}
-			const before = await host.tasks.get(id);
-			if (!before) throw new Error(`task not found: ${id}`);
-			// The actor is the nominal worker: fenced writes (pi quality) let the
-			// durable-holder path reject stale writers. Model-driven transitions
-			// on unclaimed tasks are unrestricted (no lease held).
-			const task = await host.tasks.transition(id, to as TaskState, undefined, actor);
-			host.events.append({ kind: "task.state", taskId: id, from: before.state, to: task.state });
-			return task;
-		}
-		case "tasks.list": {
-			requireCapability(host, actor, "task.read", "read", "board");
-			const state =
-				typeof args.state === "string" && TASK_STATES.includes(args.state as TaskState)
-					? (args.state as TaskState)
-					: undefined;
-			const tasks = await host.tasks.list(state);
-			return tasks.map(task => ({
-				id: task.id,
-				objective: task.objective,
-				state: task.state,
-				dependencies: task.dependencies,
-				attempts: task.attempts.length,
-				assignee: task.assignee ?? null,
-			}));
-		}
-		case "tasks.ready": {
-			requireCapability(host, actor, "task.read", "read", "board");
-			const tasks = await host.tasks.ready();
-			return tasks.map(task => ({ id: task.id, objective: task.objective }));
-		}
-		case "events.query": {
-			requireCapability(host, actor, "event.read", "read", "events");
-			const kind = typeof args.kind === "string" ? args.kind : undefined;
-			const limit = typeof args.limit === "number" ? args.limit : 50;
-			const events = kind ? host.events.query(e => e.payload.kind === kind) : [...host.events.all];
-			return events
-				.slice(-limit)
-				.map(e => ({ id: e.id, kind: e.payload.kind, timestamp: e.timestamp, sessionId: e.sessionId }));
-		}
-		case "actors.status": {
-			requireCapability(host, actor, "agent.read", "read", "roster");
-			// Parent-visible liveness (blueprint §29): project the registry's
-			// live refs onto the kernel ActorStatus shape.
-			const registry = options.session.agentRegistry ?? AgentRegistry.global();
-			const actorId = typeof args.id === "string" ? args.id : (options.session.getAgentId?.() ?? null);
-			if (!actorId) throw new Error("__kernel__.actors.status requires 'id'");
-			const ref = registry.get(actorId);
-			if (!ref) throw new Error(`actor not found: ${actorId}`);
-			return actorStatusFromRef(ref);
-		}
-		case "actors.list": {
-			requireCapability(host, actor, "agent.read", "read", "roster");
-			const registry = options.session.agentRegistry ?? AgentRegistry.global();
-			return registry
-				.listVisibleTo(options.session.getAgentId?.() ?? MAIN_AGENT_ID)
-				.map(ref => ({ id: ref.id, displayName: ref.displayName, ...actorStatusFromRef(ref) }));
-		}
-		case "actors.send": {
-			requireCapability(host, actor, "agent.message", "spawn", "actor");
-			const to = requireArg(args, "to");
-			const kind = requireArg(args, "kind");
-			if (typeof to !== "string" || typeof kind !== "string") {
-				throw new Error("__kernel__.actors.send requires string 'to' and string 'kind'");
-			}
-			// The transport sender is the SESSION's identity — never caller-
-			// supplied (audit: the JSON body's from/to must not be forgeable).
-			// The recipient may be any live peer; the sender is bound here.
-			const from = options.session.getAgentId?.() ?? "eval";
-			const message = makeAgentMessage(from, to, kind, args.payload);
-			const receipt = await IrcBus.global().send({
-				from: message.from,
-				to: message.to,
-				body: encodeAgentMessage(message),
-			});
-			host.events.append(
-				{ kind: "agent.message", from: message.from, to: message.to, text: `[${kind}]` },
-				{ sessionId: options.session.getSessionId?.() ?? "default" },
-			);
-			return { ...receipt, messageId: message.id };
-		}
-		case "actors.park": {
-			requireCapability(host, actor, "agent.kill", "execute", "actor");
-			// Persistent actor lifecycle (§32): park = intentionally suspend but
-			// keep the ref + session file for later revival. Uses OMP's lifecycle
-			// manager — do NOT replace it.
-			const actorId = requireArg(args, "id");
-			if (typeof actorId !== "string") throw new Error("__kernel__.actors.park requires string 'id'");
-			const lifecycle = options.session.agentLifecycle?.() ?? AgentLifecycleManager.global();
-			await lifecycle.park(actorId);
-			return { parked: actorId };
-		}
-		case "actors.revive": {
-			requireCapability(host, actor, "agent.kill", "execute", "actor");
-			const actorId = requireArg(args, "id");
-			if (typeof actorId !== "string") throw new Error("__kernel__.actors.revive requires string 'id'");
-			const lifecycle = options.session.agentLifecycle?.() ?? AgentLifecycleManager.global();
-			const session = await lifecycle.ensureLive(actorId);
-			return { revived: actorId, live: session !== undefined };
-		}
-		case "actors.abort": {
-			requireCapability(host, actor, "agent.kill", "execute", "actor");
-			const actorId = requireArg(args, "id");
-			if (typeof actorId !== "string") throw new Error("__kernel__.actors.abort requires string 'id'");
-			const registry = options.session.agentRegistry ?? AgentRegistry.global();
-			const ref = registry.get(actorId);
-			if (!ref) throw new Error(`actor not found: ${actorId}`);
-			await ref.session?.abort();
-			registry.setStatus(actorId, "aborted");
-			return { aborted: actorId };
-		}
-		// NOTE: no `capabilities.grant` bridge op. The model may inspect
-		// (`capabilities.effective`) and ask (`policy.authorize`), but the
-		// trusted host owns capability creation — grants happen only in the
-		// spawn derivation path (structured-subagent), where the host computes
-		// child = requested ∩ parent. A model-facing grant primitive would let
-		// an actor mint permissions outside monotonicity.
-		case "capabilities.effective": {
-			const actor = typeof args.actor === "string" ? args.actor : (options.session.getAgentId?.() ?? "eval");
-			return host.capabilities.effective(actor).map(cap => `${cap.id}:${cap.scope}`);
-		}
-		case "memory.propose": {
-			requireCapability(host, actor, "memory.write", "write", "facts");
-			const fact = requireArg(args, "fact");
-			if (typeof fact !== "string") throw new Error("__kernel__.memory.propose requires string 'fact'");
-			// Prefer the session's live memory backend (mnemopi) so RLM and
-			// OMP's own recall/learn/retain see the SAME facts (§19: no
-			// split-brain). Falls back to the kernel in-memory backend.
-			const live = sessionLiveMemory(options.session);
-			if (live) {
-				const id = live.remember(fact, typeof args.confidence === "number" ? args.confidence : 0.8);
-				if (id) {
-					memoryOwner(options.session).set(id, "mnemopi");
-					host.events.append(
-						{
-							kind: "memory.proposed",
-							factId: id,
-							text: fact,
-							scope: args.scope === "user" || args.scope === "global" ? args.scope : "project",
-						},
-						{ sessionId: options.session.getSessionId?.() ?? "default" },
-					);
-					return { id, state: "committed", backend: "mnemopi" };
-				}
-			}
-			const proposed = await host.memory.propose({
-				fact,
-				confidence: typeof args.confidence === "number" ? args.confidence : 0.8,
-				scope: args.scope === "user" || args.scope === "global" ? args.scope : "project",
-				evidence: [],
-				observedAt: Date.now(),
-				expires: typeof args.expires === "number" ? args.expires : null,
-				decay: typeof args.decay === "string" ? (args.decay as never) : "architecture",
-			});
-			memoryOwner(options.session).set(proposed.id, "kernel");
-			host.events.append(
-				{ kind: "memory.proposed", factId: proposed.id, text: proposed.fact, scope: proposed.scope },
-				{ sessionId: options.session.getSessionId?.() ?? "default" },
-			);
-			return { id: proposed.id, state: proposed.state };
-		}
-		case "memory.commit": {
-			requireCapability(host, actor, "memory.write", "write", "facts");
-			const id = requireArg(args, "id");
-			if (typeof id !== "string") throw new Error("__kernel__.memory.commit requires string 'id'");
-			// Lifecycle routes to the OWNING backend (paste-4 P1). A mnemopi
-			// fact was committed at propose time (mnemopi has no staged
-			// lifecycle) — commit is an idempotent success there, never a
-			// kernel-store call for a fact the kernel never saw.
-			if (memoryOwner(options.session).get(id) === "mnemopi") {
-				return { committed: id, backend: "mnemopi" };
-			}
-			await host.memory.commit(id);
-			host.events.append({ kind: "memory.committed", factId: id });
-			return { committed: id };
-		}
-		case "memory.reject": {
-			requireCapability(host, actor, "memory.write", "write", "facts");
-			const id = requireArg(args, "id");
-			if (typeof id !== "string") throw new Error("__kernel__.memory.reject requires string 'id'");
-			// Mnemopi has no staged lifecycle to reject — surfacing that is
-			// honest, silently touching the kernel store for a foreign id is not.
-			if (memoryOwner(options.session).get(id) === "mnemopi") {
-				throw new Error(`memory.reject unsupported: fact ${id} lives in mnemopi, which has no staged lifecycle`);
-			}
-			await host.memory.reject(id);
-			return { rejected: id };
-		}
-		case "memory.stale": {
-			requireCapability(host, actor, "memory.write", "write", "facts");
-			const id = requireArg(args, "id");
-			if (typeof id !== "string") throw new Error("__kernel__.memory.stale requires string 'id'");
-			if (memoryOwner(options.session).get(id) === "mnemopi") {
-				throw new Error(`memory.stale unsupported: fact ${id} lives in mnemopi, which has no staged lifecycle`);
-			}
-			await host.memory.markStale(id);
-			return { stale: id };
-		}
-		case "memory.recall": {
-			requireCapability(host, actor, "memory.read", "read", "facts");
-			// Prefer the session's live memory backend so RLM recall sees the
-			// same facts as OMP's own recall/learn (§19).
-			const live = sessionLiveMemory(options.session);
-			if (live) {
-				const results = await live.recall(typeof args.query === "string" ? args.query : "");
-				return results.map(item => ({
-					id: item.id,
-					fact: item.content,
-					confidence: 1,
-					scope: "project",
-					observedAt: item.timestamp ? Date.parse(item.timestamp) : Date.now(),
-					state: "committed",
-				}));
-			}
-			const results = await host.memory.recall({
-				scope: args.scope === "user" || args.scope === "global" ? args.scope : undefined,
-				similarity: typeof args.similarity === "number" ? args.similarity : undefined,
-			});
-			return results.map(fact => ({
-				id: fact.id,
-				fact: fact.fact,
-				confidence: fact.confidence,
-				scope: fact.scope,
-				observedAt: fact.observedAt,
-				state: fact.state,
-			}));
-		}
-		case "contract.create": {
-			requireCapability(host, actor, "contract.write", "write", "contracts");
-			// Phase 8 (§40, §76): register a completion contract for later
-			// verification. Checks run against the session cwd; required evidence
-			// is matched against artifacts the caller provides at verify time.
-			const id = requireArg(args, "id");
-			if (typeof id !== "string") throw new Error("__kernel__.contract.create requires string 'id'");
-			const objective = requireArg(args, "objective");
-			if (typeof objective !== "string") throw new Error("__kernel__.contract.create requires string 'objective'");
-			const checks = Array.isArray(args.checks) ? (args.checks as never[]) : [];
-			const requiredEvidence = Array.isArray(args.requiredEvidence) ? (args.requiredEvidence as never[]) : [];
-			// Shape validation (dogfooding finding: a bare string check slipped
-			// through and crashed verify with `r.pass` on undefined). Each check
-			// must be an object with a KNOWN kind — reject early with a clear
-			// error instead of failing later in the engine.
-			const CHECK_KINDS = new Set(["command", "fileExists", "fileAbsent", "pattern", "json"]);
-			for (const check of checks) {
-				if (check === null || typeof check !== "object") {
-					throw new Error(
-						`__kernel__.contract.create: check must be an object { kind, ... }, got ${JSON.stringify(check)}`,
-					);
-				}
-				const kind = (check as { kind?: unknown }).kind;
-				if (typeof kind !== "string" || !CHECK_KINDS.has(kind)) {
-					throw new Error(
-						`__kernel__.contract.create: unknown check kind ${JSON.stringify(kind)} (expected one of ${[...CHECK_KINDS].join(", ")})`,
-					);
-				}
-				// Command checks must carry an array command (dogfooding finding):
-				// a string slipped through kind-only validation and crashed the
-				// verifier host at `command.join(" ")` (host.ts:144) instead of
-				// refusing cleanly. Reject the malformed shape here.
-				if (kind === "command" && !Array.isArray((check as { command?: unknown }).command)) {
-					throw new Error(
-						'__kernel__.contract.create: command check requires a string[] \'command\' (e.g. ["bun", "test", ...])',
-					);
-				}
-			}
-			const contractRecord: CompletionContract = {
-				id,
-				objective,
-				requirements: Array.isArray(args.requirements) ? (args.requirements as string[]) : [],
-				claims: [],
-				checks,
-				requiredEvidence,
-				verificationLevel: (typeof args.verificationLevel === "number" &&
-				args.verificationLevel >= 0 &&
-				args.verificationLevel <= 4
-					? args.verificationLevel
-					: 1) as CompletionContract["verificationLevel"],
-			};
-			await host.contracts.put(contractRecord);
-			return { id, checks: checks.length, evidence: requiredEvidence.length };
-		}
-		case "contract.verify": {
-			requireCapability(host, actor, "contract.read", "read", "contracts");
-			// Evidence-first verification (§43): the report leads with artifacts,
-			// not the worker's prose.
-			const id = requireArg(args, "id");
-			if (typeof id !== "string") throw new Error("__kernel__.contract.verify requires string 'id'");
-			const contract = await host.contracts.get(id);
-			if (!contract) throw new Error(`contract not found: ${id}`);
-			const artifacts = Array.isArray(args.evidence)
-				? (args.evidence as { id: string; kind?: string }[]).map(a => ({
-						id: a.id,
-						kind: a.kind,
-					}))
-				: [];
-			// Verify AS the calling actor — passed immutably per invocation so
-			// command checks authorize against THIS caller's effective
-			// capabilities (default deny without a process.exec grant), never a
-			// mutable host field another concurrent verification could race.
-			const report = await host.verifier.verify(contract, {
-				cwd: options.session.cwd,
-				root: options.session.cwd,
-				actor: options.session.getAgentId?.() ?? "eval",
-				artifacts,
-			});
-			// V3/V4 (§41, audit #17, paste-4 P1): the CONTRACT's verification
-			// level determines verification — the caller cannot opt out of the
-			// independent reviewer a level-3+ contract mandates (a caller
-			// preference must never downgrade the contract). `reviewerModel`
-			// remains a caller affordance for §42's independent-model-family
-			// requirement; `review: false` is ignored for level ≥3.
-			if (report.pass && contract.verificationLevel >= 3) {
-				// Lazy import: the reviewer pulls in the task/structured-subagent
-				// graph, which re-enters tools/index — importing at module top
-				// level would cycle (tools/learn → kernel-bridge → reviewer).
-				const { runContractReviewer } = await import("../runtime/contract-reviewer");
-				const review = await runContractReviewer(options.session, contract, {
-					reviewerModel: typeof args.reviewerModel === "string" ? args.reviewerModel : undefined,
-					signal: options.signal,
-				});
-				if (review) {
-					report.review = review;
-					report.pass = review.pass;
-				} else {
-					// A level-3+ contract whose independent review could not run
-					// is NOT verified — no verdict means failure, not a silent
-					// downgrade to deterministic-only (paste-4 P1).
-					report.pass = false;
-					report.review = {
-						reviewerModel: "unavailable",
-						pass: false,
-						note: "independent reviewer could not run",
-					};
-				}
-			}
-			host.events.append(
-				{ kind: "verification.completed", report },
-				{ sessionId: options.session.getSessionId?.() ?? "default" },
-			);
-			return report;
-		}
-		case "routing.resolve": {
-			requireCapability(host, actor, "routing.read", "read", "routing");
-			// Phase 9 (§45–47): rule-based routing. The registry stays
-			// interpretable; learned statistics replace it later.
-			const role = requireArg(args, "role");
-			if (typeof role !== "string") throw new Error("__kernel__.routing.resolve requires string 'role'");
-			const features = {
-				taskComplexity: typeof args.taskComplexity === "number" ? args.taskComplexity : 0.5,
-				uncertainty: typeof args.uncertainty === "number" ? args.uncertainty : 0.5,
-				expectedToolCount: typeof args.expectedToolCount === "number" ? args.expectedToolCount : 3,
-				requiredContext: typeof args.requiredContext === "number" ? args.requiredContext : 8_000,
-				risk: typeof args.risk === "number" ? args.risk : 0.3,
-			};
-			// One model/execution backend (§19): when the session has a live
-			// configured model, route through it — the RLM plans against the
-			// model OMP is ACTUALLY running, not a parallel kernel-only table.
-			// The kernel role registry stays the fallback for bare eval
-			// sessions that expose no configured model.
-			const live = sessionLiveModel(options.session);
-			if (live) return host.models.resolveWith(live.provider, live.model, features);
-			return host.models.resolve(role as never, features);
-		}
-		case "routing.register": {
-			requireCapability(host, actor, "routing.write", "write", "routing");
-			const role = requireArg(args, "role");
-			const provider = requireArg(args, "provider");
-			const model = requireArg(args, "model");
-			if (typeof role !== "string" || typeof provider !== "string" || typeof model !== "string") {
-				throw new Error("__kernel__.routing.register requires string 'role', 'provider', 'model'");
-			}
-			host.models.register(role as never, provider, model);
-			return { registered: `${role} → ${provider}/${model}` };
-		}
-		case "routing.stats": {
-			requireCapability(host, actor, "routing.read", "read", "routing");
-			// §46 statistics from the event log: per-model call volume, tokens,
-			// latency, plus overall contract pass rate. Rule-based start; the
-			// learned bandit replaces the resolver later, not the accounting.
-			const requests = host.events.query(e => e.payload.kind === "model.request");
-			const responses = host.events.query(e => e.payload.kind === "model.response");
-			const byModel = new Map<
-				string,
-				{ calls: number; inputTokens: number; outputTokens: number; latencyMs: number }
-			>();
-			for (const env of requests) {
-				const payload = env.payload as { model: string; contextTokens: number };
-				const stats = byModel.get(payload.model) ?? { calls: 0, inputTokens: 0, outputTokens: 0, latencyMs: 0 };
-				stats.calls += 1;
-				stats.inputTokens += payload.contextTokens;
-				byModel.set(payload.model, stats);
-			}
-			for (const env of responses) {
-				const payload = env.payload as { model: string; outputTokens: number; latencyMs: number };
-				const stats = byModel.get(payload.model) ?? { calls: 0, inputTokens: 0, outputTokens: 0, latencyMs: 0 };
-				stats.outputTokens += payload.outputTokens;
-				stats.latencyMs += payload.latencyMs;
-				byModel.set(payload.model, stats);
-			}
-			const verifications = host.events.query(e => e.payload.kind === "verification.completed");
-			let contractPasses = 0;
-			let contractRuns = 0;
-			for (const env of verifications) {
-				const payload = env.payload as { report: { pass: boolean } };
-				contractRuns += 1;
-				if (payload.report.pass) contractPasses += 1;
-			}
-			return {
-				models: [...byModel.entries()].map(([model, stats]) => ({
-					model,
-					calls: stats.calls,
-					inputTokens: stats.inputTokens,
-					outputTokens: stats.outputTokens,
-					latencyMs: stats.latencyMs,
-				})),
-				contracts: {
-					runs: contractRuns,
-					passes: contractPasses,
-					passRate: contractRuns > 0 ? contractPasses / contractRuns : 0,
-				},
-			};
-		}
-		case "routing.record": {
-			// Feed routing statistics: log a model request + response pair.
-			// A uniform capability OS (paste-9): telemetry injection is a
-			// routing-write effect, gated like every other mutation.
-			requireCapability(host, actor, "routing.write", "write", "routing");
-			const model = requireArg(args, "model");
-			if (typeof model !== "string") throw new Error("__kernel__.routing.record requires string 'model'");
-			host.events.append({
-				kind: "model.request",
-				model,
-				contextTokens: typeof args.contextTokens === "number" ? args.contextTokens : 0,
-			});
-			host.events.append({
-				kind: "model.response",
-				model,
-				outputTokens: typeof args.outputTokens === "number" ? args.outputTokens : 0,
-				latencyMs: typeof args.latencyMs === "number" ? args.latencyMs : 0,
-			});
-			return { recorded: model };
-		}
-		case "policy.authorize": {
-			// Phase 10 (§53–55, §75): capability-based authorization, default deny.
-			const id = requireArg(args, "id");
-			const effect = requireArg(args, "effect");
-			const resource = requireArg(args, "resource");
-			if (typeof id !== "string" || typeof effect !== "string" || typeof resource !== "string") {
-				throw new Error("__kernel__.policy.authorize requires string 'id', 'effect', 'resource'");
-			}
-			const actor = typeof args.actor === "string" ? args.actor : (options.session.getAgentId?.() ?? "eval");
-			return host.policy.authorize(actor, {
-				id,
-				effect: effect as never,
-				resource,
-				host: typeof args.host === "string" ? args.host : undefined,
-				size: typeof args.size === "number" ? args.size : undefined,
-			});
-		}
-		case "security.profile": {
-			// Phase 10 (§90): the session's effective capability surface and the
-			// derived policy tier (main = moderate, subagent = derived minimum).
-			const actor = typeof args.actor === "string" ? args.actor : (options.session.getAgentId?.() ?? "eval");
-			const isSubagent = (options.session.taskDepth ?? 0) > 0;
-			return {
-				actor,
-				tier: isSubagent ? "subagent-minimum" : "main-moderate",
-				capabilities: host.capabilities.effective(actor).map(cap => `${cap.id}:${cap.scope}`),
-				policy: "default-deny",
-			};
-		}
-		case "harness.hypothesis": {
-			// Phase 11 (§66): commit a falsifiable hypothesis for a harness change.
-			// A dedicated harness-proposal capability (paste-9): mutating the
-			// version ledger is a capability-governed effect like any other.
-			requireCapability(host, actor, "harness.propose", "write", "harness");
-			// Editable components only — constitutional layers are refused here.
-			const component = requireArg(args, "component");
-			const observation = requireArg(args, "observation");
-			const hypothesisText = requireArg(args, "hypothesis");
-			if (typeof component !== "string" || typeof observation !== "string" || typeof hypothesisText !== "string") {
-				throw new Error("__kernel__.harness.hypothesis requires string 'component', 'observation', 'hypothesis'");
-			}
-			if (!isEditable(component as HarnessComponent)) {
-				throw new Error(`component '${component}' is constitutional and cannot be self-modified`);
-			}
-			const predictions = Array.isArray(args.prediction)
-				? (args.prediction as { metric: string; expectedDelta: number; tolerance: number }[])
-				: [];
-			const hypothesis: Hypothesis = {
-				id: crypto.randomUUID(),
-				component: component as HarnessComponent,
-				observation,
-				hypothesis: hypothesisText,
-				prediction: predictions,
-				change: { id: typeof args.change === "string" ? args.change : "pending" },
-				evaluationSlice: typeof args.evaluationSlice === "string" ? args.evaluationSlice : "general",
-				author: options.session.getAgentId?.() ?? "eval",
-				createdAt: Date.now(),
-			};
-			const version = host.versions.propose(hypothesis.change, hypothesis, hypothesis.author);
-			host.events.append(
-				{
-					kind: "harness.experiment",
-					experimentId: version.number.toString(),
-					hypothesis: hypothesisText,
-					cohort: component,
-				},
-				{ sessionId: options.session.getSessionId?.() ?? "default" },
-			);
-			return { version: version.number, component, hypothesisId: hypothesis.id };
-		}
-		case "harness.promote": {
-			// Phase 11 (§64): apply a TRUSTED evaluation verdict. The RLM must
-			// not be its own judge (audit): it may propose hypotheses and read
-			// state, but the authoritative promotion verdict is recorded by the
-			// external metaharness evaluator from real trials — never computed
-			// from comparison statistics the model itself submits. Accepting
-			// caller-supplied `comparisons` here would let the candidate
-			// fabricate the evidence that activates its own mutation.
-			// A separate promotion capability (paste-9): even applying an
-			// already-trusted verdict is a governed effect — distinct from
-			// proposing.
-			requireCapability(host, actor, "harness.promote", "execute", "harness");
-			if (Array.isArray(args.comparisons) && args.comparisons.length > 0) {
-				throw new Error(
-					"harness.promote refuses self-certified comparisons: the evaluation verdict must come from the trusted metaharness evaluator, not the candidate",
-				);
-			}
-			const version = requireArg(args, "version");
-			if (typeof version !== "number") throw new Error("__kernel__.harness.promote requires number 'version'");
-			const recorded = host.versions.get(version);
-			if (!recorded) throw new Error(`harness version ${version} not found`);
-			// Apply the recorded verdict if and only if a trusted source already
-			// marked it promote. Pending/rejected versions never activate.
-			if (recorded.evaluation?.decision === "promote") {
-				host.versions.promote(version);
-				return { version, promote: true, reason: recorded.evaluation.reason };
-			}
-			return {
-				version,
-				promote: false,
-				reason: `evaluation is ${recorded.evaluation?.decision ?? "pending"}; awaiting trusted verdict`,
-			};
-		}
-		case "harness.recordEvaluation": {
-			// Phase 11 (§64) trusted-verdict bridge (dead-code fix): the
-			// metaharness evaluator records its promotion/reject verdict into
-			// the ledger, and `harness.promote` applies it. Recording is as
-			// authoritative as applying — same capability gate. The verdict
-			// shape is the optimizer's `recommendation` mapped to the
-			// kernel's evaluation contract; the RLM cannot self-certify.
-			requireCapability(host, actor, "harness.promote", "execute", "harness");
-			const version = requireArg(args, "version");
-			const decision = requireArg(args, "decision");
-			if (typeof version !== "number")
-				throw new Error("__kernel__.harness.recordEvaluation requires number 'version'");
-			if (decision !== "promote" && decision !== "reject") {
-				throw new Error("__kernel__.harness.recordEvaluation: decision must be 'promote' or 'reject'");
-			}
-			const reason =
-				typeof args.reason === "string"
-					? args.reason
-					: decision === "promote"
-						? "trusted evaluator promote"
-						: "trusted evaluator reject";
-			const recorded = host.versions.recordEvaluation(version, { decision, reason });
-			host.events.append(
-				{
-					kind: "harness.evaluated",
-					version,
-					decision,
-					reason,
-				},
-				{ sessionId: options.session.getSessionId?.() ?? "default" },
-			);
-			return { version, decision, reason: recorded.evaluation?.reason };
-		}
-		case "harness.versions": {
-			// Phase 11 (§70): the harness version ledger — bisectable history.
-			// Read capability for uniformity (paste-9).
-			requireCapability(host, actor, "harness.read", "read", "harness");
-			return host.versions.all.map(v => ({
-				number: v.number,
-				parent: v.parent,
-				hypothesis: v.hypothesis
-					? { component: v.hypothesis.component, observation: v.hypothesis.observation }
-					: null,
-				evaluation: v.evaluation,
-				rollbackTarget: v.rollbackTarget,
-			}));
-		}
-		case "gateway.status": {
-			// Phase 12 (§58, §92): control-plane surface — runtimes + method roster.
-			return {
-				runtimes: host.gateway.listRuntimes(),
-				methods: host.gateway.methodNames(),
-			};
-		}
-		default:
-			throw new Error(`unknown kernel bridge op: ${args.op}`);
+	const handler = BRIDGE_HANDLERS[args.op];
+	if (!handler) {
+		throw new Error(`unknown kernel bridge op: ${args.op}`);
 	}
+	return handler(args, options, host, actor);
 }
 
 /**

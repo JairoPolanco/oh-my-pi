@@ -277,6 +277,38 @@ describe("kernel prelude globals (JS worker)", () => {
 		expect(result.output).toContain("artifact not found");
 	});
 
+	it("kernel.* is the single reserved bridge surface; a shadowing local cannot break it (round-2 F1)", async () => {
+		const session = makeSession(tempDir.path());
+		const code = `
+			const tasks = "shadowing-local"; // would have crashed the old bare-global surface
+			const put = await kernel.artifacts.put({ text: "f1-probe" });
+			const got = await kernel.artifacts.read({ id: put.id });
+			const ops = await kernel.bridge.ops();
+			const list = await kernel.tasks.list({});
+			return JSON.stringify({ text: got.text, opsCount: ops.length, taskList: Array.isArray(list) });
+		`;
+		const result = await executeJs(code, { cwd: tempDir.path(), sessionId, session });
+		expect(result.exitCode).toBe(0);
+		const parsed = JSON.parse(result.output.trim());
+		expect(parsed.text).toBe("f1-probe");
+		expect(parsed.opsCount).toBeGreaterThanOrEqual(19);
+		expect(parsed.taskList).toBe(true);
+	});
+
+	it("deprecated bare namespace aliases still dispatch (round-2 F1 backward compat)", async () => {
+		const session = makeSession(tempDir.path());
+		const code = `
+			const ops = await bridge.ops();
+			const created = await tasks.create({ id: "legacy-alias-task", objective: "alias probe" });
+			return JSON.stringify({ hasBridge: Array.isArray(ops), state: created.state });
+		`;
+		const result = await executeJs(code, { cwd: tempDir.path(), sessionId, session });
+		expect(result.exitCode).toBe(0);
+		const parsed = JSON.parse(result.output.trim());
+		expect(parsed.hasBridge).toBe(true);
+		expect(parsed.state).toBe("triage");
+	});
+
 	it("cleans up kernel state between sessions", async () => {
 		await fs.rm(tempDir.path(), { recursive: true, force: true });
 	});

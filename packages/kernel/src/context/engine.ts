@@ -10,7 +10,7 @@
 
 import type { ContextCodec } from "./codecs";
 import { LevelCodec } from "./codecs";
-import { ContextMaterializer } from "./materializer";
+import { ContextMaterializer, type MaterializeOptions } from "./materializer";
 import type { ContextEngine, ContextRequest, ContextView } from "./types";
 
 export interface ContextEngineOptions {
@@ -36,8 +36,8 @@ export class DefaultContextEngine implements ContextEngine {
 		this.#minRecall = options.minRecall ?? 0.9;
 	}
 
-	async materialize(request: ContextRequest): Promise<ContextView> {
-		const view = this.#materializer.materialize(request);
+	async materialize(request: ContextRequest, options?: MaterializeOptions): Promise<ContextView> {
+		const view = this.#materializer.materialize(request, options);
 
 		// Select the cheapest codec meeting the fidelity floor.
 		const candidates = this.#codecs

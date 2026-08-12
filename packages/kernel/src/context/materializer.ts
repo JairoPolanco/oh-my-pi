@@ -39,6 +39,28 @@ export function estimateTokens(text: string): number {
 	return Math.max(1, Math.ceil(text.length / 4));
 }
 
+/** Event kind emitted when the hard-budget pass drops selected spans (round-2 F3). */
+export const CONTEXT_EVICTED_EVENT_KIND = "context.evicted";
+
+/** A span the hard-budget pass evicted from the materialized view. */
+export interface EvictedSpan {
+	id: string;
+	kind: ContextItemKind;
+	/** Measured tokens of the dropped representation. */
+	tokens: number;
+}
+
+/** Optional call-site options for {@link ContextMaterializer.materialize}. */
+export interface MaterializeOptions {
+	/**
+	 * Called once with the spans the hard-budget pass evicted (whole spans
+	 * only — truncations and never-selected candidates are not evictions).
+	 * Lets the caller surface a `context.evicted` event so agents never
+	 * detect loss by noticing absence (round-2 F3).
+	 */
+	onEvict?: (evicted: EvictedSpan[], view: ContextView) => void;
+}
+
 export interface MaterializerOptions {
 	/** Per-kind budget weights, overrides of {@link DEFAULT_BANDS}. */
 	bands?: Partial<Record<ContextItemKind, number>>;
@@ -82,7 +104,7 @@ export class ContextMaterializer {
 		return caps;
 	}
 
-	materialize(request: ContextRequest): ContextView {
+	materialize(request: ContextRequest, options: MaterializeOptions = {}): ContextView {
 		const spendable = Math.floor(request.tokenBudget * (1 - this.#reserveFraction));
 		const bandCaps = this.#normalizedBandWeights(spendable);
 		const items: ContextItem[] = [];
@@ -218,10 +240,15 @@ export class ContextMaterializer {
 		// representation fits. Mandatory items are never dropped; if only they
 		// remain and still overflow (degenerate sub-token case), the last one
 		// is truncated for real.
+		const evicted: EvictedSpan[] = [];
 		while (renderedTokens > spendable && items.length > 0) {
 			const rankedIndex = items.findLastIndex(item => RANKED_KINDS.includes(item.kind));
 			if (rankedIndex >= 0) {
-				items.splice(rankedIndex, 1);
+				// Whole-span eviction (round-2 F3): report what the hard-budget
+				// pass dropped so the caller can surface a `context.evicted`
+				// event — agents must never detect loss by noticing absence.
+				const [dropped] = items.splice(rankedIndex, 1);
+				evicted.push({ id: dropped.id, kind: dropped.kind, tokens: dropped.tokens ?? 0 });
 			} else {
 				// Only mandatory content remains; shrink the LAST item's real
 				// content to close the (separator-only) gap.
@@ -239,7 +266,7 @@ export class ContextMaterializer {
 			renderedTokens = renderedContent.length > 0 ? estimateTokens(renderedContent) : 0;
 		}
 
-		return {
+		const view: ContextView = {
 			sessionId: request.sessionId,
 			items,
 			budget: request.tokenBudget,
@@ -255,6 +282,8 @@ export class ContextMaterializer {
 				tokenCount: renderedTokens,
 			},
 		};
+		if (evicted.length > 0) options.onEvict?.(evicted, view);
+		return view;
 	}
 
 	/**

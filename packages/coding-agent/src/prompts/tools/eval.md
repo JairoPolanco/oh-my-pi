@@ -42,18 +42,18 @@ budget → {{#if py}}`budget.total` (ceiling or None), `budget.spent()`, `budget
 </prelude>
 
 <kernel-bridge>
-The constitutional kernel is exposed as namespaced async helpers (JS `await`, Python `await`). Every call is capability-gated — you can only touch what your session was granted. Prefer these over ad-hoc shell/file work when the operation maps to one. NOTE: these are BARE namespace objects — call `security.profile()`, not `__kernel__.security.profile()` (the `__kernel__` name is the internal bridge op, not a runtime global). If you are unsure of an op's exact arguments, introspect first: `bridge.ops()` lists every op, and `bridge.schema({name})` returns its exact argument shapes + return type (do NOT guess from the names alone — e.g. `contract.verify` takes `evidence: [{id, kind}]` and `requiredEvidence` is artifactKind-matched):
-- `ctx.materialize({ tokenBudget, objective?, candidates })` → ContextView. Token-budgeted selection over candidates (value-ranked, atomic spans, hard overflow).
-- `artifacts.put({ text, kind? })` → `{ id, bytes }` (content-addressed, dedup). `artifacts.read({ id })` → `{ id, text }`. `artifacts.has({ id })` → bool.
-- `tasks.create({ id, objective, dependencies?, assignee? })` → task. `tasks.transition({ id, to })`. `tasks.list({ state? })`. `tasks.ready()`.
-- `events.query({ kind?, limit? })` → recent kernel events (the canonical session log).
-- `memory.propose({ fact, confidence?, scope? })` → `{ id, state }` (staged). `memory.commit({ id })`, `memory.reject({ id })`, `memory.stale({ id })`, `memory.recall({ query?, scope? })`.
-- `actors.status({ id? })`, `actors.list()`, `actors.send({ to, kind, payload? })` (peer message), `actors.park({ id })`, `actors.revive({ id })`, `actors.abort({ id })`.
-- `contract.create({ id, objective, requirements?, checks?, requiredEvidence?, verificationLevel? })`, `contract.verify({ id, evidence?, reviewerModel? })` → verification report (V1–V4).
-- `routing.resolve({ role, taskComplexity?, … })`, `routing.register({ role, provider, model })`, `routing.stats()`.
-- `policy.authorize({ id, effect, resource, actor? })` → `{ allow, reason? }`. `security.profile({ actor? })` → tier + effective capabilities.
-- `harness.hypothesis({ component, observation, hypothesis, prediction?, change?, evaluationSlice? })` → version. `harness.recordEvaluation({ version, decision, reason? })` (trusted evaluator verdict; same capability as promote — you cannot self-certify). `harness.promote({ version })` (applies a TRUSTED verdict only). `harness.versions()`.
-- `gateway.status()` → control-plane runtimes + methods.
+The constitutional kernel is exposed through ONE reserved global: `kernel.<ns>.<op>(args)` (JS `await`, Python `await`), e.g. `kernel.security.profile()`. Every call is capability-gated — you can only touch what your session was granted. Prefer these over ad-hoc shell/file work when the operation maps to one. The `__kernel__` name is the internal bridge op, not a runtime global — never call it directly. Never declare a local variable named `kernel`; it is the reserved identifier. (Legacy bare namespace globals like `tasks`/`memory` are deprecated aliases and shadowable by any local binding — do not use them.) If you are unsure of an op's exact arguments, introspect first: `kernel.bridge.ops()` lists every op, and `kernel.bridge.schema({name})` returns its exact argument shapes + return type (do NOT guess from the names alone — e.g. `contract.verify` takes `evidence: [{id, kind}]` and `requiredEvidence` is artifactKind-matched):
+- `kernel.ctx.materialize({ tokenBudget, objective?, candidates })` → ContextView. Token-budgeted selection over candidates (value-ranked, atomic spans, hard overflow). When the hard budget evicts spans you referenced, a `context.evicted` event lands in `events.query({ kind: "context.evicted" })` — treat that as the signal that content you expected is gone.
+- `kernel.artifacts.put({ text, kind? })` → `{ id, bytes }` (content-addressed, dedup). `kernel.artifacts.read({ id })` → `{ id, text }`. `kernel.artifacts.has({ id })` → bool.
+- `kernel.tasks.create({ id, objective, dependencies?, assignee? })` → task. `kernel.tasks.transition({ id, to })`. `kernel.tasks.list({ state? })`. `kernel.tasks.ready()`.
+- `kernel.events.query({ kind?, limit? })` → recent kernel events (the canonical session log).
+- `kernel.memory.propose({ fact, confidence?, scope? })` → `{ id, state }` (staged). `kernel.memory.commit({ id })`, `kernel.memory.reject({ id })`, `kernel.memory.stale({ id })`, `kernel.memory.recall({ query?, scope? })`.
+- `kernel.actors.status({ id? })`, `kernel.actors.list()`, `kernel.actors.send({ to, kind, payload? })` (peer message), `kernel.actors.park({ id })`, `kernel.actors.revive({ id })`, `kernel.actors.abort({ id })`.
+- `kernel.contract.create({ id, objective, requirements?, checks?, requiredEvidence?, verificationLevel? })`, `kernel.contract.verify({ id, evidence?, reviewerModel? })` → verification report (V1–V4).
+- `kernel.routing.resolve({ role, taskComplexity?, … })`, `kernel.routing.register({ role, provider, model })`, `kernel.routing.stats()`.
+- `kernel.policy.authorize({ id, effect, resource, actor? })` → `{ allow, reason? }`. `kernel.security.profile({ actor? })` → tier + effective capabilities.
+- `kernel.harness.hypothesis({ component, observation, hypothesis, prediction?, change?, evaluationSlice? })` → version. `kernel.harness.recordEvaluation({ version, decision, reason? })` (trusted evaluator verdict; same capability as promote — you cannot self-certify). `kernel.harness.promote({ version })` (applies a TRUSTED verdict only). `kernel.harness.versions()`.
+- `kernel.gateway.status()` → control-plane runtimes + methods.
 </kernel-bridge>
 {{#if spawns}}
 <dag>

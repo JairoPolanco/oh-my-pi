@@ -562,6 +562,23 @@ if "__omp_prelude_loaded__" not in globals():
             return f"<kernel {self._ns}>"
 
     # RLM host bridge (blueprint §16, §84): programmatic kernel access.
+    # ONE reserved identifier (`kernel`) — round-2 F1: the bare namespace
+    # globals were shadowable by any local binding. `kernel.<ns>.<op>(...)`
+    # is the ONLY documented surface; the bare names below are deprecated
+    # aliases kept one cycle for backward compatibility.
+    class _KernelProxy:
+        """Single reserved kernel object: `kernel.tasks.create(...)`."""
+
+        __slots__ = ()
+
+        def __getattr__(self, ns: str) -> _KernelNamespace:
+            return _KernelNamespace(ns)
+
+        def __repr__(self) -> str:
+            return "<kernel>"
+
+    kernel = _KernelProxy()
+    # Deprecated bare-namespace aliases (round-2 F1) — use `kernel.<ns>.<op>`.
     ctx = _KernelNamespace("ctx")
     artifacts = _KernelNamespace("artifacts")
     tasks = _KernelNamespace("tasks")
@@ -575,8 +592,8 @@ if "__omp_prelude_loaded__" not in globals():
     security = _KernelNamespace("security")
     harness = _KernelNamespace("harness")
     gateway = _KernelNamespace("gateway")
-    # Introspection (dogfooding finding #2): `bridge.ops()` lists ops,
-    # `bridge.schema({"name": ...})` returns the exact arg shapes.
+    # Introspection (dogfooding finding #2): `kernel.bridge.ops()` lists ops,
+    # `kernel.bridge.schema({"name": ...})` returns the exact arg shapes.
     bridge = _KernelNamespace("bridge")
 
     def completion(prompt, *, model="default", system=None, schema=None):

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	type CandidateItem,
+	CONTEXT_EVICTED_EVENT_KIND,
 	ContextMaterializer,
 	DefaultContextEngine,
 	ExtractiveCodec,
@@ -373,5 +374,45 @@ describe("codecs", () => {
 		const compressed = await codec.compress(view);
 		expect(compressed.content).toContain("keep me");
 		expect(compressed.content).not.toContain("drop me");
+	});
+});
+
+describe("context.evicted (round-2 F3)", () => {
+	test("onEvict reports whole spans dropped by the hard-budget pass", () => {
+		const materializer = new ContextMaterializer();
+		// Tiny 2-token items: selection saturates the spendable budget, but
+		// the JOINED rendering (content + separators) overflows it — the
+		// hard-budget pass must drop whole ranked spans.
+		const candidates = Array.from({ length: 400 }, (_, i) =>
+			candidate({ id: `c${i}`, tokens: 2, truncatable: false }),
+		);
+		const evicted: Array<{ id: string; kind: string }> = [];
+		const view = materializer.materialize(
+			{ tokenBudget: 200, candidates },
+			{ onEvict: spans => evicted.push(...spans) },
+		);
+		expect(evicted.length).toBeGreaterThan(0);
+		for (const span of evicted) {
+			expect(view.items.some(item => item.id === span.id)).toBe(false);
+		}
+		expect(view.usedTokens).toBeLessThan(200);
+	});
+
+	test("onEvict is not called when everything fits", () => {
+		const materializer = new ContextMaterializer();
+		let calls = 0;
+		materializer.materialize(
+			{ tokenBudget: 1000, candidates: [candidate({ id: "a", tokens: 100 })] },
+			{
+				onEvict: () => {
+					calls += 1;
+				},
+			},
+		);
+		expect(calls).toBe(0);
+	});
+
+	test("CONTEXT_EVICTED_EVENT_KIND is the documented event kind", () => {
+		expect(CONTEXT_EVICTED_EVENT_KIND).toBe("context.evicted");
 	});
 });

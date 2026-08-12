@@ -3,8 +3,10 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { Gateway } from "@oh-my-pi/pi-kernel";
 import {
+	BRIDGE_OP_SCHEMAS,
 	EVAL_KERNEL_BRIDGE_NAME,
 	kernelHostFor,
+	listBridgeOps,
 	releaseKernelSession,
 	resetKernelHosts,
 	runKernelBridge,
@@ -48,6 +50,31 @@ describe("kernel bridge", () => {
 		await fs.rm(testDir, { recursive: true, force: true });
 	});
 
+	test("ctx.materialize emits a readable context.evicted event on hard-budget drops (round-2 F3)", async () => {
+		// Tiny 2-token items overflow the joined rendering past the spendable
+		// budget, forcing the hard-budget pass to evict whole spans.
+		const candidates = Array.from({ length: 400 }, (_, i) => ({
+			id: `sp${i}`,
+			kind: "evidence" as const,
+			level: "artifact" as const,
+			tokens: 2,
+			impact: 0.5,
+			information: 0.5,
+			reliability: 0.5,
+			truncatable: false,
+			content: "x".repeat(8),
+		}));
+		await call("ctx.materialize", { tokenBudget: 200, candidates });
+
+		const events = (await call("events.query", { kind: "context.evicted" })) as {
+			kind: string;
+			payload: { spans?: { id: string }[]; budget: number };
+		}[];
+		expect(events.length).toBeGreaterThan(0);
+		expect(events[0]!.payload.spans?.length).toBeGreaterThan(0);
+		expect(events[0]!.payload.budget).toBe(200);
+	});
+
 	test("artifacts are content-addressed, deduplicated, and readable", async () => {
 		const first = (await call("artifacts.put", { text: "same payload", kind: "tool-output" })) as {
 			id: string;
@@ -62,6 +89,19 @@ describe("kernel bridge", () => {
 		expect(read.text).toBe("same payload");
 		expect(await call("artifacts.has", { id: first.id })).toBe(true);
 		expect(await call("artifacts.has", { id: "deadbeef" })).toBe(false);
+	});
+
+	test("bridge.ops() is derived from dispatch and every op has a schema (round-2 F2)", async () => {
+		// The op inventory must cover every dispatch handler and the schema
+		// table must cover the inventory — the drift that hid 17 live ops.
+		const ops = (await call("bridge.ops")) as string[];
+		expect(ops.length).toBeGreaterThanOrEqual(36);
+		for (const op of ops) {
+			const schema = (await call("bridge.schema", { name: op })) as { name: string };
+			expect(schema.name).toBe(op);
+		}
+		expect(Object.keys(BRIDGE_OP_SCHEMAS).sort()).toEqual(ops);
+		expect(listBridgeOps()).toEqual(ops);
 	});
 
 	test("artifacts.read rejects unknown ids", async () => {
