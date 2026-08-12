@@ -9,7 +9,7 @@ const testDir = `${import.meta.dir}/tmp-trajectory-tap`;
 class FakeAgent {
 	#listeners = new Set<(event: OmpAgentEvent) => void>();
 	#modelHooks = new Set<() => void>();
-	#state = { model: { id: "claude-4" } };
+	#state = { model: { id: "claude-4" }, messages: [] as unknown[] };
 
 	subscribe(fn: (event: OmpAgentEvent) => void): () => void {
 		this.#listeners.add(fn);
@@ -111,6 +111,29 @@ describe("KernelTrajectoryTap", () => {
 		agent.emit({ type: "tool_execution_start", toolCallId: "t2", toolName: "bash", args: {} });
 		const after = host.events.query(e => e.payload.kind === "tool.called");
 		expect(after).toHaveLength(1);
+	});
+
+	test("model.request hook survives a holey messages array (round-4 probe crash)", async () => {
+		// The contextTokens scan iterates agent.state.messages; a sparse array
+		// (pending entries, compaction holes) yields undefined entries and the
+		// unguarded read threw INTO the model call — the whole request failed
+		// with 'undefined is not an object (evaluating messages[index].role)'.
+		host = new KernelHost(testDir);
+		await host.warm();
+		const session = makeSession();
+		const agent = (session as { agent: FakeAgent }).agent;
+		// Sparse array: index 0 present, index 1 HOLY, index 2 present.
+		const messages = [] as unknown[];
+		messages[0] = { role: "user", content: "a" };
+		messages[2] = { role: "assistant", content: "b" };
+		(agent as unknown as { state: { messages: unknown[] } }).state.messages = messages;
+
+		const tap = new KernelTrajectoryTap(session, host);
+		const detach = tap.attach();
+		// Must not throw.
+		agent.fireModelHook();
+		detach();
+		expect(tap.attached).toBe(false);
 	});
 
 	test("tool.completed carries the error flag from the OMP event", async () => {

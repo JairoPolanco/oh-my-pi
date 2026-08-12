@@ -83,7 +83,12 @@ export class KernelTrajectoryTap {
 			const messages = this.#session.agent.state?.messages ?? [];
 			let contextTokens = 0;
 			for (let index = messages.length - 1; index >= 0; index--) {
+				// Holey/compact arrays and pending entries can leave holes —
+				// the hook must NEVER throw into the model call (round-4
+				// probe crash: messages[index] undefined → the whole request
+				// failed with a TypeError).
 				const message = messages[index];
+				if (message === undefined || message === null) continue;
 				if (message.role !== "assistant") continue;
 				const snapshot = (message as { contextSnapshot?: { promptTokens?: number } }).contextSnapshot;
 				if (snapshot?.promptTokens) {
