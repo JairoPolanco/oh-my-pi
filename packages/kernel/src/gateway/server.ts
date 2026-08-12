@@ -96,6 +96,28 @@ export async function startGatewayServer(
 			// owns the route — the handler must call server.upgrade() and return
 			// the special 101 response.
 			if (url.pathname === "/ws" && request.headers.get("upgrade")?.toLowerCase() === "websocket") {
+				// WebSocket AUTH (round-4 audit, paste-18 P1): the upgrade
+				// previously registered a channel with zero authentication —
+				// any client that reached the port received the attached
+				// sessions' full event stream (tool args, paths, prompts).
+				// The RPC path authenticates via options.authenticate; the
+				// WS path must use the SAME check before accepting. A
+				// gateway without an authenticator is loopback-only by
+				// default (hostname 127.0.0.1), but defense-in-depth:
+				// authToken also gates outbound fan-out, not just inbound
+				// event.append.
+				if (options.authenticate) {
+					try {
+						options.authenticate(request.headers);
+					} catch {
+						return new Response("websocket upgrade denied: authentication failed", { status: 401 });
+					}
+				} else if (
+					options.authToken !== undefined &&
+					request.headers.get("authorization") !== `Bearer ${options.authToken}`
+				) {
+					return new Response("websocket upgrade denied: missing or invalid auth token", { status: 401 });
+				}
 				// The `open` handler assigns ws.data; the placeholder only satisfies
 				// the generic's arity requirement.
 				const upgraded = server.upgrade(request, {

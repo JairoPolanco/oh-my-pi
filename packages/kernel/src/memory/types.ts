@@ -57,6 +57,8 @@ export interface SemanticFact {
 
 /** Retrieval query for semantic memory. */
 export interface MemoryQuery {
+	/** Free-text query the recall should match against fact content. */
+	query?: string;
 	scope?: MemoryScope;
 	/** Semantic similarity, when a vector backend is wired (0–1). */
 	similarity?: number;

@@ -206,6 +206,19 @@ function firstBashWriteTargetOutside(
 			match = TOKEN.exec(command);
 			continue;
 		}
+		// Safe device targets (round-4 G2): the null device is a legit discard
+		// idiom and /dev/zero|random|urandom reads are harmless — a redirect to
+		// them is NOT an fs.write bypass. Restricted to these exact names:
+		// a blanket `/dev/` allow would make /dev/sda a writable target.
+		if (
+			expanded === "/dev/null" ||
+			expanded === "/dev/zero" ||
+			expanded === "/dev/random" ||
+			expanded === "/dev/urandom"
+		) {
+			match = TOKEN.exec(command);
+			continue;
+		}
 		const rel = path.relative(root, abs);
 		if (rel.startsWith("..") || path.isAbsolute(rel)) return `outside:${rel.split(path.sep).join("/")}`;
 		match = TOKEN.exec(command);
@@ -355,9 +368,12 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 			return [op("agent.spawn", "spawn", "actor")];
 		case "board": {
 			// Durable work graph: reads are reads, mutations are writes,
-			// lease-taking is its own capability.
+			// lease-taking is its own capability (paste-18 P1: heartbeat and
+			// reclaimExpired were classified task.read — a lease mutation is
+			// a write, not read; a read-only principal must not extend or
+			// steal leases).
 			const action = String(args.op ?? "list");
-			if (action === "create" || action === "transition") {
+			if (action === "create" || action === "transition" || action === "heartbeat" || action === "reclaimExpired") {
 				return [op("task.write", "write", "board")];
 			}
 			if (action === "claim") return [op("task.claim", "write", "board")];

@@ -65,13 +65,42 @@ describe("KernelTrajectoryTap", () => {
 		agent.emit({ type: "tool_execution_start", toolCallId: "t1", toolName: "read", args: { path: "a.ts" } });
 		agent.emit({ type: "tool_execution_end", toolCallId: "t1", toolName: "read", result: "ok", isError: false });
 		agent.fireModelHook();
+		// Round-4 observability: the finalized assistant message carries the
+		// provider usage record → model.response (was: only model.request with
+		// a hardcoded contextTokens: 0, so routing.stats() had no real output
+		// tokens or latency).
+		agent.emit({
+			type: "message_end",
+			message: {
+				role: "assistant",
+				content: [],
+				api: "openai",
+				provider: "test",
+				model: "test-model",
+				stopReason: "stop",
+				usage: {
+					output: 42,
+					input: 100,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 142,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				timestamp: 0,
+			},
+		});
 
 		const events = host.events.query(
 			e =>
-				e.payload.kind === "tool.called" || e.payload.kind === "user.message" || e.payload.kind === "model.request",
+				e.payload.kind === "tool.called" ||
+				e.payload.kind === "user.message" ||
+				e.payload.kind === "model.request" ||
+				e.payload.kind === "model.response",
 		);
 		const kinds = events.map(e => e.payload.kind).sort();
-		expect(kinds).toEqual(["model.request", "tool.called", "user.message"]);
+		expect(kinds).toEqual(["model.request", "model.response", "tool.called", "user.message"]);
+		const response = events.find(e => e.payload.kind === "model.response");
+		expect((response!.payload as { outputTokens: number }).outputTokens).toBe(42);
 		for (const event of events) {
 			expect(event.sessionId).toBe("tap-test");
 		}

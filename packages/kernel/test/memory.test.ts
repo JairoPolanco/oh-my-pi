@@ -118,6 +118,36 @@ describe("InMemoryMemoryBackend", () => {
 		expect(results[0].fact).toBe("uses postgres");
 	});
 
+	test("recall filters by free-text query (round-4 audit: fallback dropped the query)", async () => {
+		// paste-18 P1: recall({query:"does-not-exist"}) returned EVERY
+		// committed fact — the bridge dropped the query and the fallback
+		// backend ignored it. Token-overlap filtering keeps the no-vector
+		// backend honest: an unrelated query matches nothing, a content-word
+		// query matches the fact containing it.
+		for (const [fact, decay] of [
+			["the project uses bun for tooling", "architecture"],
+			["the user prefers dark mode in their editor", "user"],
+		] as const) {
+			const proposed = await backend.propose({
+				fact,
+				confidence: 0.9,
+				scope: "project",
+				evidence: [],
+				observedAt: Date.now(),
+				expires: null,
+				decay,
+			});
+			await backend.commit(proposed.id);
+		}
+
+		expect(await backend.recall({ query: "does-not-exist" })).toHaveLength(0);
+		const matches = await backend.recall({ query: "does the project use bun?" });
+		expect(matches.length).toBe(1);
+		expect(matches[0]!.fact).toContain("bun");
+		// Empty/absent query still returns all committed (caller's choice).
+		expect((await backend.recall({})).length).toBe(2);
+	});
+
 	test("scope filtering narrows results", async () => {
 		const global = await backend.propose({
 			fact: "global truth",

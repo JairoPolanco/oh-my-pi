@@ -139,7 +139,10 @@ describe("gateway server", () => {
 		const wsUrl = `ws://127.0.0.1:${handle.server.port}/ws`;
 
 		await new Promise<void>((resolve, reject) => {
-			const ws = new WebSocket(wsUrl);
+			// Round-4 WS-auth fix: the upgrade itself now requires the token
+			// (Authorization: Bearer) — a client cannot even open a channel
+			// without it, so event.append is no longer the only gate.
+			const ws = new WebSocket(wsUrl, { headers: { authorization: "Bearer secret-token" } });
 			ws.onopen = () => {
 				// Wrong token: dropped.
 				ws.send(JSON.stringify({ kind: "event.append", token: "wrong", payload: { kind: "x" } }));
@@ -157,5 +160,31 @@ describe("gateway server", () => {
 		});
 
 		expect(received).toEqual([{ kind: "z" }]);
+	});
+
+	test("WebSocket upgrade without the auth token is DENIED (round-4 audit P1)", async () => {
+		// paste-18 P1: /ws previously upgraded with zero auth — any client that
+		// reached the port received the attached sessions' full event stream.
+		// With an authToken configured, an upgrade without the bearer token
+		// must be rejected at the HTTP layer before any channel exists.
+		const gateway = new Gateway();
+		gateways.push(gateway);
+		handle = await startGatewayServer(gateway, {
+			operator: { id: "daemon", scopes: [] },
+			authToken: "secret-token",
+		});
+		const wsUrl = `ws://127.0.0.1:${handle.server.port}/ws`;
+
+		await expect(
+			new Promise<void>((resolve, reject) => {
+				const ws = new WebSocket(wsUrl); // no Authorization header
+				ws.onopen = () => {
+					ws.close();
+					resolve();
+				};
+				ws.onerror = () => resolve(); // upgrade denied → error is correct
+				setTimeout(() => reject(new Error("timeout waiting for denial")), 5000);
+			}),
+		).resolves.toBeUndefined();
 	});
 });

@@ -207,8 +207,14 @@ export class KernelHost implements Kernel {
 		// not own a private gateway instance.
 		this.gateway = Gateway.global();
 		this.#detachGateway = this.gateway.attachEvents(this.events);
+		// Stable runtime identity (round-4 audit, paste-18 P1): `host:<dirname>`
+		// collides for every kernel dir named "kernel" — a second host would
+		// overwrite the first's runtime entry. Anchor on the main principal so
+		// the id is stable per authority AND distinct across hosts, and keep it
+		// for unregister-on-close.
+		this.#runtimeId = `host:${path.basename(dir)}:${this.mainPrincipal}`;
 		this.gateway.registerRuntime({
-			id: `host:${path.basename(dir)}`,
+			id: this.#runtimeId,
 			provider: "omp",
 			model: "omp-runtime",
 			async status() {
@@ -242,6 +248,8 @@ export class KernelHost implements Kernel {
 
 	/** Detaches this host's event bus from the daemon gateway on close. */
 	#detachGateway: (() => void) | undefined;
+	/** Runtime id registered on the daemon gateway; unregistered on close. */
+	#runtimeId: string;
 
 	/**
 	 * Load persisted events, THEN start persisting new ones. Order matters:
@@ -266,6 +274,11 @@ export class KernelHost implements Kernel {
 		this.contracts.close();
 		this.versions.close();
 		this.capabilityStore.close();
+		// Round-4 audit (paste-18 P1): disposed hosts stayed reported as
+		// running, and `host:<basename>` collisions (every kernel dir named
+		// "kernel") let a second host overwrite the first's runtime entry.
+		// Unregister on close so gateway.status is a real liveness view.
+		this.gateway.unregisterRuntime(this.#runtimeId);
 		this.#detachGateway?.();
 		this.#detachGateway = undefined;
 		await this.log.flush();

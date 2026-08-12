@@ -109,6 +109,13 @@ export class Gateway {
 		this.#runtimes.set(runtime.id, runtime);
 	}
 
+	/** Unregister a runtime on host disposal (round-4 audit, paste-18 P1):
+	 *  disposed hosts previously stayed reported as running, and two hosts
+	 *  for the same kernel dir overwrote each other's runtime entry. */
+	unregisterRuntime(id: string): void {
+		this.#runtimes.delete(id);
+	}
+
 	listRuntimes(): { id: string; provider: string; model: string }[] {
 		return [...this.#runtimes.values()].map(runtime => ({
 			id: runtime.id,

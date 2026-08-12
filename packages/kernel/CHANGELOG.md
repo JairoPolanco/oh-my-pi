@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 - Read/grep/glob effect mapping authorizes EACH semicolon-delimited path entry instead of the unsplit string (a `src; /etc/passwd` grep previously canonicalized as one in-repo resource), and classifies URL/internal/ssh targets by scheme — a network fetch can no longer pass under an `fs.read: repo/**` grant.
 - Bash redirect denies name the escaping target (`outside:<path>`) instead of a bare `outside:` resource.
 - Context materializer no longer duplicates a mandatory candidate that is also sticky-selected.
+- Path-less verification checks (`{kind:"pattern"}` with no path) fail cleanly instead of crashing the verifier host with `ERR_INVALID_ARG_TYPE`.
+- `/dev/null` (and zero/random/urandom) redirect targets are allowed — a discard idiom is not an fs.write bypass; the allowlist is exact, so `/dev/sda` stays denied.
+- Board `heartbeat`/`reclaimExpired` are classified as lease WRITES, not `task.read` — a read-only principal can no longer extend or steal leases.
+- The kernel memory fallback honors the recall query: `InMemoryMemoryBackend` filters by substantive token overlap instead of returning every committed fact, and the bridge passes the query through.
+- Gateway WebSocket upgrades are authenticated (bearer token or `authenticate` handler) — a client can no longer open an unauthenticated channel and receive the attached sessions' event stream.
+- `KernelHost.close()` unregisters its gateway runtime; runtime ids are anchored on the main principal so two hosts for the same kernel dir no longer overwrite each other's liveness entry.
 
 ### Added
 

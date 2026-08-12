@@ -79,7 +79,11 @@ export class DeterministicVerificationEngine implements VerificationEngine {
 	 * within `root` (defaults to `cwd`). Refused (null) when the resolved path
 	 * escapes — deny-on-uncertainty, same as command gating.
 	 */
-	#confinedPath(state: StateSnapshot, checkPath: string): string | null {
+	#confinedPath(state: StateSnapshot, checkPath: unknown): string | null {
+		// Malformed checks must FAIL CLEANLY, not crash the verifier host
+		// (round-4 G1): path.resolve(cwd, undefined) throws
+		// ERR_INVALID_ARG_TYPE. A check without a usable path is unsatisfiable.
+		if (typeof checkPath !== "string" || checkPath.length === 0) return null;
 		const root = path.resolve(state.root ?? state.cwd);
 		const resolved = path.resolve(state.cwd, checkPath);
 		const relative = path.relative(root, resolved);

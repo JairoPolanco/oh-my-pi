@@ -87,6 +87,14 @@ describe("mapToolEffectToOperation", () => {
 		expect(mapToolEffectToOperation({ tool: "board", args: { op: "claim" } })).toEqual([
 			{ id: "task.claim", effect: "write", resource: "board" },
 		]);
+		// Lease mutations are WRITES, not reads (round-4 audit, paste-18 P1):
+		// a read-only principal must not extend or steal leases.
+		expect(mapToolEffectToOperation({ tool: "board", args: { op: "heartbeat" } })).toEqual([
+			{ id: "task.write", effect: "write", resource: "board" },
+		]);
+		expect(mapToolEffectToOperation({ tool: "board", args: { op: "reclaimExpired" } })).toEqual([
+			{ id: "task.write", effect: "write", resource: "board" },
+		]);
 	});
 
 	test("hub maps BY OPERATION from the REAL schema: name is the process identity (paste-8 P0 #1)", () => {
@@ -297,6 +305,21 @@ describe("EffectBroker", () => {
 			expect(denied.op?.resource).toContain("/tmp/omp-probe.txt");
 			expect(denied.reason).toContain("tmp");
 		}
+	});
+
+	test("/dev/null discard redirect is allowed, not an outside escape (round-4 G2)", () => {
+		// `echo hi > /dev/null` is a legit discard idiom — it was denied as
+		// outside:../dev/null. The null/zero/random devices are safe write
+		// targets, never an fs.write bypass (restricted to exact names — a
+		// blanket /dev/ allow would make /dev/sda writable).
+		const registry = new CapabilityRegistry();
+		registry.grant("agent", { id: "process.exec", scope: "repo/**", effect: "execute" });
+		const broker = new EffectBroker(new PolicyEngine(registry), undefined, { workspaceRoot: "/repo" });
+		expect(broker.allows("agent", { tool: "bash", args: { command: "echo hi > /dev/null" } })).toBe(true);
+		expect(broker.allows("agent", { tool: "bash", args: { command: "cat x > /dev/null 2>&1" } })).toBe(true);
+		// But /dev/sda is still denied — the device allowlist is exact.
+		const denied = broker.authorize("agent", { tool: "bash", args: { command: "echo x > /dev/sda" } });
+		expect(denied.allow).toBe(false);
 	});
 
 	test("authorize returns the mapped operations on success", () => {

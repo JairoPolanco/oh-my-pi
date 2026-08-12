@@ -126,6 +126,22 @@ describe("DeterministicVerificationEngine", () => {
 		expect(report.checkResults[0].detail).toContain("missing regex");
 	});
 
+	test("path-less checks fail cleanly instead of crashing the verifier (round-4 G1)", async () => {
+		// `{ kind: "pattern" }` with no path used to throw
+		// ERR_INVALID_ARG_TYPE (path.resolve(cwd, undefined)) — a malformed
+		// check crashed the whole verification instead of failing the check.
+		// Every path-shaped kind must produce an honest fail, never a throw.
+		const report = await engine.verify(
+			contract({
+				checks: [{ kind: "pattern" } as never, { kind: "fileExists" } as never, { kind: "json" } as never],
+			}),
+			{ cwd: dir, artifacts: [] },
+		);
+		expect(report.pass).toBe(false);
+		expect(report.checkResults).toHaveLength(3);
+		for (const result of report.checkResults) expect(result.pass).toBe(false);
+	});
+
 	test("json check asserts a dotted selector value", async () => {
 		await Bun.write(`${dir}/package.json`, JSON.stringify({ deps: { bun: "1.3.14" } }));
 		const report = await engine.verify(

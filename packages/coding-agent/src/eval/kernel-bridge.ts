@@ -1066,6 +1066,11 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 			}));
 		}
 		const results = await host.memory.recall({
+			// Round-4 audit (paste-18 P1): the fallback path previously
+			// dropped the query — recall({query:"does-not-exist"}) returned
+			// every committed fact. The query now reaches the backend's
+			// token-overlap filter.
+			query: typeof args.query === "string" ? args.query : undefined,
 			scope: args.scope === "user" || args.scope === "global" ? args.scope : undefined,
 			similarity: typeof args.similarity === "number" ? args.similarity : undefined,
 		});

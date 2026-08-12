@@ -60,9 +60,38 @@ export class KernelTrajectoryTap {
 					this.#append({ kind: "user.message", text: content.slice(0, 2000) });
 				}
 			}
+			if (event.type === "message_end" && event.message?.role === "assistant") {
+				// model.response (round-4 audit, paste-18 P1): the tap only
+				// emitted model.request with a hardcoded contextTokens: 0, so
+				// routing.stats() could never compute real output tokens or
+				// latency from ordinary sessions. The finalized assistant
+				// message carries the provider usage record — surface it.
+				const assistant = event.message as { usage?: { output?: number } };
+				const usage = assistant.usage;
+				this.#append({
+					kind: "model.response",
+					model: this.#session.agent.state.model.id,
+					outputTokens: usage?.output ?? 0,
+					latencyMs: 0,
+				});
+			}
 		});
 		this.#detachModelHook = this.#session.agent.addBeforeModelCallHook(() => {
-			this.#append({ kind: "model.request", model: this.#session.agent.state.model.id, contextTokens: 0 });
+			// contextTokens from the last assistant message's snapshot (round-4
+			// observability): the session stamps calculatePromptTokens(usage)
+			// into contextSnapshot; fall back to 0 only when no snapshot yet.
+			const messages = this.#session.agent.state?.messages ?? [];
+			let contextTokens = 0;
+			for (let index = messages.length - 1; index >= 0; index--) {
+				const message = messages[index];
+				if (message.role !== "assistant") continue;
+				const snapshot = (message as { contextSnapshot?: { promptTokens?: number } }).contextSnapshot;
+				if (snapshot?.promptTokens) {
+					contextTokens = snapshot.promptTokens;
+					break;
+				}
+			}
+			this.#append({ kind: "model.request", model: this.#session.agent.state.model.id, contextTokens });
 		});
 		return () => this.detach();
 	}
