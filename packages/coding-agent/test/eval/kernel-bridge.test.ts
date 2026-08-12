@@ -460,6 +460,8 @@ describe("kernel bridge memory + actors + capabilities", () => {
 				inputTokens: number;
 				outputTokens: number;
 				cacheReadTokens: number;
+				cacheReadRate: number | null;
+				cacheTelemetryCoverage: number | null;
 			}[];
 		};
 		expect(stats.models).toHaveLength(1);
@@ -468,6 +470,42 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(stats.models[0].outputTokens).toBe(1200);
 		// Round-13 c5: cache token share aggregated alongside fresh tokens.
 		expect(stats.models[0].cacheReadTokens).toBe(20000);
+		// Round-14 c10: the CORRECT rate is cacheRead / input (input already
+		// includes the cached prefix). 20000/3000 = 6.67 — the old
+		// cacheRead/(input+cacheRead) formula would have capped this at ~0.87
+		// and double-counted. Both responses carried the field → coverage 1.
+		expect(stats.models[0].cacheReadRate).toBeCloseTo(20000 / 3000, 3);
+		expect(stats.models[0].cacheTelemetryCoverage).toBe(1);
+	});
+
+	test("routing.stats labels pre-c5 responses (no cacheReadTokens field) via coverage (round-14 c10)", async () => {
+		const host = await kernelHostFor(makeSession());
+		host.events.append({ kind: "model.request", model: "m1", contextTokens: 1000 });
+		// Pre-c5 event: no cacheReadTokens field → must NOT count as 0 in
+		// the numerator, and coverage drops below 1 so callers can see the
+		// rate understates the session.
+		host.events.append({ kind: "model.response", model: "m1", outputTokens: 500, latencyMs: 100 });
+		host.events.append({ kind: "model.request", model: "m1", contextTokens: 2000 });
+		host.events.append({
+			kind: "model.response",
+			model: "m1",
+			outputTokens: 700,
+			cacheReadTokens: 12000,
+			latencyMs: 150,
+		});
+		const stats = (await call("routing.stats", {})) as {
+			models: {
+				cacheReadTokens: number;
+				cacheReadRate: number | null;
+				cacheTelemetryCoverage: number | null;
+				calls: number;
+			}[];
+		};
+		// The pre-c5 response contributed ZERO to the numerator (not 0-as-
+		// missing), and only 1 of 2 responses carried the field.
+		expect(stats.models[0].cacheReadTokens).toBe(12000);
+		expect(stats.models[0].cacheReadRate).toBeCloseTo(12000 / 3000, 3);
+		expect(stats.models[0].cacheTelemetryCoverage).toBe(0.5);
 	});
 
 	test("perf.profile ranks tools by latency with output bytes (harness profiler)", async () => {

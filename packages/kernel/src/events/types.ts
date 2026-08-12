@@ -87,8 +87,11 @@ export interface ModelResponse {
 	outputTokens: number;
 	/** Cached-prefix tokens charged to this request (round-13 c5): lets
 	 *  kernel-side consumers compute cacheRead% — the success metric of the
-	 *  cache-cost levers — instead of only fresh input/output. */
-	cacheReadTokens: number;
+	 *  cache-cost levers — instead of only fresh input/output. ABSENT on
+	 *  pre-c5 events (the field did not exist); consumers must not treat
+	 *  absence as zero (round-14 c10: coverage labels the share that carried
+	 *  it). */
+	cacheReadTokens?: number;
 	latencyMs: number;
 }
 

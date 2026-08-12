@@ -657,7 +657,7 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 		name: "routing.stats",
 		returns: "per-model stats + contract pass rate",
 		description:
-			"READ-ONLY telemetry from the session event log (the trajectory tap feeds model.request/model.response automatically — routing.record was removed as dead). Per-model call volume, tokens (incl. cacheReadTokens, round-13 c5), latency, plus contract pass rate.",
+			"READ-ONLY telemetry from the session event log (the trajectory tap feeds model.request/model.response automatically — routing.record was removed as dead). Per-model call volume, tokens (incl. cacheReadTokens), the CORRECT cache rate (cacheReadTokens / inputTokens — input already includes the cached prefix, so cacheRead/(input+cacheRead) double-counts and caps at ~50%: round-14 c10), cacheTelemetryCoverage (share of responses carrying the field; pre-c5 events have none), latency, plus contract pass rate.",
 		args: {},
 	},
 	"contract.create": {
@@ -1395,6 +1395,8 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 				inputTokens: number;
 				outputTokens: number;
 				cacheReadTokens: number;
+				/** Responses that carried a cacheReadTokens field (post-c5). */
+				cacheTelemetryEvents: number;
 				latencyMs: number;
 			}
 		>();
@@ -1405,6 +1407,7 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 				inputTokens: 0,
 				outputTokens: 0,
 				cacheReadTokens: 0,
+				cacheTelemetryEvents: 0,
 				latencyMs: 0,
 			};
 			stats.calls += 1;
@@ -1423,13 +1426,17 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 				inputTokens: 0,
 				outputTokens: 0,
 				cacheReadTokens: 0,
+				cacheTelemetryEvents: 0,
 				latencyMs: 0,
 			};
 			stats.outputTokens += payload.outputTokens;
-			// Round-13 c5: cached-prefix tokens (0 for pre-c5 events). Lets a
-			// session compute cacheRead% = cacheReadTokens / (input + cacheRead)
-			// — the success metric of the cache-cost levers.
-			stats.cacheReadTokens += payload.cacheReadTokens ?? 0;
+			// Round-13 c5: cached-prefix tokens. Pre-c5 events carry NO
+			// field — `?? 0` would silently dilute the aggregate, so count
+			// only events that actually reported it (round-14 c10).
+			if (payload.cacheReadTokens !== undefined) {
+				stats.cacheReadTokens += payload.cacheReadTokens;
+				stats.cacheTelemetryEvents += 1;
+			}
 			stats.latencyMs += payload.latencyMs;
 			byModel.set(payload.model, stats);
 		}
@@ -1448,6 +1455,20 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 				inputTokens: stats.inputTokens,
 				outputTokens: stats.outputTokens,
 				cacheReadTokens: stats.cacheReadTokens,
+				// Round-14 c10: the CORRECT cache metric. contextTokens (input)
+				// is the full prompt INCLUDING the cached prefix, so
+				// cacheRead / (input + cacheRead) double-counts and caps at
+				// ~50% on a perfect cache. The honest rate is
+				// cacheRead / input. null when no telemetry-bearing
+				// responses exist for this model.
+				cacheReadRate:
+					stats.cacheTelemetryEvents > 0 && stats.inputTokens > 0
+						? stats.cacheReadTokens / stats.inputTokens
+						: null,
+				// How much of the response stream carried the field — pre-c5
+				// events have no cacheReadTokens, so a low coverage means the
+				// rate understates the session (band/label accordingly).
+				cacheTelemetryCoverage: stats.calls > 0 ? stats.cacheTelemetryEvents / stats.calls : null,
 				latencyMs: stats.latencyMs,
 			})),
 			contracts: {

@@ -17,7 +17,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- `ModelResponse` events carry `cacheReadTokens` (round-13 c5): the trajectory tap surfaces the provider usage record's cached-prefix tokens on every `model.response`, and `routing.stats` aggregates `cacheReadTokens` per model — so `cacheRead% = cacheReadTokens / (inputTokens + cacheReadTokens)`, the named success metric of the cache-cost levers (tool-result spill, consumed-read elision), is finally measurable from the kernel surface instead of being invisible.
+- `ModelResponse` events carry `cacheReadTokens` (round-13 c5, corrected round-14 c10): the trajectory tap surfaces the provider usage record's cached-prefix tokens on `model.response`, and `routing.stats` aggregates `cacheReadTokens` per model — so `cacheRead% = cacheReadTokens / inputTokens` (input already includes the cached prefix; the earlier `/(input + cacheRead)` double-counted and capped at ~50%), the named success metric of the cache-cost levers (tool-result spill, consumed-read elision), is finally measurable from the kernel surface instead of being invisible. The field is absent on pre-c5 events; `routing.stats` reports `cacheTelemetryCoverage` so they are labelable, not silently zero.
 
 - `ToolCompleted` events now carry `latencyMs` + `outputBytes` (harness profiler): the trajectory tap records per-call duration and estimated output size — 4 chars ≈ 1 token ≈ the per-turn fresh-cache cost — so bottlenecks are observable instead of invisible.
 
