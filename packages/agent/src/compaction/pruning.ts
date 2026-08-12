@@ -136,8 +136,16 @@ const DEFAULT_IDLE_FLUSH_MS = 30 * 60_000;
  * so a file read fully in chunks accumulates at least ~12k tokens of content
  * per chunk; a group under this floor is too small for elision to matter.
  * Matches the spirit of `MIN_TOOL_RESULT_TOKENS` in snapcompact.
+ *
+ * Round-10 cache-cost lever: lowered from 16k to 4k. Measured sessions show
+ * the dominant FRESH-input spikes (2–4k per call) come from stale chunk
+ * reads that never reach the old 16k floor — each is re-sent verbatim on
+ * every later call. The warm-tail cache guard (suffix ≤ 8k) and idle flush
+ * still protect the prompt-cache prefix; the floor only gates when a group
+ * is big enough that eliding to the notice actually saves tokens
+ * (estimatePrunedSavings ≥ 0).
  */
-export const CONSUMED_READ_GROUP_MIN_TOKENS = 16_000;
+export const CONSUMED_READ_GROUP_MIN_TOKENS = 4_000;
 
 function createPrunedNotice(tokens: number): string {
 	return `[Output truncated - ${tokens} tokens]`;

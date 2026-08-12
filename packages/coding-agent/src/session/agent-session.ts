@@ -363,6 +363,21 @@ import { TtsrCoordinator, type TtsrCoordinatorHost } from "./ttsr-coordinator";
 const PLAN_MODE_REMINDER_MAX = 3;
 const POST_PROMPT_DRAIN_TIMEOUT_MS = 5_000;
 
+/**
+ * Max chars of tool-result TEXT kept inline in the conversation before the
+ * result is spilled to an artifact and replaced by a preview + artifact://
+ * link (round-10 cache-cost lever). Every tool result is FRESH input on the
+ * next provider call (it cannot be prompt-cached), so oversized outputs are
+ * the dominant per-call cache cost. 24k chars ≈ 6k tokens: above the
+ * median per-call fresh (≈1k) so small results flow untouched, below the
+ * read tool's own 50KB cap so big grep/bash/read outputs get truncated.
+ * The full content stays reachable via the artifact link — the model
+ * re-reads on demand instead of re-paying it every turn.
+ */
+const TOOL_RESULT_INLINE_MAX_CHARS = 24_000;
+/** Preview kept when a tool result is spilled (matches async preview size). */
+const TOOL_RESULT_PREVIEW_MAX_CHARS = 4_000;
+
 /** Internal marker for hook messages queued through the agent loop */
 // ============================================================================
 // Constants
@@ -3614,7 +3629,7 @@ export class AgentSession {
 		}
 	}
 
-	#afterToolCall(ctx: AfterToolCallContext): AfterToolCallResult | undefined {
+	async #afterToolCall(ctx: AfterToolCallContext): Promise<AfterToolCallResult | undefined> {
 		if (
 			this.#isTerminalYieldToolResult({
 				toolName: ctx.toolCall.name,
@@ -3626,7 +3641,57 @@ export class AgentSession {
 			this.#synchronouslyTerminatedYieldToolCallIds.add(ctx.toolCall.id);
 			this.agent.abort(TERMINAL_TOOL_RESULT_ABORT_REASON);
 		}
-		return this.#ttsr.afterToolCall(ctx);
+		// Round-10 cache-cost lever: spill oversized non-read tool results.
+		// Every tool result is FRESH input on the next provider call (never
+		// prompt-cached), so an unbounded bash/grep/scan output is re-paid
+		// every turn. Truncate inline to a preview + artifact:// link — the
+		// full content is one read away. read/grep/glob are excluded: they
+		// self-truncate at their own caps and their stale-result elision is
+		// handled by the supersede pass (capping here would strip the model's
+		// working view of a file before it is ever consumed).
+		const [spilled, ttsrResult] = await Promise.all([
+			this.#maybeSpillOversizedToolResult(ctx),
+			Promise.resolve(this.#ttsr.afterToolCall(ctx)),
+		]);
+		if (!spilled && !ttsrResult) return undefined;
+		return {
+			...(ttsrResult ?? {}),
+			...(spilled ?? {}),
+		};
+	}
+
+	/**
+	 * Spill a tool result whose inline text exceeds the cache-cost cap to an
+	 * artifact, replacing the content with a preview + `artifact://` link.
+	 * Returns the `AfterToolCallResult` override, or undefined when the result
+	 * is small, an error, or the tool is read-family (self-truncating).
+	 * Best-effort: an artifact write failure keeps the full content (never
+	 * loses data, never blocks the turn).
+	 */
+	async #maybeSpillOversizedToolResult(ctx: AfterToolCallContext): Promise<AfterToolCallResult | undefined> {
+		const name = ctx.toolCall.name;
+		if (name === "read" || name === "grep" || name === "glob" || name === "inspect_image") return undefined;
+		if (ctx.isError) return undefined;
+		const result = ctx.result;
+		if (!result || !Array.isArray(result.content)) return undefined;
+		const textBlocks = result.content.filter(
+			(block): block is { type: "text"; text: string } => block.type === "text" && typeof block.text === "string",
+		);
+		if (textBlocks.length === 0) return undefined;
+		const totalChars = textBlocks.reduce((sum, block) => sum + block.text.length, 0);
+		if (totalChars <= TOOL_RESULT_INLINE_MAX_CHARS) return undefined;
+
+		const fullText = textBlocks.map(block => block.text).join("");
+		const artifactId = await this.sessionManager.saveArtifact(fullText, name);
+		if (!artifactId) return undefined;
+		const previewWithLink = `${fullText.slice(0, TOOL_RESULT_PREVIEW_MAX_CHARS)}\n\n[Output truncated: ${totalChars.toLocaleString()} chars — full result: artifact://${artifactId}]`;
+		const firstTextIndex = result.content.findIndex(block => block.type === "text" && typeof block.text === "string");
+		const content = result.content.map((block, index) => {
+			if (block.type !== "text" || typeof block.text !== "string") return block;
+			if (index === firstTextIndex) return { type: "text" as const, text: previewWithLink };
+			return null; // drop subsequent text blocks (all in the artifact)
+		});
+		return { content: content.filter((block): block is TextContent => block !== null) };
 	}
 	/**
 	 * Emits the extension `tool_call` event for a loop-dispatched call at

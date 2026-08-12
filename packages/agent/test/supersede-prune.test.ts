@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { AgentMessage } from "@oh-my-pi/pi-agent-core";
 import type { SessionEntry, SessionMessageEntry } from "@oh-my-pi/pi-agent-core/compaction";
 import {
+	CONSUMED_READ_GROUP_MIN_TOKENS,
 	DEFAULT_PRUNE_CONFIG,
 	pruneSupersededToolResults,
 	pruneToolOutputs,
@@ -745,6 +746,33 @@ describe("consumed read group elision (harmony: chunked-read resend tax)", () =>
 		expect(result.prunedCount).toBe(0);
 		expect(resultText(result1)).toBe(FILE_CONTENT);
 		expect(resultText(result3)).toBe(FILE_CONTENT);
+	});
+
+	test("groups between 4k and 16k elide with the lowered default (round-10 cache lever)", () => {
+		// The default floor was lowered 16k → 4k: measured sessions showed the
+		// dominant FRESH-input spikes (2–4k/call) come from stale chunk reads
+		// that never reached 16k and were re-sent verbatim every later call.
+		// A ~8k combined group must now elide under the idle path.
+		const chunk = "const x = computeSomething(42);\n".repeat(1_200); // ~2.7k tokens per chunk
+		const [call1, result1] = readPair("src/mid.ts:1-800", chunk, T0);
+		const [call2, result2] = readPair("src/mid.ts:801-1600", chunk, T0 + 1_000);
+		const [call3, result3] = readPair("src/mid.ts:1601-2400", chunk, T0 + 2_000);
+		const entries: SessionEntry[] = [call1, result1, call2, result2, call3, result3];
+
+		const result = pruneSupersededToolResults(
+			entries,
+			cfg({
+				consumedReadGroupMinTokens: CONSUMED_READ_GROUP_MIN_TOKENS, // the NEW default (4k)
+				idleFlushMs: 30 * 60_000,
+				now: T0 + 3_000 + 31 * 60_000,
+			}),
+		);
+
+		expect(CONSUMED_READ_GROUP_MIN_TOKENS).toBe(4_000);
+		expect(result.prunedCount).toBe(2);
+		expect(resultText(result1)).toBe("[Consumed reads of src/mid.ts elided — re-read on demand]");
+		expect(resultText(result2)).toBe("[Consumed reads of src/mid.ts elided — re-read on demand]");
+		expect(resultText(result3)).toBe(chunk); // newest kept as working copy
 	});
 
 	test("disabled by default when the config omits the floor", () => {
