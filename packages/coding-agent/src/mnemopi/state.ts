@@ -480,9 +480,18 @@ export class MnemopiSessionState {
 		options: MnemopiRememberOptions,
 		scope: string | undefined,
 	): string | undefined {
+		// FAIL CLOSED (round-7 re-probe): when the global bank is not
+		// configured, falling through to the retain bank silently wrote a
+		// scope:"global" fact into the PROJECT bank — the exact silent-drop
+		// class the round-6 verdict flagged. A requested global write
+		// without a global bank is an ERROR surfaced to the caller, not a
+		// downgrade (checked OUTSIDE the catch so it propagates).
+		if (scope === "global" && !this.globalMemory) {
+			throw new Error(`no global memory bank configured (scope:"global" requested but globalBank is unset)`);
+		}
 		try {
-			if (scope === "global" && this.globalMemory) {
-				return this.globalMemory.remember(memory, options);
+			if (scope === "global") {
+				return this.globalMemory!.remember(memory, options);
 			}
 			return this.scoped.retain.memory.remember(memory, options);
 		} catch (error) {

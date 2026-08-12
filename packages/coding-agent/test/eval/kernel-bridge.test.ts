@@ -846,6 +846,30 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(writes).toEqual(["global", "project"]);
 	});
 
+	test("memory.propose scope:global FAILS CLOSED when no global bank exists (round-7 re-probe)", async () => {
+		// Round-7 re-probe: with the default per-project scoping there is NO
+		// global bank — the old code fell through to the retain bank, so a
+		// scope:"global" write silently landed in the PROJECT bank (the exact
+		// silent-drop class round 6 flagged). rememberScopedTo now throws
+		// when global is requested without a global bank, and the bridge
+		// must surface that error instead of falling back to the kernel
+		// store (which would also be the wrong place).
+		const session = makeSession({
+			getMnemopiSessionState: () =>
+				({
+					rememberScopedTo() {
+						throw new Error(
+							'no global memory bank configured (scope:"global" requested but globalBank is unset)',
+						);
+					},
+				}) as never,
+		});
+
+		await expect(
+			call("memory.propose", { fact: "global truth", confidence: 0.9, scope: "global" }, session),
+		).rejects.toThrow(/no global memory bank configured/);
+	});
+
 	test("artifacts.read falls back to the session artifact manager", async () => {
 		// One artifact system: OMP's own spilled tool outputs are addressable
 		// from the RLM by their session artifact id.

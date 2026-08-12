@@ -567,7 +567,12 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 		args: {
 			fact: { kind: "string", required: true, description: "The fact text" },
 			confidence: { kind: "number", required: false, description: "0-1 confidence" },
-			scope: { kind: "string", required: false, description: "project|session|global" },
+			scope: {
+				kind: "string",
+				required: false,
+				description:
+					"project (default) | session | global. global requires a configured global bank (mnemopi.scoping=per-project-tagged); without one the call FAILS CLOSED rather than writing to the wrong store",
+			},
 		},
 	},
 	"memory.commit": {
