@@ -600,6 +600,10 @@ describe("Mnemopi backend lifecycle", () => {
 		expect(rememberSpy).toHaveBeenCalledTimes(1);
 		const [storedTranscript, options] = rememberSpy.mock.calls[0];
 		if (options === undefined) throw new Error("retainMessages did not pass remember options");
+		// Storage keeps the retention framing (`[role: user]` / `[user:end]`)
+		// — the resume cursor derives the retained turn count from it. Marker
+		// stripping happens at every READ surface (search, recall, memories
+		// block — paste-17 #1), never in storage.
 		expect(storedTranscript).toContain("[role: assistant]");
 		expect(storedTranscript).toContain("reorder never activates");
 		expect(options.extract).toBe(true);
@@ -1051,6 +1055,26 @@ describe("Mnemopi backend lifecycle", () => {
 			source: "test-source",
 			score: expect.any(Number),
 		});
+
+		// Memory hygiene (paste-17 #1): an episode stored WITH the retention
+		// framing must come back through search WITHOUT it — the model never
+		// sees [role: user] / [user:end] protocol noise from any read surface.
+		await state.retainMessages(
+			[
+				{ role: "user", content: "the user prefers tabs in indentation" },
+				{ role: "assistant", content: "indentation never activates" },
+			],
+			"episode-source",
+		);
+		const episodeSearch = await mnemopiBackend.search!(
+			{ agentDir: path.dirname(config.dbPath), cwd: "/work/project-alpha", session },
+			"tabs in indentation",
+		);
+		const episodeHit = episodeSearch.items.find(item => item.content.includes("tabs in indentation"));
+		expect(episodeHit).toBeDefined();
+		expect(episodeHit!.content).not.toContain("[role:");
+		expect(episodeHit!.content).not.toContain(":end]");
+		expect(episodeHit!.content).toContain("indentation never activates");
 	});
 
 	it("reports aborted searches and save-without-id failures", async () => {

@@ -77,6 +77,52 @@ function canonicalFileResource(raw: string, root: string | undefined): string {
 	return `repo/${rel.split(path.sep).join("/")}`;
 }
 
+/**
+ * Non-file targets the read/grep/glob family can address (round-3 audit P0,
+ * paste-18): URLs (reader-mode fetch), internal URLs (artifact://, skill://,
+ * mcp://, memory://, …) and ssh:// hosts. These must NEVER be canonicalized
+ * as repo file paths — `read path="https://example.com/secret"` was
+ * authorized as `repo/https:/example.com/secret`, a truthful-looking but
+ * wrong resource that matched the fs.read repo/** grant. Each scheme is
+ * classified as its own resource so a principal with only fs.read repo/**
+ * is correctly DENIED a network/internal fetch, and the deny message names
+ * the real target.
+ */
+function classifyNonFileTarget(raw: string): string | null {
+	// Known network protocols → network resource (fetch/browser reads).
+	if (/^(https?|ftp|ws|wss|ssh):\/\//.test(raw)) return `network:${raw}`;
+	// Everything else with a scheme (artifact://, skill://, rule://,
+	// memory://, mcp://, …) is an INTERNAL URL, not a network fetch and
+	// never a repo file path.
+	if (raw.includes("://")) return `internal:${raw}`;
+	return null;
+}
+
+/**
+ * The file resources a read/grep/glob call actually touches (round-3 audit
+ * P0, paste-18): these tools accept a SEMICOLON-DELIMITED multi-path list,
+ * but the broker previously canonicalized the unsplit string as ONE resource
+ * — `grep path="src; /etc/passwd"` authorized as `repo/src; /etc/passwd`,
+ * matching the repo/** grant while the tool then read /etc/passwd. Split
+ * top-level entries and canonicalize each independently, so every touched
+ * resource must be covered by the grant. Entries with a URL/scheme prefix
+ * are classified via {@link classifyNonFileTarget}, never as repo paths.
+ */
+function canonicalFileResources(raw: string, root: string | undefined): string[] {
+	if (!raw.includes(";")) {
+		const nonFile = classifyNonFileTarget(raw.trim());
+		return [nonFile ?? canonicalFileResource(raw.trim(), root)];
+	}
+	const resources: string[] = [];
+	for (const entry of raw.split(";")) {
+		const trimmed = entry.trim();
+		if (trimmed.length === 0) continue;
+		const nonFile = classifyNonFileTarget(trimmed);
+		resources.push(nonFile ?? canonicalFileResource(trimmed, root));
+	}
+	return resources.length > 0 ? resources : [canonicalFileResource(raw, root)];
+}
+
 /** Canonicalize a process resource: the workspace context the command runs in. */
 function canonicalProcessResource(cwd: string | undefined, root: string | undefined): string {
 	const effectiveCwd = cwd ?? root;
@@ -85,10 +131,10 @@ function canonicalProcessResource(cwd: string | undefined, root: string | undefi
 	try {
 		abs = path.resolve(root, effectiveCwd);
 	} catch {
-		return "outside:";
+		return `outside:${effectiveCwd}`;
 	}
 	const rel = path.relative(root, abs);
-	if (rel.startsWith("..") || path.isAbsolute(rel)) return "outside:";
+	if (rel.startsWith("..") || path.isAbsolute(rel)) return `outside:${rel.split(path.sep).join("/")}`;
 	return `repo/${rel.split(path.sep).join("/")}`;
 }
 
@@ -106,10 +152,25 @@ function canonicalProcessResource(cwd: string | undefined, root: string | undefi
  */
 function bashWriteTargetsOutside(
 	command: string | undefined,
-	_cwd: string | undefined,
+	cwd: string | undefined,
 	root: string | undefined,
 ): boolean {
-	if (!command || !root) return false;
+	return firstBashWriteTargetOutside(command, cwd, root) !== null;
+}
+
+/**
+ * First redirect target escaping the workspace (round-3 audit #4): the deny
+ * must name WHAT was denied — a bare `outside:` resource forces a guess on
+ * retry. Reuses the same conservative parse as
+ * {@link bashWriteTargetsOutside}; returns the canonical `outside:<path>`
+ * resource for the first escaping target, or null when none does.
+ */
+function firstBashWriteTargetOutside(
+	command: string | undefined,
+	_cwd: string | undefined,
+	root: string | undefined,
+): string | null {
+	if (!command || !root) return null;
 	const home = typeof process.env.HOME === "string" ? process.env.HOME : undefined;
 	const tmp = typeof process.env.TMPDIR === "string" ? process.env.TMPDIR : "/tmp";
 	const expand = (raw: string): string => {
@@ -122,7 +183,10 @@ function bashWriteTargetsOutside(
 	let match: RegExpExecArray | null = TOKEN.exec(command);
 	while (match !== null) {
 		const target = match[2]!;
-		if (!target) continue;
+		if (!target) {
+			match = TOKEN.exec(command);
+			continue;
+		}
 		// fd merge like 2>&1 or >&1 — the token is an fd, not a path.
 		if (/^&\d+$/.test(target) || /^\d+$/.test(target)) {
 			match = TOKEN.exec(command);
@@ -143,10 +207,10 @@ function bashWriteTargetsOutside(
 			continue;
 		}
 		const rel = path.relative(root, abs);
-		if (rel.startsWith("..") || path.isAbsolute(rel)) return true;
+		if (rel.startsWith("..") || path.isAbsolute(rel)) return `outside:${rel.split(path.sep).join("/")}`;
 		match = TOKEN.exec(command);
 	}
-	return false;
+	return null;
 }
 
 /** Hostname from a URL (paste-7 P1): network authority is the host, not the raw URL. */
@@ -218,8 +282,15 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 		case "grep":
 		case "glob":
 		case "inspect_image":
-		case "ast_grep":
-			return [op("fs.read", "read", canonicalFileResource(firstString(args) ?? "", root))];
+		case "ast_grep": {
+			// Multi-path + non-file classification (round-3 audit P0,
+			// paste-18): each semicolon-delimited entry is its own resource,
+			// and URL/internal/ssh targets are classified by scheme — a read
+			// grant must never authorize a network fetch, and the unsplit
+			// string must never mask an outside path.
+			const raw = firstString(args) ?? "";
+			return canonicalFileResources(raw, root).map(resource => op("fs.read", "read", resource));
+		}
 		case "lsp": {
 			// LSP maps BY ACTION (paste-8 P0 #6): the tool itself classifies
 			// rename/rename_file/code_actions+apply as writes. A read grant
@@ -266,7 +337,12 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 				typeof args.command === "string" &&
 				bashWriteTargetsOutside(args.command, args.cwd as string | undefined, root)
 			) {
-				return [op("process.exec", "execute", "outside:")];
+				// Name the escaping redirect target (round-3 audit #4): a bare
+				// `outside:` resource told the model nothing about WHAT was
+				// denied, so the retry was a guess. Resolve the first escaping
+				// target for the deny message.
+				const target = firstBashWriteTargetOutside(args.command, args.cwd as string | undefined, root);
+				return [op("process.exec", "execute", target ?? "outside:")];
 			}
 			return [op("process.exec", "execute", canonicalProcessResource(args.cwd as string | undefined, root))];
 		case "fetch":

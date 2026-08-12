@@ -586,6 +586,34 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(pending.reason).toContain("pending");
 	});
 
+	test("harness.recordEvaluation requires harness.evaluate — the RLM cannot self-certify (round-3 P0)", async () => {
+		// paste-18 P0: harness.recordEvaluation and harness.promote shared the
+		// same capability, and the main agent's bootstrap holds it — so the
+		// model could record its own "promote" verdict and then apply it. The
+		// recording op now requires the `harness.evaluate` capability, which
+		// only the trusted evaluator (gateway operator with the "harness"
+		// scope) holds. The main agent can propose, and can APPLY a verdict a
+		// trusted source already recorded, but can never record one.
+		await call("harness.hypothesis", {
+			component: "tool-default",
+			observation: "o",
+			hypothesis: "h",
+		});
+		// Main (full baseline) is DENIED the recording op.
+		await expect(
+			call("harness.recordEvaluation", { version: 1, decision: "promote", reason: "self" }),
+		).rejects.toThrow(/lacks harness\.evaluate/);
+
+		// Even if a principal had promote, it still cannot record.
+		const host = await kernelHostFor(makeSession());
+		host.capabilities.setParent("HasPromote", "Main");
+		host.capabilities.grant("HasPromote", { id: "harness.promote", scope: "harness", effect: "execute" });
+		const hasPromote = makeSession({ getAgentId: () => "HasPromote" });
+		await expect(call("harness.recordEvaluation", { version: 1, decision: "promote" }, hasPromote)).rejects.toThrow(
+			/lacks harness\.evaluate/,
+		);
+	});
+
 	test("gateway.status reports the daemon runtime and method roster", async () => {
 		const status = (await call("gateway.status", {})) as {
 			runtimes: { id: string; provider: string; model: string }[];

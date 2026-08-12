@@ -2516,7 +2516,7 @@ export class AgentSession {
 		const { kernelEffectGateEnabled, authorizeToolEffect, kernelHostFor } = await import("../eval/kernel-bridge");
 		if (!kernelEffectGateEnabled()) return { blocked: false };
 		try {
-			const host = await kernelHostFor(this.#kernelSessionAdapter());
+			const host = await kernelHostFor(this.kernelSessionAdapter());
 			const gate = await authorizeToolEffect({
 				host,
 				actor: this.getAgentId?.() ?? host.mainPrincipal,
@@ -2578,8 +2578,11 @@ export class AgentSession {
 		this.#appendSessionMessage(message);
 	}
 
-	/** Minimal session-shaped adapter for kernel host resolution (gate + re-issue). */
-	#kernelSessionAdapter(): KernelSessionAdapter {
+	/**
+	 * Minimal session-shaped adapter for kernel host resolution (gate,
+	 * re-issue, and the context-governor eviction sink in sdk.ts).
+	 */
+	kernelSessionAdapter(): KernelSessionAdapter {
 		return {
 			cwd: this.sessionManager.getCwd(),
 			hasUI: false,
@@ -3656,8 +3659,8 @@ export class AgentSession {
 				// broker needs the tool name + args passed directly below.
 				// TYPED as KernelSessionAdapter — a member the host needs
 				// becomes a compile error here, never a silent `as never`
-				// undefined (see #kernelSessionAdapter).
-				const host = await kernelHostFor(this.#kernelSessionAdapter());
+				// undefined (see kernelSessionAdapter).
+				const host = await kernelHostFor(this.kernelSessionAdapter());
 				// Instrument this session's REAL trajectory into the kernel
 				// event log — the one place production turns reach the host.
 				// Best-effort and once-per-session (lazy import keeps the

@@ -29,23 +29,7 @@ import type { SessionManager } from "../session/session-manager";
 
 /** Map an OMP message to a kernel context candidate. */
 export function messageToCandidate(message: AgentMessage, index: number): ContextRequest["candidates"][number] {
-	const isExecution = message.role === "bashExecution" || message.role === "pythonExecution";
-	let text = "";
-	if (isExecution) {
-		text = `${(message as { command?: string }).command ?? ""}\n${(message as { output?: string }).output ?? ""}`;
-	} else if ("content" in message) {
-		const content = (message as { content: unknown }).content;
-		text =
-			typeof content === "string"
-				? content
-				: (content as { type: string; text?: string }[])
-						.filter(
-							(part): part is { type: "text"; text: string } =>
-								part.type === "text" && typeof part.text === "string",
-						)
-						.map(part => part.text)
-						.join("\n");
-	}
+	const text = messageText(message);
 	const role = message.role;
 	const kind: ContextItemKind = role === "developer" ? "instruction" : role === "user" ? "working" : "trajectory";
 	const level: ContextLevel = role === "developer" ? "active" : role === "user" ? "working" : "episodic";
@@ -59,6 +43,27 @@ export function messageToCandidate(message: AgentMessage, index: number): Contex
 		reliability: 1,
 		content: text,
 	};
+}
+
+/** Extract the displayable text of an OMP message (execution messages carry
+ *  command+output, content messages carry text blocks). Shared by the
+ *  candidate mapper and the pass-through path. */
+function messageText(message: AgentMessage): string {
+	if (message.role === "bashExecution" || message.role === "pythonExecution") {
+		const exec = message as { command?: string; output?: string };
+		return `${exec.command ?? ""}\n${exec.output ?? ""}`;
+	}
+	if (!("content" in message)) return "";
+	const content = (message as { content: unknown }).content;
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter(
+			(part): part is { type: "text"; text: string } =>
+				typeof part === "object" && part !== null && (part as { type?: unknown }).type === "text",
+		)
+		.map(part => part.text)
+		.join("\n");
 }
 
 /**
@@ -85,6 +90,26 @@ export class OmpContextEngine implements ContextEngine {
 	}
 
 	async materialize(request: ContextRequest): Promise<ContextView> {
+		// Governance off (round-3 audit fresh bug): `enabled` was stored but
+		// materialize() always transformed the transcript, so a session that
+		// opted out of kernel context governance still got its context
+		// rewritten — silent behavior change behind a documented off switch.
+		// Off → return the full session context untouched (candidates merged
+		// so explicit artifacts remain available), never a governed view.
+		if (!this.#enabled) {
+			const raw = this.#sessionManager.buildSessionContext();
+			const content = raw.messages.map(messageText).join("\n");
+			const view: ContextView = {
+				sessionId: request.sessionId,
+				items: [],
+				budget: request.tokenBudget,
+				usedTokens: 0,
+				allocation: {},
+				materializedAt: Date.now(),
+				rendered: { content, codec: "raw", tokenCount: estimateTokens(content) },
+			};
+			return view;
+		}
 		// The REAL transcript — this is what OMP would send the model.
 		const sessionContext = this.#sessionManager.buildSessionContext();
 		const candidates = sessionContext.messages.map(messageToCandidate);

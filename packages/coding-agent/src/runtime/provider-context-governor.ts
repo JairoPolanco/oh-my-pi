@@ -31,7 +31,14 @@
 
 import type { Context, Message, TextContent } from "@oh-my-pi/pi-ai";
 import type { Model } from "@oh-my-pi/pi-catalog/types";
-import { ContextMaterializer, ContextOverflowError, type ContextRequest, estimateTokens } from "@oh-my-pi/pi-kernel";
+import {
+	ContextMaterializer,
+	ContextOverflowError,
+	type ContextRequest,
+	type ContextView,
+	type EvictedSpan,
+	estimateTokens,
+} from "@oh-my-pi/pi-kernel";
 import { messageToCandidate } from "./omp-context-engine";
 
 /** Benchmark gate env var; metaharness flips it per experiment arm. */
@@ -53,6 +60,15 @@ const DEFAULT_CONTEXT_WINDOW = 128_000;
 const OUTPUT_RESERVE_FRACTION = 0.1;
 const SYSTEM_TOOLS_OVERHEAD_FRACTION = 0.1;
 const PROVIDER_OVERHEAD_FRACTION = 0.05;
+
+/**
+ * Minimum governing turns between `context.evicted` emissions from the
+ * governor. Eviction is the steady state under governance (every over-budget
+ * turn compresses), so per-turn emission would flood the event stream with
+ * the same signal; the first compression reports immediately, then at most
+ * one event per this many turns.
+ */
+const EVICT_EVENT_EVERY_N_TURNS = 10;
 
 /** True when the benchmark gate is open (env `1`/`true`). */
 export function kernelContextGovernanceEnabled(): boolean {
@@ -133,6 +149,18 @@ export class ProviderContextGovernor {
 	#materializer: ContextMaterializer;
 	/** Config-file override (omjai's `kernel.contextGovernance: true`); ORs with the env gate. */
 	#settingsEnabled: boolean;
+	/** Caller sink for whole-span history evictions (round-3: governor feedback). */
+	#onEvict: ((evicted: EvictedSpan[], view: ContextView) => void) | undefined;
+	/**
+	 * Turns until the next `context.evicted` emission is allowed. Governor
+	 * eviction is STEADY-STATE under governance (every over-budget turn
+	 * compresses), unlike the probe path where a hard-budget drop is rare —
+	 * emitting per turn would flood the event stream. Starts at 0 so the
+	 * FIRST compression (the signal the model most needs) reports
+	 * immediately; after that at most one event per EVICT_EVENT_EVERY_N_TURNS
+	 * governing turns.
+	 */
+	#turnsUntilEvictEmit = 0;
 	/**
 	 * Cache-stable selection state (dogfooding everyday fix): the message
 	 * INDICES the provider received on the previous turn. Indices are
@@ -168,10 +196,11 @@ export class ProviderContextGovernor {
 		// true spendable pool, so the materializer must not reserve again —
 		// otherwise provider history is ~10% more conservative than intended.
 		materializer: ContextMaterializer = new ContextMaterializer({ reserveFraction: 0 }),
-		options: { settingsEnabled?: boolean } = {},
+		options: { settingsEnabled?: boolean; onEvict?: (evicted: EvictedSpan[], view: ContextView) => void } = {},
 	) {
 		this.#materializer = materializer;
 		this.#settingsEnabled = options.settingsEnabled ?? false;
+		this.#onEvict = options.onEvict;
 	}
 
 	async transform(context: Context, model: Model): Promise<Context> {
@@ -180,6 +209,8 @@ export class ProviderContextGovernor {
 		// promotion). Plain omp with neither stays byte-identical.
 		if (!kernelContextGovernanceEnabled() && !this.#settingsEnabled) return context;
 		if (context.messages.length === 0) return context;
+		// Count governing turns toward the eviction-event cooldown.
+		if (this.#turnsUntilEvictEmit > 0) this.#turnsUntilEvictEmit--;
 
 		// B_history = B_model − output − system/tools − provider overhead.
 		// Benchmark window override (governance gate open only): forces real
@@ -301,23 +332,39 @@ export class ProviderContextGovernor {
 			});
 			candidateUnitOf.set(`span:${unit.start}-${unit.end}`, unitIndex);
 		});
+		// Round-3 eviction feedback: collect the spans this turn's materialize
+		// dropped (hard-budget pass only — never-selected candidates and
+		// truncations are not evictions) plus any unit the final hard-budget
+		// pass had to evict, then surface ONE aggregated, rate-limited
+		// `context.evicted` event. The model must not detect history loss by
+		// noticing absence.
+		const turnEvictions: EvictedSpan[] = [];
+		let turnView: ContextView | undefined;
 		const view =
 			optionalBudget > 0
-				? this.#materializer.materialize({
-						tokenBudget: optionalBudget,
-						// objective/instructions are NOT re-passed here (paste-7
-						// P0/P1): the developer message and current user turn
-						// are already mandatory units that survive whole —
-						// materializing them AGAIN as pseudo-candidates would
-						// spend optional history budget on representations that
-						// are later discarded. They are scoring metadata at the
-						// unit level, already accounted.
-						candidates,
-						// Cache-stable selection: units that survived last turn
-						// are selected first; only NEW units compete for the
-						// remainder by value (everyday-context fix).
-						stickyIds: this.#stickyIds,
-					})
+				? this.#materializer.materialize(
+						{
+							tokenBudget: optionalBudget,
+							// objective/instructions are NOT re-passed here (paste-7
+							// P0/P1): the developer message and current user turn
+							// are already mandatory units that survive whole —
+							// materializing them AGAIN as pseudo-candidates would
+							// spend optional history budget on representations that
+							// are later discarded. They are scoring metadata at the
+							// unit level, already accounted.
+							candidates,
+							// Cache-stable selection: units that survived last turn
+							// are selected first; only NEW units compete for the
+							// remainder by value (everyday-context fix).
+							stickyIds: this.#stickyIds,
+						},
+						{
+							onEvict: (evicted, evictedView) => {
+								turnEvictions.push(...evicted);
+								turnView = evictedView;
+							},
+						},
+					)
 				: {
 						items: [],
 						budget: 0,
@@ -362,6 +409,24 @@ export class ProviderContextGovernor {
 		// request.
 		const final = enforceHardBudgetOnUnits(units, rebuilt, selectedUnits, mandatoryUnitIds, historyBudget);
 
+		// Final-pass evictions (units the materializer kept but the hard
+		// invariant still had to drop) join the aggregated event — the
+		// provider loses them this turn just like materialize evictions.
+		if (final.survivingUnitIds.size < selectedUnits.size) {
+			for (const unit of units) {
+				const unitIndex = units.indexOf(unit);
+				if (!selectedUnits.has(unitIndex) || final.survivingUnitIds.has(unitIndex)) continue;
+				let cost = 0;
+				for (let i = unit.start; i <= unit.end; i++) cost += messageTokenCost(messages[i]!);
+				const spanStart = spanOf.get(unit.start);
+				const spanId =
+					spanStart !== undefined && spanOf.get(unit.end) === spanStart
+						? `span:${unit.start}-${unit.end}`
+						: `${unit.start}:${messages[unit.start]!.role}`;
+				turnEvictions.push({ id: spanId, kind: "trajectory", tokens: cost });
+			}
+		}
+
 		// Cache-stable state: record the FINAL output's message indices (the
 		// provider's cache prefix this turn). Any index that was in the
 		// PREVIOUS output but is absent now enters the permanent dropped set —
@@ -388,6 +453,35 @@ export class ProviderContextGovernor {
 			if (!mandatoryUnitIds.has(unitIndex)) continue;
 			for (let i = unit.start; i <= unit.end; i++) nextPrevOutput.add(i);
 		}
+
+		// Round-3 eviction feedback — the REAL absence signal: a message index
+		// that was in the PREVIOUS provider output and is absent now is
+		// history the model had and lost. Under the current costing the
+		// materializer's hard-budget pass (and the governor's final pass)
+		// rarely fire — drops happen by value-ranking (never selected), which
+		// F3's onEvict deliberately excludes. For the governor that exclusion
+		// was wrong: the model does not see the selection, so every drop is
+		// loss detected by noticing absence. The prevOutput delta is the
+		// honest event payload.
+		const reportedUnitIds = new Set<string>();
+		for (const index of this.#prevOutputIndices) {
+			if (nextPrevOutput.has(index)) continue;
+			const spanIndex = spanOf.get(index);
+			if (spanIndex !== undefined) {
+				const span = spans[spanIndex]!;
+				const spanId = `span:${span.start}-${span.end}`;
+				if (reportedUnitIds.has(spanId)) continue;
+				reportedUnitIds.add(spanId);
+				let cost = 0;
+				for (let i = span.start; i <= span.end; i++) cost += messageTokenCost(messages[i]!);
+				turnEvictions.push({ id: spanId, kind: "trajectory", tokens: cost });
+			} else {
+				const id = `${index}:${messages[index]!.role}`;
+				if (reportedUnitIds.has(id)) continue;
+				reportedUnitIds.add(id);
+				turnEvictions.push({ id, kind: "trajectory", tokens: messageTokenCost(messages[index]!) });
+			}
+		}
 		// Indices that were in the previous output but are absent now → dropped
 		// forever (they left the provider's cache prefix).
 		for (const index of this.#prevOutputIndices) {
@@ -395,6 +489,27 @@ export class ProviderContextGovernor {
 		}
 		this.#stickyIds = nextSticky;
 		this.#prevOutputIndices = nextPrevOutput;
+
+		// Surface the aggregated evictions (materialize hard-pass, final-pass,
+		// and the prevOutput delta) as ONE rate-limited `context.evicted`
+		// event. First loss reports immediately; after that at most one event
+		// per EVICT_EVENT_EVERY_N_TURNS governing turns — the steady state
+		// under governance must not flood the stream. Delta-driven events have
+		// no materialize view; carry the governor's own budget/used numbers.
+		if (turnEvictions.length > 0 && this.#turnsUntilEvictEmit === 0) {
+			this.#turnsUntilEvictEmit = EVICT_EVENT_EVERY_N_TURNS;
+			this.#onEvict?.(
+				turnEvictions,
+				turnView ?? {
+					items: [],
+					budget: historyBudget,
+					usedTokens: final.messages.reduce((sum, message) => sum + messageTokenCost(message), 0),
+					allocation: {},
+					materializedAt: Date.now(),
+					rendered: { content: "", codec: "raw", tokenCount: 0 },
+				},
+			);
+		}
 		return { ...context, messages: final.messages };
 	}
 }

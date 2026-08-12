@@ -38,6 +38,36 @@ describe("mapToolEffectToOperation", () => {
 		]);
 	});
 
+	test("multi-path tools authorize EACH delimited entry, not the unsplit string (round-3 P0)", () => {
+		// `grep path="src; /etc/passwd"` previously canonicalized the whole
+		// string as `repo/src; /etc/passwd` (matching the repo/** grant) while
+		// the tool then read /etc/passwd. Every entry is now its own resource.
+		expect(mapToolEffectToOperation({ tool: "grep", args: { path: "src; /etc/passwd" } }, "/repo")).toEqual([
+			{ id: "fs.read", effect: "read", resource: "repo/src" },
+			{ id: "fs.read", effect: "read", resource: "outside:../etc/passwd" },
+		]);
+		expect(mapToolEffectToOperation({ tool: "grep", args: { path: "src; test" } }, "/repo")).toEqual([
+			{ id: "fs.read", effect: "read", resource: "repo/src" },
+			{ id: "fs.read", effect: "read", resource: "repo/test" },
+		]);
+	});
+
+	test("URL/internal/ssh read targets are classified by scheme, never repo paths (round-3 P0)", () => {
+		// `read path="https://example.com/secret"` was authorized as
+		// `repo/https:/example.com/secret` (fs.read repo/** grant). Network
+		// and internal fetches are their own resources — a principal with
+		// only fs.read repo/** is correctly denied.
+		expect(mapToolEffectToOperation({ tool: "read", args: { path: "https://example.com/secret" } }, "/repo")).toEqual(
+			[{ id: "fs.read", effect: "read", resource: "network:https://example.com/secret" }],
+		);
+		expect(mapToolEffectToOperation({ tool: "read", args: { path: "mcp://server/resource" } }, "/repo")).toEqual([
+			{ id: "fs.read", effect: "read", resource: "internal:mcp://server/resource" },
+		]);
+		expect(mapToolEffectToOperation({ tool: "grep", args: { path: "artifact://abc123" } }, "/repo")).toEqual([
+			{ id: "fs.read", effect: "read", resource: "internal:artifact://abc123" },
+		]);
+	});
+
 	test("task is agent spawning — never board work (paste-7 P0 #3)", () => {
 		expect(mapToolEffectToOperation({ tool: "task", args: {} })).toEqual([
 			{ id: "agent.spawn", effect: "spawn", resource: "actor" },
@@ -250,6 +280,23 @@ describe("EffectBroker", () => {
 		expect(broker.allows("agent", { tool: "bash", args: { command: "echo hi > out.log" } })).toBe(true);
 		// fd merges and heredocs are not path targets — still allowed.
 		expect(broker.allows("agent", { tool: "bash", args: { command: "bun test 2>&1 | tee /repo/x.log" } })).toBe(true);
+	});
+
+	test("bash redirect deny names the escaping target (round-3 audit #4)", () => {
+		// A bare `outside:` resource forced a guessing retry. The mapped
+		// operation's resource must name the first escaping redirect target.
+		const registry = new CapabilityRegistry();
+		registry.grant("agent", { id: "process.exec", scope: "repo/**", effect: "execute" });
+		const broker = new EffectBroker(new PolicyEngine(registry), undefined, { workspaceRoot: "/repo" });
+		const denied = broker.authorize("agent", {
+			tool: "bash",
+			args: { command: "echo PROBE > /tmp/omp-probe.txt" },
+		});
+		expect(denied.allow).toBe(false);
+		if (!denied.allow) {
+			expect(denied.op?.resource).toContain("/tmp/omp-probe.txt");
+			expect(denied.reason).toContain("tmp");
+		}
 	});
 
 	test("authorize returns the mapped operations on success", () => {

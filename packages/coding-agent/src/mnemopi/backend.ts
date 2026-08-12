@@ -8,6 +8,7 @@ import type { DiagnosticSummary } from "@oh-my-pi/pi-mnemopi/diagnose";
 import { logger } from "@oh-my-pi/pi-utils";
 import type { ModelRegistry } from "../config/model-registry";
 import { resolveRoleSelection } from "../config/model-resolver";
+import { stripRetentionProtocolMarkers } from "../hindsight/content";
 import type {
 	MemoryBackend,
 	MemoryBackendSaveInput,
@@ -246,7 +247,12 @@ export const mnemopiBackend: MemoryBackend = {
 		}
 		const items: MemoryBackendSearchItem[] = results.map(result => ({
 			id: result.id,
-			content: result.content,
+			// Memory hygiene (paste-17 #1): stored episodes keep the
+			// `[role: user]` / `[user:end]` framing (the resume cursor derives
+			// turn counts from it), so every READ surface must strip it —
+			// search included — or the model sees protocol noise and the
+			// recall→retain loop feeds on itself.
+			content: stripRetentionProtocolMarkers(result.content) || result.content,
 			source: result.source ?? undefined,
 			timestamp: result.timestamp ?? undefined,
 			score: result.score,

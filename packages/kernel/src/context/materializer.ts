@@ -147,7 +147,11 @@ export class ContextMaterializer {
 		const globalRemaining = (): number => spendable - used;
 		const bandUsed = new Map<ContextItemKind, number>();
 
-		// Mandatory kinds first (still subject to the global budget).
+		// Mandatory kinds first (still subject to the global budget). Selections
+		// are recorded in `selectedIds` so the sticky pass below can never
+		// re-select an already-selected candidate (round-3 audit fresh bug:
+		// stickyIds containing a mandatory kind duplicated it in the view).
+		const selectedIds = new Set<string>();
 		for (const kind of MANDATORY_KINDS) {
 			const kindCandidates = candidates.filter(c => c.kind === kind).sort((a, b) => itemValue(b) - itemValue(a));
 			let kindUsed = 0;
@@ -157,6 +161,7 @@ export class ContextMaterializer {
 				const fit = this.#fitCandidate(candidate, available);
 				if (!fit) break;
 				items.push(fit.item);
+				selectedIds.add(candidate.id);
 				kindUsed += fit.cost;
 				used += fit.cost;
 			}
@@ -173,9 +178,9 @@ export class ContextMaterializer {
 		// on a real 156k session → ~3.4x cache cost). New units still compete
 		// for the REMAINDER by value below.
 		const stickyIds = request.stickyIds;
-		const selectedIds = new Set<string>();
 		if (stickyIds && stickyIds.size > 0) {
 			for (const candidate of candidates) {
+				if (selectedIds.has(candidate.id)) continue;
 				if (!stickyIds.has(candidate.id)) continue;
 				if (globalRemaining() <= 0) break;
 				const fit = this.#fitCandidate(candidate, globalRemaining());

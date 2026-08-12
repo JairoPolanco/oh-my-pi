@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- `contract.verify` no longer trusts caller-supplied evidence refs: every evidence id is resolved through the artifact store, its content hash verified, and kind taken from the stored record — forged `{id, kind}` pairs fail verification instead of satisfying `requiredEvidence` (recursive audit P0).
+- Pattern checks fail closed when neither `pattern` nor `regex` is present, and accept the model-facing `pattern` field (a missing field previously produced `RegExp(undefined)` = `/(?:)/` matching everything).
+- Read/grep/glob effect mapping authorizes EACH semicolon-delimited path entry instead of the unsplit string (a `src; /etc/passwd` grep previously canonicalized as one in-repo resource), and classifies URL/internal/ssh targets by scheme — a network fetch can no longer pass under an `fs.read: repo/**` grant.
+- Bash redirect denies name the escaping target (`outside:<path>`) instead of a bare `outside:` resource.
+- Context materializer no longer duplicates a mandatory candidate that is also sticky-selected.
+
+### Added
+
+- `ContextMaterializer.materialize` accepts an `onEvict` callback reporting whole spans dropped by the hard-budget pass; the provider context governor surfaces aggregated, rate-limited `context.evicted` events (source `"governor"`) driven by the honest prev-output delta — the model never detects history loss by noticing absence.
+
 - Fenced task-store writes (pi quality, upstream writer-leases.ts): `SqliteTaskStore.transition` from `running` never checked the lease holder — a stale worker whose lease was reclaimed and re-claimed by another could complete/fail the task out from under the current holder (the exact "stale owner cannot release the replacement that succeeded it" failure mode). `transition(id, to, error?, worker?)` now fences writes: a running task with a live lease requires the caller to be the lease holder; anonymous and stale-holder writes are rejected. Model-driven bridge transitions on unclaimed tasks stay unrestricted (the actor is passed as the nominal worker). Pinned by 3 regression tests.
 - Verification engine fails CLOSED on unknown/malformed check kinds (dogfooding finding): a bare-string check (kind `undefined`) made `#run` fall through and return `undefined`, crashing `verify()` at `r.pass`. The engine now returns a descriptive failing `CheckResult` for any unhandled kind — never `undefined`.
 

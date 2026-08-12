@@ -237,16 +237,26 @@ describe("kernel prelude globals (JS worker)", () => {
 			});
 			const versions = await kernel.harness.versions();
 			const status = await kernel.gateway.status();
-			// Trusted-verdict ledger path (dead-code fix): the evaluator
-			// records a promote verdict, and promote applies it.
-			const recorded = await kernel.harness.recordEvaluation({ version: hyp.version, decision: "promote", reason: "heldout passed" });
+			// Self-certification guard (round-3 P0, paste-18): the RLM cannot
+			// record its own verdict — harness.recordEvaluation requires the
+			// harness.evaluate capability, held only by the trusted
+			// evaluator (gateway operator scope), never the main agent.
+			// Verdicts reach the ledger through the evaluator path; promote
+			// applies only what a trusted source already recorded.
+			let recorded;
+			try {
+				recorded = await kernel.harness.recordEvaluation({ version: hyp.version, decision: "promote", reason: "heldout passed" });
+				recorded = "unexpected-allow";
+			} catch (err) {
+				recorded = String(err);
+			}
 			const promoted = await kernel.harness.promote({ version: hyp.version });
 			const after = await kernel.harness.versions();
 			return JSON.stringify({
 				version: hyp.version,
 				ledger: versions.length,
 				methods: Array.isArray(status.methods),
-				recorded: recorded.decision,
+				recorded,
 				promoted: promoted.promote,
 				activeHead: after.find(v => v.evaluation?.decision === "promote")?.number,
 			});
@@ -257,9 +267,9 @@ describe("kernel prelude globals (JS worker)", () => {
 		expect(parsed.version).toBe(1);
 		expect(parsed.ledger).toBe(2);
 		expect(parsed.methods).toBe(true);
-		expect(parsed.recorded).toBe("promote");
-		expect(parsed.promoted).toBe(true);
-		expect(parsed.activeHead).toBe(1);
+		expect(parsed.recorded).toContain("lacks harness.evaluate");
+		expect(parsed.promoted).toBe(false);
+		expect(parsed.activeHead).toBeUndefined();
 	});
 
 	it("kernel bridge errors surface as cell failures", async () => {

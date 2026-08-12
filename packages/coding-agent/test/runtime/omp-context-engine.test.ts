@@ -23,6 +23,7 @@ describe("OmpContextEngine", () => {
 			message("user", "Did you find it?"),
 		]);
 		const engine = new OmpContextEngine(manager);
+		engine.setEnabled(true);
 
 		const view = await engine.materialize({ tokenBudget: 1000, candidates: [] });
 
@@ -36,6 +37,26 @@ describe("OmpContextEngine", () => {
 		expect(view.usedTokens).toBeLessThanOrEqual(900); // 10% reserve
 	});
 
+	test("disabled engine passes the transcript through untouched (round-3 audit fresh bug)", async () => {
+		// `enabled` was stored but materialize() always transformed the
+		// transcript — a session that opted out of governance still got its
+		// context rewritten. Off → pass-through: full raw content, no items,
+		// raw codec, and the token count of the untouched transcript.
+		const manager = makeSessionManager([
+			message("developer", "You are a coding agent."),
+			message("user", "Fix the bug in src/db.ts"),
+		]);
+		const engine = new OmpContextEngine(manager); // enabled defaults false
+
+		const view = await engine.materialize({ tokenBudget: 1000, candidates: [] });
+
+		expect(engine.enabled).toBe(false);
+		expect(view.items).toEqual([]);
+		expect(view.rendered.codec).toBe("raw");
+		expect(view.rendered.content).toContain("Fix the bug in src/db.ts");
+		expect(view.rendered.tokenCount).toBe(estimateTokens(view.rendered.content));
+	});
+
 	test("flag-gated: enabled defaults to false (zero behavior change)", async () => {
 		const engine = new OmpContextEngine(makeSessionManager([]));
 		expect(engine.enabled).toBe(false);
@@ -46,6 +67,7 @@ describe("OmpContextEngine", () => {
 	test("caller candidates merge ahead of the transcript", async () => {
 		const manager = makeSessionManager([message("user", "short transcript")]);
 		const engine = new OmpContextEngine(manager);
+		engine.setEnabled(true);
 
 		const view = await engine.materialize({
 			tokenBudget: 1000,

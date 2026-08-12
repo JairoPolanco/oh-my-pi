@@ -27,6 +27,7 @@ import {
 	prewarmOpenAICodexResponses,
 } from "@oh-my-pi/pi-ai/providers/openai-codex-responses";
 import { FALLBACK_DIALECT, preferredDialect } from "@oh-my-pi/pi-catalog/identity";
+import { CONTEXT_EVICTED_EVENT_KIND } from "@oh-my-pi/pi-kernel";
 import type { Component } from "@oh-my-pi/pi-tui";
 import { $env, $flag, getAgentDir, getProjectDir, logger, postmortem, prompt, Snowflake } from "@oh-my-pi/pi-utils";
 import { INTENT_FIELD } from "@oh-my-pi/pi-wire";
@@ -70,6 +71,7 @@ import { initializeWithSettings } from "./discovery";
 import { withOmpExtensionRootScope } from "./discovery/omp-extension-roots";
 import { disposeAllJuliaKernelSessions, disposeJuliaKernelSessionsByOwner } from "./eval/jl/executor";
 import { disposeVmContextsByOwner } from "./eval/js/context-manager";
+import { type KernelSessionAdapter, kernelHostFor } from "./eval/kernel-bridge";
 import { disposeAllKernelSessions, disposeKernelSessionsByOwner } from "./eval/py/executor";
 import { disposeAllRubyKernelSessions, disposeRubyKernelSessionsByOwner } from "./eval/rb/executor";
 import { defaultEvalSessionId } from "./eval/session-id";
@@ -3118,8 +3120,37 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// override `kernel.contextGovernance` is on (omjai's real default —
 		// item 2, no longer just the ledger promotion).
 		const contextGovernorSettingsEnabled = settings.get("kernel.contextGovernance") === true;
+		// Round-3 eviction feedback: the governor's whole-span history evictions
+		// surface as `context.evicted` events (source "governor") so the model
+		// can query events.query instead of detecting loss by noticing absence
+		// (same principle as the bridge probe path, round-2 F3). The session is
+		// constructed below; the deferred ref is set right after construction —
+		// evictions only fire during request transforms, which never run before
+		// the session exists. Best-effort: a missing kernel host never affects
+		// the turn.
+		let governorSession: KernelSessionAdapter | undefined;
 		const contextGovernor = new ProviderContextGovernor(undefined, {
 			settingsEnabled: contextGovernorSettingsEnabled,
+			onEvict: (evicted, view) => {
+				const sessionRef = governorSession;
+				if (!sessionRef) return;
+				void kernelHostFor(sessionRef)
+					.then(host => {
+						host.events.append(
+							{
+								kind: CONTEXT_EVICTED_EVENT_KIND,
+								source: "governor",
+								spans: evicted,
+								budget: view?.budget ?? 0,
+								usedTokens: view?.usedTokens ?? 0,
+							},
+							{ sessionId: sessionRef.getSessionId?.() ?? "default" },
+						);
+					})
+					.catch(() => {
+						// Kernel host unavailable: eviction feedback is best-effort.
+					});
+			},
 		});
 		const snapcompactSystemPromptMode = settings.get("snapcompact.systemPrompt");
 		const snapcompactInline =
@@ -3469,6 +3500,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			advisorMcpResources: cursorMcpResources,
 			titleSystemPrompt: options.titleSystemPrompt,
 		});
+		// Eviction feedback wiring (round-3): from here on the governor's
+		// onEvict sink resolves the session's kernel host for the
+		// `context.evicted` event. No transform runs before this point.
+		governorSession = session.kernelSessionAdapter();
 		hasSession = true;
 		session.yieldQueue.register<McpNotificationEntry>("mcp-notification", {
 			build: buildMcpNotificationBatchMessage,

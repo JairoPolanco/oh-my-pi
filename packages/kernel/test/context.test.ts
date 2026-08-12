@@ -415,4 +415,41 @@ describe("context.evicted (round-2 F3)", () => {
 	test("CONTEXT_EVICTED_EVENT_KIND is the documented event kind", () => {
 		expect(CONTEXT_EVICTED_EVENT_KIND).toBe("context.evicted");
 	});
+
+	test("sticky ids never duplicate a mandatory candidate (round-3 audit fresh bug)", () => {
+		// A stickyId naming a mandatory-kind candidate (e.g. "instruction")
+		// used to be selected by the mandatory pass AND again by the sticky
+		// pass — duplicated in the view. Mandatory selections are recorded,
+		// and the sticky pass skips already-selected ids.
+		const materializer = new ContextMaterializer();
+		const instruction: CandidateItem = {
+			id: "instruction",
+			kind: "instruction",
+			level: "working",
+			tokens: 100,
+			impact: 1,
+			information: 1,
+			reliability: 1,
+			content: "y".repeat(400),
+		};
+		const evidence: CandidateItem = {
+			id: "evidence-1",
+			kind: "evidence",
+			level: "artifact",
+			tokens: 100,
+			impact: 0.5,
+			information: 0.5,
+			reliability: 0.5,
+			content: "x".repeat(400),
+		};
+		const view = materializer.materialize({
+			sessionId: "s",
+			tokenBudget: 1000,
+			candidates: [instruction, evidence],
+			stickyIds: new Set(["instruction"]),
+		});
+		const ids = view.items.map(item => item.id);
+		expect(ids.filter(id => id === "instruction")).toHaveLength(1);
+		expect(ids).toContain("evidence-1");
+	});
 });

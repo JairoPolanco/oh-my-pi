@@ -31,6 +31,7 @@ import {
 	EffectBroker,
 	type HarnessComponent,
 	type Hypothesis,
+	hashContent,
 	isEditable,
 	KernelHost,
 	mapToolEffectToOperation,
@@ -40,6 +41,7 @@ import {
 	type ToolEffectMapper,
 } from "@oh-my-pi/pi-kernel";
 import { actorStatusFromRef, encodeAgentMessage, makeAgentMessage } from "../actors/kernel-actors";
+import { stripRetentionProtocolMarkers } from "../hindsight/content";
 import { IrcBus } from "../irc/bus";
 import { AgentLifecycleManager } from "../registry/agent-lifecycle";
 import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
@@ -417,6 +419,8 @@ export interface BridgeOpSchema {
 	args: Record<string, BridgeArgSpec>;
 	/** What the op returns. */
 	returns: string;
+	/** Optional prose about access/authorization the model needs to know. */
+	description?: string;
 }
 
 export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
@@ -674,6 +678,8 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 			decision: { kind: "string", required: true, description: "promote|reject" },
 			reason: { kind: "string", required: false, description: "Evaluation rationale" },
 		},
+		description:
+			"EVALUATOR-ONLY: requires the harness.evaluate capability the main agent does not hold — the model can propose and apply trusted verdicts, but never record its own (self-certification guard).",
 	},
 	"harness.promote": {
 		name: "harness.promote",
@@ -756,6 +762,7 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 				host.events.append(
 					{
 						kind: CONTEXT_EVICTED_EVENT_KIND,
+						source: "probe",
 						spans: evicted,
 						budget: evictedView.budget,
 						usedTokens: evictedView.usedTokens,
@@ -1047,7 +1054,11 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 			const results = await live.recall(typeof args.query === "string" ? args.query : "");
 			return results.map(item => ({
 				id: item.id,
-				fact: item.content,
+				// Memory hygiene (paste-17 #1): episodes are stored with the
+				// retention framing (the resume cursor needs it) but every
+				// READ surface strips it — bridge recall included — so the
+				// model never sees [role: user] / [user:end] noise.
+				fact: stripRetentionProtocolMarkers(item.content) || item.content,
 				confidence: 1,
 				scope: "project",
 				observedAt: item.timestamp ? Date.parse(item.timestamp) : Date.now(),
@@ -1129,12 +1140,41 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 		if (typeof id !== "string") throw new Error("__kernel__.contract.verify requires string 'id'");
 		const contract = await host.contracts.get(id);
 		if (!contract) throw new Error(`contract not found: ${id}`);
-		const artifacts = Array.isArray(args.evidence)
-			? (args.evidence as { id: string; kind?: string }[]).map(a => ({
-					id: a.id,
-					kind: a.kind,
-				}))
-			: [];
+		// Evidence integrity (recursive audit P0, paste-18): the verifier must
+		// NEVER trust caller-supplied artifact refs — a forged {id, kind} pair
+		// previously satisfied requiredEvidence without existing in the store.
+		// Resolve every supplied id through the store: missing artifacts and
+		// content-hash mismatches fail verification; kind always comes from
+		// the stored record, never the caller.
+		const artifacts: { id: string; kind?: string }[] = [];
+		const supplied = Array.isArray(args.evidence) ? (args.evidence as { id?: unknown; kind?: unknown }[]) : [];
+		for (const item of supplied) {
+			const evidenceId = typeof item?.id === "string" ? item.id : "";
+			const record = evidenceId ? await host.artifacts.describe(evidenceId) : null;
+			if (!record) {
+				return {
+					pass: false,
+					checkResults: [],
+					evidence: [],
+					contractId: id,
+					verificationLevel: contract.verificationLevel,
+					reason: `evidence artifact '${evidenceId}' does not exist in the store`,
+				};
+			}
+			const bytes = await host.artifacts.read(evidenceId);
+			if (!bytes || hashContent(bytes) !== evidenceId) {
+				return {
+					pass: false,
+					checkResults: [],
+					evidence: [],
+					contractId: id,
+					verificationLevel: contract.verificationLevel,
+					reason: `evidence artifact '${evidenceId}' failed content-hash verification`,
+				};
+			}
+			// Store kind is authoritative; the caller's kind claim is ignored.
+			artifacts.push({ id: evidenceId, kind: record.kind });
+		}
 		// Verify AS the calling actor — passed immutably per invocation so
 		// command checks authorize against THIS caller's effective
 		// capabilities (default deny without a process.exec grant), never a
@@ -1392,7 +1432,12 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 		// authoritative as applying — same capability gate. The verdict
 		// shape is the optimizer's `recommendation` mapped to the
 		// kernel's evaluation contract; the RLM cannot self-certify.
-		requireCapability(host, actor, "harness.promote", "execute", "harness");
+		// Separate `harness.evaluate` capability (recursive audit P0,
+		// paste-18): the main agent's bootstrap holds `harness.promote` but
+		// NOT `harness.evaluate`, so the model can never record its own
+		// verdict and then apply it — recording is evaluator-only (the
+		// gateway operator path with the "harness" scope).
+		requireCapability(host, actor, "harness.evaluate", "execute", "harness");
 		const version = requireArg(args, "version");
 		const decision = requireArg(args, "decision");
 		if (typeof version !== "number") throw new Error("__kernel__.harness.recordEvaluation requires number 'version'");

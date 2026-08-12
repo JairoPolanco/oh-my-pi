@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Context, Message, Model } from "@oh-my-pi/pi-ai";
 import { KERNEL_CONTEXT_GOVERNANCE_ENV, ProviderContextGovernor } from "../../src/runtime/provider-context-governor";
 
@@ -36,6 +36,16 @@ function toolResultMessage(index: number, text = `result ${index}`): Message {
 }
 
 const governor = new ProviderContextGovernor();
+
+// Hermetic w.r.t. the harness launcher's env: omjai arms
+// OMP_KERNEL_CONTEXT_GOVERNANCE, and the process env leaks into test runs —
+// the "gate closed" test would see governance on and fail before any
+// afterEach ran. Each test pins the gate closed first; gate-open tests set
+// the env explicitly in-test.
+beforeEach(() => {
+	delete Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV];
+	delete Bun.env.OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE;
+});
 
 afterEach(() => {
 	delete Bun.env[KERNEL_CONTEXT_GOVERNANCE_ENV];
@@ -483,5 +493,71 @@ describe("ProviderContextGovernor", () => {
 			prevKept = kept;
 		}
 		expect(everRemoved.size).toBeGreaterThan(0); // the budget did force eviction
+	});
+
+	test("over-budget governor pass emits a context.evicted payload; in-budget is silent (round-3)", async () => {
+		// Round-3 filed gap: the provider governor compressed history silently —
+		// the model could only detect loss by noticing absence (round-2 F3
+		// principle applied to the REAL production compression path). The
+		// materializer's hard-budget pass rarely fires under accurate costing,
+		// so the honest signal is the prev-output delta: units the provider
+		// delivered last turn and no longer receives.
+		const events: Array<{ spans: number; budget: number; usedTokens: number }> = [];
+		const evictingGovernor = new ProviderContextGovernor(undefined, {
+			settingsEnabled: true,
+			onEvict: (evicted, view) =>
+				events.push({ spans: evicted.length, budget: view?.budget ?? 0, usedTokens: view?.usedTokens ?? 0 }),
+		});
+
+		// In-budget: a short history fits — no event on any turn.
+		const small = [textMessage("developer", "instructions", 0), textMessage("user", "hello", 1)];
+		await evictingGovernor.transform({ messages: small }, MODEL);
+		await evictingGovernor.transform({ messages: small }, MODEL);
+		expect(events).toHaveLength(0);
+
+		// Over-budget: history exceeding the window. The first transform only
+		// selects (nothing was lost relative to a previous output); the second
+		// drops units the first delivered (mandatory→optional flip) and must
+		// report them with the governor's own budget numbers.
+		Bun.env.OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE = "400";
+		const messages = Array.from({ length: 60 }, (_, i) =>
+			textMessage(i % 2 === 0 ? "user" : "assistant", `turn ${i} `.repeat(30), i),
+		);
+		const first = await evictingGovernor.transform({ messages }, MODEL);
+		expect(first.messages.length).toBeLessThan(messages.length);
+		expect(events).toHaveLength(0);
+		const second = await evictingGovernor.transform({ messages }, MODEL);
+		expect(second.messages.length).toBeLessThan(messages.length);
+		expect(events).toHaveLength(1);
+		expect(events[0]!.spans).toBeGreaterThan(0);
+		expect(events[0]!.budget).toBeGreaterThan(0);
+	});
+
+	test("governor eviction events are rate-limited (first loss immediate, then one per 10 turns)", async () => {
+		// Governor eviction is steady-state under governance; per-turn emission
+		// would flood the event stream with the same signal. The first delta
+		// reports immediately, then at most one event per EVICT_EVENT_EVERY_N_TURNS
+		// governing turns.
+		Bun.env.OMP_KERNEL_CONTEXT_WINDOW_OVERRIDE = "400";
+		const base = Array.from({ length: 40 }, (_, i) =>
+			textMessage(i % 2 === 0 ? "user" : "assistant", `turn ${i} `.repeat(30), i),
+		);
+		let emitted = 0;
+		const g = new ProviderContextGovernor(undefined, {
+			settingsEnabled: true,
+			onEvict: () => emitted++,
+		});
+		const turn = (t: number) => [
+			...base,
+			...Array.from({ length: t + 1 }, (_, j) =>
+				textMessage(j % 2 === 0 ? "user" : "assistant", `new ${t}.${j} `.repeat(30), 1000 + t * 10 + j),
+			),
+		];
+		// Turns 0..10: the first delta (turn 1) emits; the rest are suppressed.
+		for (let t = 0; t < 11; t++) await g.transform({ messages: turn(t) }, MODEL);
+		expect(emitted).toBe(1);
+		// Turn 11: cooldown elapsed → the next delta emits again.
+		await g.transform({ messages: turn(11) }, MODEL);
+		expect(emitted).toBe(2);
 	});
 });
