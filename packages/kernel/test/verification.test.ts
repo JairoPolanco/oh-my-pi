@@ -94,6 +94,38 @@ describe("DeterministicVerificationEngine", () => {
 		expect(report.pass).toBe(true);
 	});
 
+	test("pattern check accepts the model-facing 'pattern' field (bridge passes pattern, not regex)", async () => {
+		await Bun.write(`${dir}/src.ts`, "export const answer = 42;");
+		const report = await engine.verify(
+			contract({ checks: [{ kind: "pattern", path: "src.ts", pattern: "answer = 42" }] }),
+			{ cwd: dir, artifacts: [] },
+		);
+		expect(report.pass).toBe(true);
+	});
+
+	test("pattern check fails when the regex does not match (regression: undefined regex matched everything)", async () => {
+		await Bun.write(`${dir}/src.ts`, "export const answer = 42;");
+		const report = await engine.verify(
+			contract({
+				checks: [{ kind: "pattern", path: "src.ts", pattern: "NO_MATCH_ANYWHERE_9f3k2zz" }],
+			}),
+			{ cwd: dir, artifacts: [] },
+		);
+		expect(report.pass).toBe(false);
+		expect(report.checkResults[0].pass).toBe(false);
+	});
+
+	test("pattern check fails closed when neither pattern nor regex is present", async () => {
+		await Bun.write(`${dir}/src.ts`, "export const answer = 42;");
+		const report = await engine.verify(contract({ checks: [{ kind: "pattern", path: "src.ts" } as never] }), {
+			cwd: dir,
+			artifacts: [],
+		});
+		expect(report.pass).toBe(false);
+		expect(report.checkResults[0].pass).toBe(false);
+		expect(report.checkResults[0].detail).toContain("missing regex");
+	});
+
 	test("json check asserts a dotted selector value", async () => {
 		await Bun.write(`${dir}/package.json`, JSON.stringify({ deps: { bun: "1.3.14" } }));
 		const report = await engine.verify(

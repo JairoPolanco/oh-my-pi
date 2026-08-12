@@ -30,7 +30,7 @@ export type VerificationCheck =
 	| { kind: "command"; command: string[]; cwd?: string; expectExitCode?: number }
 	| { kind: "fileExists"; path: string }
 	| { kind: "fileAbsent"; path: string }
-	| { kind: "pattern"; path: string; regex: string; expectMatch?: boolean }
+	| { kind: "pattern"; path: string; pattern?: string; regex?: string; expectMatch?: boolean }
 	| { kind: "json"; path: string; selector: string; equals?: unknown };
 
 /** Evidence that must be attached for the contract to be satisfiable. */

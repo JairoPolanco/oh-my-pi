@@ -140,17 +140,21 @@ export class DeterministicVerificationEngine implements VerificationEngine {
 			case "pattern": {
 				const file = this.#confinedPath(state, check.path);
 				if (!file) return { check, pass: false, detail: `path escapes workspace: ${check.path}` };
+				const regex = check.pattern ?? check.regex;
+				if (!regex) {
+					return { check, pass: false, detail: `missing regex for pattern check on ${check.path}` };
+				}
 				const text = await Bun.file(file)
 					.text()
 					.catch(() => null);
 				if (text === null) return { check, pass: false, detail: `missing: ${check.path}` };
-				const matched = new RegExp(check.regex).test(text);
+				const matched = new RegExp(regex).test(text);
 				const expectMatch = check.expectMatch ?? true;
 				if (matched === expectMatch) return { check, pass: true };
 				return {
 					check,
 					pass: false,
-					detail: `regex ${check.regex} ${expectMatch ? "not" : "unexpectedly"} matched in ${check.path}`,
+					detail: `regex ${regex} ${expectMatch ? "not" : "unexpectedly"} matched in ${check.path}`,
 				};
 			}
 			case "json": {
