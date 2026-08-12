@@ -97,13 +97,13 @@ export interface WriteManagedSkillInput {
 /**
  * Skill promotion evidence gate (paste-9, audit): a skill written by the
  * model becomes LIVE the moment it lands on disk (discovery loads the whole
- * managed dir). The audit's requirement — promotion only after trusted
- * evaluation — is wired but OFF by default: the sandbox→replay→heldout
- * pipeline does not exist yet, so arming the gate with no trusted evaluator
- * would strand every learned skill in staging forever. When armed
+ * managed dir) UNLESS the gate is armed. When armed
  * (`OMP_KERNEL_SKILL_PROMOTION_GATE=1`), writes land in `staging/` and only a
- * `promote: true` write (or an explicit promote action from the trusted
- * evaluator) moves the skill into the live surface.
+ * `promote: true` write (or a promotion from the trusted evaluator) moves the
+ * skill into the live surface. The auto-executor (`SkillPromotionLifecycle`,
+ * attached at the kernel trajectory tap) evaluates one staged skill per
+ * 3-turn sweep via replay + heldout and promotes on evidence, so arming does
+ * not strand learned skills. The omjai launcher arms the gate by default.
  */
 export function skillPromotionGateArmed(): boolean {
 	return Bun.env.OMP_KERNEL_SKILL_PROMOTION_GATE === "1";

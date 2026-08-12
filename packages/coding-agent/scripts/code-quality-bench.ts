@@ -20,12 +20,13 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { ThinkingLevel } from "@oh-my-pi/pi-agent-core";
 import { discoverSharedInfra, InProcessClient } from "@oh-my-pi/typescript-edit-benchmark/in-process-client";
 import { type EditTask, loadTasksFromDir } from "@oh-my-pi/typescript-edit-benchmark/tasks";
 import { verifyExpectedFileSubset } from "@oh-my-pi/typescript-edit-benchmark/verify";
 
 const REPO = "/Users/jairopolanco/Projects/oh-my-pi";
-const MODEL = "opencode-go/deepseek-v4-flash";
+const MODEL = Bun.env.CQ_MODEL ?? "opencode-go/deepseek-v4-flash";
 const TASK_TIMEOUT_MS = Number(process.env.CQ_TASK_TIMEOUT_MS ?? 300_000);
 
 // Hard task suite (item 4 round 2): nightmare + high-difficulty + largest
@@ -97,6 +98,12 @@ async function runTask(
 	try {
 		await copyInputTo(task, workDir);
 		await client.start();
+		if (Bun.env.CQ_THINKING) {
+			const level = ThinkingLevel[Bun.env.CQ_THINKING as keyof typeof ThinkingLevel];
+			if (level !== undefined && level !== ThinkingLevel.Inherit) {
+				await client.setThinkingLevel(level);
+			}
+		}
 		const t0 = performance.now();
 		const timedOut = await Promise.race([
 			client.prompt(task.prompt).then(() => false),

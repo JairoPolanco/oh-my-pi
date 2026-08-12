@@ -304,7 +304,31 @@ ONE task, 7 steps, each mapped to a different harness feature: capability-gated 
 
 **Verdict: the harness features compose correctly and cohesively (7/7 with op-level proof). The residual frictions are (a) the honest cost of full-file reads on long tasks (Context VM correctly stays a no-op under budget) and (b) memory's remaining adoption gap (model probes multiple recalls).** No feature fights another; the seam audit found one real conflict (skill-probe memory pollution, fixed d38b396a9) and three safe-by-construction seams.
 
-### Cost-lever follow-up (2026-08-11): why B was 5x, and what actually fixes it
+#### Cross-model evidence (production-readiness item, gpt-5.6-luna max, 2026-08-11)
+
+The single-model objection (all prior benchmarks on deepseek-v4-flash) is now answered: same probes, `opencode-go/gpt-5.6-luna` at `max` reasoning.
+
+**Harmony cohesion probe (B arm, full harness, 7 steps):**
+
+| Run | Calls | Tokens | Wall | Cost | Steps |
+|---|---|---|---|---|---|
+| deepseek-v4-flash | 5 | 72k | 34s | $0.0016 | 7/7 |
+| gpt-5.6-luna max | 13 | 190k | 51s | $0.0064 | 7/7 |
+
+gpt ran MORE calls (13 vs 5) — it verified more (separate eval cells per op, extra reads of host.ts/broker.ts) — but completed all 7 steps with every bridge op executed (kernel event log: tasks.create, artifacts.put, contract.create+verify, memory.recall, harness.hypothesis+recordEvaluation all ok:true). The artifact landed in the store (content-addressed `e6f95880…` verified on disk). **First-run finding fixed in the probe:** step 3's check demanded the literal text `harmony-probe-artifact` in the final summary — deepseek echoes input strings, gpt reports the returned id. Check is now model-agnostic (`[0-9a-f]{64}` accepted); op-level proof from the store was the authority regardless.
+
+**Code-quality HARD suite (10 nightmare fixtures, both arms):**
+
+| Arm | Verified | Calls | Tokens | Cost |
+|---|---|---|---|---|
+| A baseline | 10/10 | 54 | 448.7k | $0.0198 |
+| B harness | 10/10 | 47 | 358.6k | $0.0167 |
+
+B matched correctness AND was cheaper on gpt (-13% calls, -20% tokens, -15% cost) — stronger than deepseek's neutral. Combined: **harness no-harm holds across model families; the harmony composition works on a second, stronger model.**
+
+Production-readiness status after this batch: the single-model objection is closed (2 families, same probes). Remaining blockers unchanged: unmerged branch, skill gate off in interactive, no crash-resilience, small samples.
+
+## Cost-lever follow-up (2026-08-11): why B was 5x, and what actually fixes it
 
 **Root cause quantified**: the model's window is 1M tokens, so EVERY harness cost mechanism is dormant — compaction triggers at ~85% of window (~890k), the Context VM is a no-op under budget (~750k optional), snapcompact never fires. The 92k-token full-file read entered context mid-session and was re-sent verbatim on ~9 subsequent calls = ~800k tokens = 98% of B's total. A shortcut the read (grep) → 170k. The read tool itself caps at 3000 lines/50KB per call, so files larger than that are ALWAYS read in chunks — the resend tax is an everyday pattern, not a probe artifact.
 

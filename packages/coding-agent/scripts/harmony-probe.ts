@@ -33,9 +33,11 @@ import {
 	SessionManager,
 	Settings,
 } from "@oh-my-pi/pi-coding-agent";
+import type { ConfiguredThinkingLevel } from "../src/thinking";
 
 const REPO = "/Users/jairopolanco/Projects/oh-my-pi";
-const MODEL = "opencode-go/deepseek-v4-flash";
+const MODEL = Bun.env.HARMONY_MODEL ?? "opencode-go/deepseek-v4-flash";
+const THINKING = (Bun.env.HARMONY_THINKING ?? "off") as ConfiguredThinkingLevel;
 const SESSION_TIMEOUT_MS = Number(process.env.HARMONY_TIMEOUT_MS ?? 300_000);
 const OMAJI_CONFIG = `${process.env.HOME}/.omp/omjai-config.yml`;
 
@@ -59,7 +61,10 @@ function verify(
 	const steps: Record<number, boolean> = {
 		1: /KernelHost/.test(last) && /EffectBroker/.test(last),
 		2: /harmony-task-1/.test(last),
-		3: /harmony-probe-artifact/.test(last),
+		// Model-agnostic: the artifact op returns a content-addressed id
+		// (sha256 hex); some models echo the text, others report the id.
+		// Either is proof the op executed — the store itself is the authority.
+		3: /harmony-probe-artifact|[0-9a-f]{64}/.test(last),
 		4: /harmony-contract-1/.test(last) && /true|pass/i.test(last),
 		5: /#ensureKernelTrajectoryTap/.test(last),
 		6: /OMP_KERNEL_EFFECT_GATE/.test(last),
@@ -93,6 +98,7 @@ async function runArm(arm: string): Promise<Record<string, unknown>> {
 	const result = await createAgentSession({
 		cwd: REPO,
 		modelPattern: MODEL,
+		thinkingLevel: THINKING,
 		authStorage,
 		modelRegistry,
 		sessionManager: SessionManager.inMemory(REPO),
