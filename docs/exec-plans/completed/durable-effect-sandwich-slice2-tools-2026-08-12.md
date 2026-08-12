@@ -112,3 +112,12 @@ Measured (2026-08-12, main @ `c90398742`):
 - Lanes + bounded restore + deterministic drive mode (slice 3).
 - New tools must deliberately opt into "safe" — the declaration set is conservative by construction.
 - `packages.zip` (46MB) at repo root: untracked, not ours, awaiting user decision.
+
+**Follow-up closure (2026-08-12): the deferred re-issue item is IMPLEMENTED.**
+
+- On session restore, `reconcileToolEffects(...).rerunnable` now feeds `#reissueRerunnableToolEffects` (agent-session.ts): each started-but-unsettled `replay: "safe"` tool (read/grep/glob) is re-executed ONCE with the args from its durable assistant toolCall; the result persists under the record's pre-provisioned result entry id via the existing `#pendingToolEffects` settle path, so a later restore classifies it settled (never twice — verified by a second-restore assertion).
+- **Kernel gate is RE-AUTHORIZED per re-issue** (`#kernelGateAuthorization`): the durable `kernel_tool` record is written before `#beforeToolCall`'s gate check, so it does not prove the original call was approved. A gate-denied (or since-removed / no-longer-safe) tool settles as an outcome-unknown synthetic result under the provisioned id instead of executing at restore — no denial bypass. Fail-closed on authorization failure.
+- Restore appends now reach `agent.state.messages`: the re-issue re-syncs agent state from the branch (`replaceMessages(buildDisplaySessionContext().messages)`, idle-guarded) so the model's first prompt sees the recovered results paired with their toolCalls. Traced: previously the interrupted-synthetic test proved only the BRANCH append — `agent.state.messages` stayed empty on the first prompt after restore.
+- Timing: the first prompt (`#promptWithMessage`) and `waitForIdle()` await the re-issue settlement before any turn starts.
+- Regression pins: 4 new tests in `durable-attempts-wiring.test.ts` — (a) rerunnable re-issued exactly once + settled on second restore, (b) interrupted never re-issued, (c) settled never re-issued, (d) gate-denied rerunnable never re-issued (real KernelHost, `OMP_KERNEL_EFFECT_GATE=1`).
+- Verification: durable-attempts suite 22/22, session suites 1005 pass / 6 fail — the 6 failures are pre-existing on the base commit (identical failure set with changes stashed); `bun check` clean (1 pre-existing warning). Changelog entry added under `[Unreleased]`.

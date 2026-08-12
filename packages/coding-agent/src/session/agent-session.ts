@@ -589,8 +589,14 @@ export class AgentSession {
 	#pendingDurableAttempt: DurableAttemptRecord | undefined;
 	/** Pending tool intents keyed by toolCallId awaiting their result's settlement (slice 2). */
 	#pendingToolEffects = new Map<string, DurableToolRecord>();
-	/** Restore-classified rerunnable tool effects (replay-safe, result recoverable). */
-	#rerunnableToolEffects: DurableToolRecord[] = [];
+	/**
+	 * Restore-time re-issue of rerunnable (replay-safe) tool effects (slice-2
+	 * follow-up): resolves once the recovered results are durable (and agent
+	 * state re-synced). The first prompt awaits it so the model's first
+	 * context includes the recovered results. Undefined when restore found
+	 * nothing to re-issue.
+	 */
+	#restoreToolEffectsSettlement: Promise<void> | undefined;
 
 	#transformContext: (messages: AgentMessage[], signal?: AbortSignal) => AgentMessage[] | Promise<AgentMessage[]>;
 	#onPayload: SimpleStreamOptions["onPayload"] | undefined;
@@ -1103,7 +1109,17 @@ export class AgentSession {
 			this.#recovery.seedDurableAttemptCount(reconciliation.maxAttemptNumber);
 			const toolEffects = reconcileToolEffects(branch);
 			this.#restoreInterruptedToolEffects(toolEffects.interrupted);
-			this.#rerunnableToolEffects = toolEffects.rerunnable;
+			// Slice-2 follow-up (deferred in the slice-2 plan): replay-safe
+			// started-but-unsettled tools are re-executed ONCE at restore so
+			// their results are recovered — never twice, because the result
+			// persists under the pre-provisioned entry id and a later restore
+			// classifies the record settled. Best-effort: a re-issue failure
+			// leaves the record unsettled (next restore retries it) and must
+			// never block session start. The interrupted (replay: "never")
+			// path above stays as-is — never auto-run.
+			if (toolEffects.rerunnable.length > 0) {
+				this.#restoreToolEffectsSettlement = this.#reissueRerunnableToolEffects(toolEffects.rerunnable);
+			}
 		} catch (error) {
 			logger.warn("durable attempt reconciliation failed (best-effort)", { error: String(error) });
 		}
@@ -2385,6 +2401,176 @@ export class AgentSession {
 		}
 	}
 
+	/**
+	 * Re-execute rerunnable (replay-safe) tool effects at restore (durable
+	 * effect sandwich slice-2 follow-up). Each started-but-unsettled
+	 * `replay: "safe"` tool (read/grep/glob) is executed ONCE with the args
+	 * from its durable assistant toolCall, and the result persists under the
+	 * record's pre-provisioned result entry id — so a later restore classifies
+	 * it settled and never re-runs it (never twice). The kernel effect gate is
+	 * RE-AUTHORIZED per call: the durable record predates the gate check in
+	 * `#beforeToolCall`, so it does not prove the call was approved — a
+	 * gate-denied (or since-removed) tool is settled as outcome-unknown
+	 * instead of executing at restore, which would bypass the denial.
+	 *
+	 * Best-effort per record: failures leave the record unsettled (the next
+	 * restore retries it) and never block session start. When re-issue work
+	 * completes, agent state is re-synced from the branch so the recovered
+	 * results (and the interrupted synthetics appended by the constructor)
+	 * are visible to the model on the first prompt.
+	 */
+	async #reissueRerunnableToolEffects(rerunnable: DurableToolRecord[]): Promise<void> {
+		for (const record of rerunnable) {
+			if (this.#isDisposed) return;
+			try {
+				const gate = await this.#kernelGateAuthorization(record);
+				if (gate.blocked) {
+					this.#settleRestoreToolAsUnavailable(
+						record,
+						`denied by the kernel effect gate (${gate.reason ?? "no capability"})`,
+					);
+					continue;
+				}
+				const tool = this.agent.state.tools.find(candidate => candidate.name === record.toolName);
+				const args = this.#restoreToolCallArguments(record.toolCallId);
+				// The current declaration governs: a tool that changed to
+				// `replay: "never"` (or was removed) is not re-run — settle it
+				// as outcome-unknown instead of re-attempting every restore.
+				if (tool?.replay !== "safe" || args === undefined) {
+					this.#settleRestoreToolAsUnavailable(record, "tool is no longer available as a replay-safe tool");
+					continue;
+				}
+				// Seed the pending map so `#appendSessionMessage` settles the
+				// record under its pre-provisioned result id — the correlation
+				// that makes a second restore classify this as settled.
+				this.#pendingToolEffects.set(record.toolCallId, record);
+				let result: AgentToolResult;
+				let isError = false;
+				try {
+					const executed = await tool.execute(record.toolCallId, args, new AbortController().signal);
+					result = executed;
+					isError = executed.isError === true;
+				} catch (error) {
+					result = {
+						content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
+						details: {},
+					};
+					isError = true;
+				}
+				this.#appendSessionMessage({
+					role: "toolResult",
+					toolCallId: record.toolCallId,
+					toolName: record.toolName,
+					content: result.content,
+					details: result.details,
+					...(result.providerMetadata ? { providerMetadata: result.providerMetadata } : {}),
+					isError,
+					...(result.useless && !isError ? { useless: true } : {}),
+					timestamp: Date.now(),
+				});
+			} catch (error) {
+				logger.warn("rerunnable tool-effect re-issue failed (best-effort)", { error: String(error) });
+			}
+		}
+		// Re-sync agent state from the branch so the model's first prompt sees
+		// the recovered results (and the interrupted synthetics). Idle-only:
+		// never clobber a live turn that started without awaiting us (IRC wake).
+		if (!this.#promptInFlightCount && !this.agent.state.isStreaming) {
+			try {
+				const sessionContext = this.buildDisplaySessionContext();
+				this.agent.replaceMessages(sessionContext.messages);
+			} catch (error) {
+				logger.warn("restore re-issue context sync failed (best-effort)", { error: String(error) });
+			}
+		}
+	}
+
+	/**
+	 * Re-run the kernel effect gate for a restore re-issue. The durable
+	 * `kernel_tool` record is written BEFORE `#beforeToolCall`'s gate check,
+	 * so its existence does not prove the original call was approved — a
+	 * gate-denied call would otherwise be executed at restore, bypassing the
+	 * denial. Fail-closed: an authorization failure denies, never passes.
+	 * No-op (allowed) when the gate is off.
+	 */
+	async #kernelGateAuthorization(record: DurableToolRecord): Promise<{ blocked: boolean; reason?: string }> {
+		if (Bun.env.OMP_KERNEL_EFFECT_GATE !== "1") return { blocked: false };
+		try {
+			const { authorizeToolEffect, kernelHostFor } = await import("../eval/kernel-bridge");
+			const host = await kernelHostFor(this.#kernelSessionAdapter());
+			const gate = await authorizeToolEffect({
+				host,
+				actor: this.getAgentId?.() ?? host.mainPrincipal,
+				tool: record.toolName,
+				args: this.#restoreToolCallArguments(record.toolCallId) ?? {},
+				workspaceRoot: this.sessionManager.getCwd(),
+			});
+			if (gate.blocked) return { blocked: true, reason: gate.reason };
+			return { blocked: false };
+		} catch {
+			return { blocked: true, reason: "kernel effect gate failed closed" };
+		}
+	}
+
+	/** The original arguments of a toolCall from its durable assistant message. */
+	#restoreToolCallArguments(toolCallId: string): Record<string, unknown> | undefined {
+		for (const entry of this.sessionManager.getBranch()) {
+			if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+			for (const block of entry.message.content) {
+				if (block.type === "toolCall" && block.id === toolCallId) {
+					return (block.arguments ?? {}) as Record<string, unknown>;
+				}
+			}
+		}
+		return undefined;
+	}
+
+	/**
+	 * Settle a rerunnable record that cannot be re-issued (gate denied, tool
+	 * gone, no durable args) as outcome-unknown. The synthetic interrupted
+	 * result persists under the record's PRE-PROVISIONED entry id — unlike
+	 * the replay-never interrupted path, this SETTLES the record so a later
+	 * restore does not re-attempt a call the gate denies. The model is told
+	 * the outcome is unknown and must not blindly re-run it (a live re-run
+	 * would traverse the same gate anyway).
+	 */
+	#settleRestoreToolAsUnavailable(record: DurableToolRecord, reason: string): void {
+		const message: ToolResultMessage = {
+			role: "toolResult",
+			toolCallId: record.toolCallId,
+			toolName: record.toolName,
+			content: [
+				{
+					type: "text",
+					text: `Tool ${record.toolName} was not re-executed on session restore: ${reason}. Its outcome from the interrupted attempt is unknown — do NOT blindly re-run it; inspect current state (files, processes) before deciding what to do.`,
+				},
+			],
+			details: {
+				__synthetic: true,
+				source: "tool_interrupted",
+				executed: false,
+				toolName: record.toolName,
+				startedAt: record.startedAt,
+			},
+			isError: true,
+			timestamp: record.startedAt,
+		};
+		this.#pendingToolEffects.set(record.toolCallId, record);
+		this.#appendSessionMessage(message);
+	}
+
+	/** Minimal session-shaped adapter for kernel host resolution (gate + re-issue). */
+	#kernelSessionAdapter(): KernelSessionAdapter {
+		return {
+			cwd: this.sessionManager.getCwd(),
+			hasUI: false,
+			getSessionFile: () => this.sessionManager.getSessionFile() ?? null,
+			getSessionId: () => this.sessionId,
+			getKernelSessionId: () => this.getKernelSessionId(),
+			getAgentId: () => this.getAgentId(),
+		};
+	}
+
 	#appendSessionMessage(
 		message:
 			| Message
@@ -3447,21 +3633,12 @@ export class AgentSession {
 		if (Bun.env.OMP_KERNEL_EFFECT_GATE === "1") {
 			const { authorizeToolEffect, kernelHostFor } = await import("../eval/kernel-bridge");
 			try {
-				// Minimal session-shaped adapter for the kernel host: the
-				// kernel dir resolves from the session file/cwd; everything
-				// else the broker needs is the tool name + args passed
-				// directly below. TYPED as KernelSessionAdapter — a member
-				// the host needs becomes a compile error here, never a
-				// silent `as never` undefined.
-				const adapter: KernelSessionAdapter = {
-					cwd: this.sessionManager.getCwd(),
-					hasUI: false,
-					getSessionFile: () => this.sessionManager.getSessionFile() ?? null,
-					getSessionId: () => this.sessionId,
-					getKernelSessionId: () => this.getKernelSessionId(),
-					getAgentId: () => this.getAgentId(),
-				};
-				const host = await kernelHostFor(adapter);
+				// The kernel host resolves from the session file/cwd; the
+				// broker needs the tool name + args passed directly below.
+				// TYPED as KernelSessionAdapter — a member the host needs
+				// becomes a compile error here, never a silent `as never`
+				// undefined (see #kernelSessionAdapter).
+				const host = await kernelHostFor(this.#kernelSessionAdapter());
 				// Instrument this session's REAL trajectory into the kernel
 				// event log — the one place production turns reach the host.
 				// Best-effort and once-per-session (lazy import keeps the
@@ -4462,6 +4639,17 @@ export class AgentSession {
 
 	/** Wait until streaming, event persistence, and deferred recovery work are fully settled. */
 	async waitForIdle(): Promise<void> {
+		// Restore-time re-issue of replay-safe tools must settle before the
+		// session is considered idle — test seam and TUI ready-gate.
+		if (this.#restoreToolEffectsSettlement !== undefined) {
+			const settlement = this.#restoreToolEffectsSettlement;
+			this.#restoreToolEffectsSettlement = undefined;
+			try {
+				await settlement;
+			} catch (error) {
+				logger.warn("restore tool re-issue failed (best-effort)", { error: String(error) });
+			}
+		}
 		await this.agent.waitForIdle();
 		await this.#advisors.waitForPendingCardEvents();
 		await this.#waitForPostPromptRecovery();
@@ -5594,6 +5782,22 @@ export class AgentSession {
 			acceptTerminalEmptyStop?: boolean;
 		},
 	): Promise<void> {
+		// Durable effect sandwich slice-2 follow-up: the restore re-issue of
+		// replay-safe tools settles before ANY turn starts (prompt, steer,
+		// follow-up, agent-initiated), so the model's first context includes
+		// the recovered results. Best-effort — a re-issue failure only
+		// degrades recovery, never blocks the prompt. Awaited before
+		// #beginInFlight so the re-issue's own idle-guard (which skips the
+		// agent-state re-sync while a turn is in flight) still runs the sync.
+		if (this.#restoreToolEffectsSettlement !== undefined) {
+			const settlement = this.#restoreToolEffectsSettlement;
+			this.#restoreToolEffectsSettlement = undefined;
+			try {
+				await settlement;
+			} catch (error) {
+				logger.warn("restore tool re-issue failed (best-effort)", { error: String(error) });
+			}
+		}
 		this.#beginInFlight();
 		const generation = this.#promptGeneration;
 		try {
