@@ -3626,19 +3626,19 @@ export class AgentSession {
 	 * execution still emit there).
 	 */
 	async #beforeToolCall(ctx: BeforeToolCallContext): Promise<BeforeToolCallResult | undefined> {
-		// Durable effect sandwich slice 2: record tool INTENT before execution.
-		// A crash mid-`tool.execute` leaves the side effect durable but the
-		// result unpersisted; the record tells restore whether re-execution is
-		// safe (replay: "safe" pure reads) or must surface as interrupted
-		// (replay: "never" side-effecting — never auto-re-run). Best-effort:
-		// a persistence failure must never block the tool.
-		this.#preProvisionToolEffect(ctx);
 		// Kernel EffectBroker interposition (audit #7, blueprint §7/§75): when
 		// the gate is on, EVERY tool effect traverses the kernel broker before
 		// OMP's own approval machinery. Default deny — the actor's capabilities
 		// must cover the effect. Gate off by default: OMP's existing
 		// permissions/approvals are byte-for-byte unchanged. The lazy import
 		// breaks the module cycle (tools/learn → kernel-bridge → session).
+		//
+		// NOTE on ordering (dogfooding finding #7): the durable tool-effect
+		// record is written ONLY after every block path here passes — gate,
+		// approval, and extension handlers. Previously the record was written
+		// at the TOP of this hook, so a DENIED call still produced a durable
+		// record and restore could not tell "denied" from "crashed mid-run".
+		// Now a durable record always means "approved and about to execute".
 		if (Bun.env.OMP_KERNEL_EFFECT_GATE === "1") {
 			const { authorizeToolEffect, kernelHostFor } = await import("../eval/kernel-bridge");
 			try {
@@ -3678,7 +3678,12 @@ export class AgentSession {
 			}
 		}
 		const runner = this.#extensionRunner;
-		if (!runner?.hasHandlers("tool_call")) return undefined;
+		if (!runner?.hasHandlers("tool_call")) {
+			// No extension handlers to block or revise the call — write the
+			// durable intent record now (all block paths have passed).
+			this.#preProvisionToolEffect(ctx);
+			return undefined;
+		}
 		const metadata = ctx.toolCall.providerMetadata;
 		const computer = metadata?.type === "computer" ? metadata : undefined;
 		// Parity with the wrapper's pre-emit short-circuit: an already-denied
@@ -3706,8 +3711,10 @@ export class AgentSession {
 		// A computer call's event input is a synthetic {actions, pendingSafetyChecks}
 		// view, not the execution params — a revision cannot map back onto them.
 		if (callResult?.input !== undefined && !computer) {
+			this.#preProvisionToolEffect(ctx);
 			return { args: callResult.input };
 		}
+		this.#preProvisionToolEffect(ctx);
 		return undefined;
 	}
 

@@ -162,6 +162,10 @@ if (!globalThis.__omp_js_prelude_loaded__) {
 	const security = kernelNamespace("security");
 	const harness = kernelNamespace("harness");
 	const gateway = kernelNamespace("gateway");
+	// Introspection (dogfooding finding #2): `bridge.ops()` lists ops,
+	// `bridge.schema({name})` returns the exact arg shapes — no more guessing
+	// from the prelude or reading engine source.
+	const bridge = kernelNamespace("bridge");
 
 	const output = async (...args) => {
 		let opts = {};
@@ -383,6 +387,7 @@ if (!globalThis.__omp_js_prelude_loaded__) {
 	globalThis.security = security;
 	globalThis.harness = harness;
 	globalThis.gateway = gateway;
+	globalThis.bridge = bridge;
 	globalThis.completion = completion;
 	globalThis.output = output;
 	globalThis.agent = agent;

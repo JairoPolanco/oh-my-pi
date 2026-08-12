@@ -371,6 +371,207 @@ function requireCapability(
 }
 
 /**
+ * Declarative per-op argument schemas for the kernel bridge (dogfooding
+ * finding #2: the prelude named the namespaces but not the per-op shapes —
+ * the model had to read engine source to discover e.g. that
+ * `contract.verify` takes `evidence: [{id, kind}]` and `requiredEvidence`
+ * is artifactKind-matched). Exposed to the model via `bridge.schema({op})`
+ * and `bridge.ops()` so argument shapes are discoverable, not guesswork.
+ *
+ * `required` = the op throws without it; `kind` is a loose type hint (the
+ * engine's real validation is in each case). Keep in sync with the cases.
+ */
+export interface BridgeArgSpec {
+	kind: "string" | "number" | "boolean" | "string[]" | "object" | "object[]" | "any";
+	required: boolean;
+	description: string;
+}
+
+export interface BridgeOpSchema {
+	/** Namespaced name the model calls, e.g. "contract.create". */
+	name: string;
+	args: Record<string, BridgeArgSpec>;
+	/** What the op returns. */
+	returns: string;
+}
+
+const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
+	"ctx.materialize": {
+		name: "ctx.materialize",
+		returns: "ContextView (token-budgeted selection over candidates)",
+		args: {
+			tokenBudget: { kind: "number", required: false, description: "Optional token budget (default 32000)" },
+			objective: { kind: "string", required: false, description: "Selection objective" },
+			candidates: { kind: "object[]", required: false, description: "Candidate handles to materialize" },
+		},
+	},
+	"artifacts.put": {
+		name: "artifacts.put",
+		returns: "{ id, bytes } (content-addressed, dedup)",
+		args: {
+			text: { kind: "string", required: true, description: "Artifact text content" },
+			kind: { kind: "string", required: false, description: "Optional artifact kind tag" },
+		},
+	},
+	"artifacts.read": {
+		name: "artifacts.read",
+		returns: "{ id, text }",
+		args: { id: { kind: "string", required: true, description: "Artifact id" } },
+	},
+	"artifacts.has": {
+		name: "artifacts.has",
+		returns: "boolean",
+		args: { id: { kind: "string", required: true, description: "Artifact id" } },
+	},
+	"tasks.create": {
+		name: "tasks.create",
+		returns: "DurableTask (starts in triage)",
+		args: {
+			id: { kind: "string", required: true, description: "Unique task id" },
+			objective: { kind: "string", required: true, description: "Task objective" },
+			dependencies: { kind: "string[]", required: false, description: "Task ids this task waits on" },
+			assignee: { kind: "string", required: false, description: "Optional assignee" },
+		},
+	},
+	"tasks.transition": {
+		name: "tasks.transition",
+		returns: "DurableTask",
+		args: {
+			id: { kind: "string", required: true, description: "Task id" },
+			to: {
+				kind: "string",
+				required: true,
+				description: "Target state: triage|ready|running|blocked|verifying|complete|failed",
+			},
+		},
+	},
+	"tasks.list": {
+		name: "tasks.list",
+		returns: "DurableTask[]",
+		args: { state: { kind: "string", required: false, description: "Filter by state" } },
+	},
+	"events.query": {
+		name: "events.query",
+		returns: "recent kernel events",
+		args: {
+			kind: { kind: "string", required: false, description: "Event kind filter" },
+			limit: { kind: "number", required: false, description: "Max events" },
+		},
+	},
+	"memory.propose": {
+		name: "memory.propose",
+		returns: "{ id, state } (staged)",
+		args: {
+			fact: { kind: "string", required: true, description: "The fact text" },
+			confidence: { kind: "number", required: false, description: "0-1 confidence" },
+			scope: { kind: "string", required: false, description: "project|session|global" },
+		},
+	},
+	"memory.commit": {
+		name: "memory.commit",
+		returns: "{ id, state }",
+		args: { id: { kind: "string", required: true, description: "Proposed fact id" } },
+	},
+	"memory.recall": {
+		name: "memory.recall",
+		returns: "semantic fact[]",
+		args: {
+			query: { kind: "string", required: false, description: "Search query" },
+			scope: { kind: "string", required: false, description: "project|session|global" },
+		},
+	},
+	"contract.create": {
+		name: "contract.create",
+		returns: "{ id, checks, evidence }",
+		args: {
+			id: { kind: "string", required: true, description: "Contract id" },
+			objective: { kind: "string", required: true, description: "What is being verified" },
+			requirements: { kind: "string[]", required: false, description: "Free-text requirements" },
+			checks: {
+				kind: "object[]",
+				required: false,
+				description:
+					"Deterministic checks: {kind:'fileExists'|'fileAbsent',path} | {kind:'pattern',path,pattern} | {kind:'command',command:string[]} | {kind:'json',path,...}",
+			},
+			requiredEvidence: {
+				kind: "object[]",
+				required: false,
+				description: "[{artifactKind:string}] matched against artifacts passed to verify",
+			},
+			verificationLevel: {
+				kind: "number",
+				required: false,
+				description: "0-4 (3+ requires an independent reviewer)",
+			},
+		},
+	},
+	"contract.verify": {
+		name: "contract.verify",
+		returns: "verification report (V1-V4) with { pass, checkResults, evidence }",
+		args: {
+			id: { kind: "string", required: true, description: "Contract id" },
+			evidence: {
+				kind: "object[]",
+				required: false,
+				description: "[{id:string, kind:string}] artifact ids+kind to satisfy requiredEvidence",
+			},
+			reviewerModel: { kind: "string", required: false, description: "Reviewer model for level 3+ contracts" },
+		},
+	},
+	"harness.hypothesis": {
+		name: "harness.hypothesis",
+		returns: "version",
+		args: {
+			component: { kind: "string", required: true, description: "Editable harness component" },
+			observation: { kind: "string", required: true, description: "What was observed" },
+			hypothesis: { kind: "string", required: true, description: "The falsifiable hypothesis" },
+			prediction: { kind: "object[]", required: false, description: "[{metric,expectedDelta,tolerance}]" },
+			change: { kind: "string", required: false, description: "Change id" },
+			evaluationSlice: { kind: "string", required: false, description: "Evaluation slice label" },
+		},
+	},
+	"harness.recordEvaluation": {
+		name: "harness.recordEvaluation",
+		returns: "version",
+		args: {
+			version: { kind: "string", required: true, description: "Hypothesis version" },
+			decision: { kind: "string", required: true, description: "promote|reject" },
+			reason: { kind: "string", required: false, description: "Evaluation rationale" },
+		},
+	},
+	"harness.promote": {
+		name: "harness.promote",
+		returns: "version",
+		args: { version: { kind: "string", required: true, description: "Hypothesis version (trusted verdict only)" } },
+	},
+	"harness.versions": {
+		name: "harness.versions",
+		returns: "version[]",
+		args: {},
+	},
+	"security.profile": {
+		name: "security.profile",
+		returns: "{ actor, tier, capabilities, policy }",
+		args: { actor: { kind: "string", required: false, description: "Actor id (defaults to session principal)" } },
+	},
+	"gateway.status": {
+		name: "gateway.status",
+		returns: "control-plane runtimes + methods",
+		args: {},
+	},
+};
+
+/** All bridge op names (for `bridge.ops()`). */
+export function listBridgeOps(): string[] {
+	return Object.keys(BRIDGE_OP_SCHEMAS).sort();
+}
+
+/** The arg schema for one bridge op (for `bridge.schema({op})`). */
+export function bridgeOpSchema(op: string): BridgeOpSchema | undefined {
+	return BRIDGE_OP_SCHEMAS[op];
+}
+
+/**
  * Dispatch a kernel bridge operation. Ops mirror the constitutional kernel
  * surfaces: context materialization, content-addressed artifacts, durable
  * tasks, and the event log.
@@ -379,6 +580,22 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 	const host = await kernelHostFor(options.session);
 	const actor = bridgeActor(options.session);
 	switch (args.op) {
+		// Introspection (dogfooding finding #2): argument shapes are
+		// discoverable, not guesswork.
+		case "bridge.ops": {
+			return listBridgeOps();
+		}
+		case "bridge.schema": {
+			const name = requireArg(args, "name");
+			if (typeof name !== "string") throw new Error("__kernel__.bridge.schema requires string 'name'");
+			const schema = bridgeOpSchema(name);
+			if (!schema) {
+				throw new Error(
+					`__kernel__.bridge.schema: no schema for '${name}' (available: ${listBridgeOps().join(", ")})`,
+				);
+			}
+			return schema;
+		}
 		case "ctx.materialize": {
 			// Conservative Context VM (blueprint §11): candidates in, token-budgeted
 			// view out. Callers pass handles (artifact refs) rather than copies.

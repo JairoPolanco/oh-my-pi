@@ -575,6 +575,9 @@ if "__omp_prelude_loaded__" not in globals():
     security = _KernelNamespace("security")
     harness = _KernelNamespace("harness")
     gateway = _KernelNamespace("gateway")
+    # Introspection (dogfooding finding #2): `bridge.ops()` lists ops,
+    # `bridge.schema({"name": ...})` returns the exact arg shapes.
+    bridge = _KernelNamespace("bridge")
 
     def completion(prompt, *, model="default", system=None, schema=None):
         """Oneshot, stateless completion against a model tier.

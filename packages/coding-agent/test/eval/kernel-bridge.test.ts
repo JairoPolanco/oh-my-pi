@@ -244,6 +244,31 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(ok.checks).toBe(1);
 	});
 
+	test("bridge.ops lists the kernel surface and bridge.schema describes op args (dogfooding finding #2)", async () => {
+		// The model previously had to read engine source to learn per-op shapes
+		// (e.g. contract.verify's evidence: [{id,kind}]). The introspection ops
+		// make the shapes discoverable at runtime.
+		const ops = (await call("bridge.ops")) as string[];
+		expect(ops).toContain("contract.create");
+		expect(ops).toContain("contract.verify");
+		expect(ops).toContain("tasks.create");
+		expect(ops).toContain("harness.hypothesis");
+
+		const schema = (await call("bridge.schema", { name: "contract.verify" })) as {
+			name: string;
+			returns: string;
+			args: Record<string, { kind: string; required: boolean; description: string }>;
+		};
+		expect(schema.name).toBe("contract.verify");
+		expect(schema.args.id.required).toBe(true);
+		expect(schema.args.evidence.kind).toBe("object[]");
+		// The exact friction the session hit: evidence's shape must be documented.
+		expect(schema.args.evidence.description).toContain("artifact ids");
+
+		const unknown = await call("bridge.schema", { name: "nope" }).catch((e: unknown) => String(e));
+		expect(String(unknown)).toContain("no schema for 'nope'");
+	});
+
 	test("level-3 contracts mandate the independent reviewer (paste-4 P1)", async () => {
 		// The contract's verificationLevel determines verification: the caller
 		// cannot omit the reviewer a level-3 contract requires. The reviewer
