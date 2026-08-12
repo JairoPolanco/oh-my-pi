@@ -6,6 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Fenced task-store writes (pi quality, upstream writer-leases.ts): `SqliteTaskStore.transition` from `running` never checked the lease holder — a stale worker whose lease was reclaimed and re-claimed by another could complete/fail the task out from under the current holder (the exact "stale owner cannot release the replacement that succeeded it" failure mode). `transition(id, to, error?, worker?)` now fences writes: a running task with a live lease requires the caller to be the lease holder; anonymous and stale-holder writes are rejected. Model-driven bridge transitions on unclaimed tasks stay unrestricted (the actor is passed as the nominal worker). Pinned by 3 regression tests.
 - Verification engine fails CLOSED on unknown/malformed check kinds (dogfooding finding): a bare-string check (kind `undefined`) made `#run` fall through and return `undefined`, crashing `verify()` at `r.pass`. The engine now returns a descriptive failing `CheckResult` for any unhandled kind — never `undefined`.
 
 ### Added

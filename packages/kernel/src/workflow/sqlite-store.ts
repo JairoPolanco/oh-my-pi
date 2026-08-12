@@ -133,11 +133,34 @@ export class SqliteTaskStore implements TaskStore {
 		return updated;
 	}
 
-	async transition(id: TaskId, to: TaskState, error?: string): Promise<DurableTask> {
+	async transition(id: TaskId, to: TaskState, error?: string, worker?: string): Promise<DurableTask> {
 		const task = await this.get(id);
 		if (!task) throw new Error(`task ${id} not found`);
 		if (!canTransition(task.state, to)) {
 			throw new Error(`illegal task transition: ${task.state} → ${to} for task ${id}`);
+		}
+		// Fenced write (pi quality, writer-leases.ts): a task leased to a durable
+		// worker may only be transitioned by that worker. A STALE worker whose
+		// lease was reclaimed and re-claimed by another (state flipped back to
+		// ready, then claimed by a new holder) must not be able to complete or
+		// fail the task out from under the current holder — that is the exact
+		// "stale owner cannot release the replacement that succeeded it"
+		// failure mode Pi's fence counters. When no lease is held (model-driven
+		// transitions without a claim), the write is unrestricted as before.
+		const row = this.#db.query("SELECT lease_holder FROM tasks WHERE id = ?").get(id) as
+			| { lease_holder: string | null }
+			| undefined;
+		if (task.state === "running" && row?.lease_holder !== null && row?.lease_holder !== undefined) {
+			if (worker === undefined) {
+				throw new Error(
+					`task ${id} is leased to ${row.lease_holder}; transition requires the lease holder (fenced write)`,
+				);
+			}
+			if (worker !== row.lease_holder) {
+				throw new Error(
+					`task ${id} is leased to ${row.lease_holder}, not ${worker}; stale-holder write rejected (fence)`,
+				);
+			}
 		}
 		const updated: DurableTask = { ...task, state: to, updatedAt: Date.now() };
 		if (to === "running" && error === undefined) {

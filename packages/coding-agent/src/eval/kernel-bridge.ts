@@ -461,7 +461,10 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 			}
 			const before = await host.tasks.get(id);
 			if (!before) throw new Error(`task not found: ${id}`);
-			const task = await host.tasks.transition(id, to as TaskState);
+			// The actor is the nominal worker: fenced writes (pi quality) let the
+			// durable-holder path reject stale writers. Model-driven transitions
+			// on unclaimed tasks are unrestricted (no lease held).
+			const task = await host.tasks.transition(id, to as TaskState, undefined, actor);
 			host.events.append({ kind: "task.state", taskId: id, from: before.state, to: task.state });
 			return task;
 		}

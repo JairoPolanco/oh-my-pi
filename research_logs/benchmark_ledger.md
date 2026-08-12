@@ -322,6 +322,45 @@ The task design WAS the dominant cost driver: demanding a 9,283-line read forced
 
 **Honest cache economics**: with provider prompt caching, mid-session elision of a large warm read is a net LOSS (suffix cacheWrite premium > discounted resend savings) — the existing guard is correct. Group elision's value is long sessions that accumulate chunked reads and flush them at idle/compaction, plus token-count/rate-limit/latency savings on every resend.
 
+## Upstream Pi deep trace (pi-001, 4 parallel scouts + first-hand reads)
+
+The user pointed us at `/Users/jairopolanco/Projects/pi` — upstream `@earendil-works/pi`, the repo our fork came from — asking what it does well on cost/time/pass-rates and what we can take. Four scouts (harness-v2, evals, storage, fork-divergence) + direct reads of the compaction engine, reducer, session state, and deferred-tool transport.
+
+**Fork divergence (the framing that matters):** all 121 shared code files across `agent`/`ai`/`coding-agent` now differ on both sides — only test fixtures are byte-identical. OMP is NOT a fork anymore in any substantive sense; it's a parallel application. Upstream-only packages: `evals`, `session-backends/sqlite-node`, `protocol`, `server`, `client`, `telemetry`. Ours-only (confirmed absent upstream): `kernel`, `metaharness`, `mnemopi`, `snapcompact`, `hashline`, `catalog`, `wire`.
+
+**Honest headline: Pi's "cost/pass-rate machinery" is a DESIGN, not a shipped runtime.** `agent-harness.ts` is a scaffold — every operation method returns `HarnessNotImplemented` (agent-harness.ts:350-420). The landed, testable foundations are: pure record-log reducer (reducer.ts, 667 lines), v4 session entry/record/storage contracts, SQLite/JSONL backends, the compaction engine, telemetry schemas, events bus. The 4,613-line harness-v2.md + 2,524-line agent-harness-spec.md define the durable-run design; the spec supersedes the v2 record-log design. Any adoption must target the DESIGN + landed primitives, not a working loop.
+
+**What Pi actually does well (ranked by our evidence):**
+
+1. **Durable effect sandwich + numbered attempts** (harness-v2.md:199-201, 358-376): before an effect, write an intent record naming every durable id (response entry, usage record); after, append the complete response THEN the preplanned usage record before classification. Crash recovery is bounded (indexed reads, no history scan) and reconstructs any state a crash can produce; the only uncertain interval (intent-without-settlement) becomes a numbered retry or synthetic settlement under the SAME reserved id. Eliminates double/lost billing and enables resume-vs-restart.
+2. **Overflow recovery bounded to ONE compaction per user input** (harness-v2.md:677-708): `triggerMessageId` guard + `overflowRecoveryUsed` flag; second overflow for the same trigger → failure drain. Detects overflow from `stopReason === "length" && usage.output < intendedOutputLimit` (captured BEFORE clamping) and `input + cacheRead > contextWindow`. Kills the dominant long-session cost bug: retry-at-full-context loops.
+3. **Append-only provider context invariant** (harness-v2.md:160-163): "context only grows at the tail. An insertion before the previous request's tail invalidates the provider's KV cache and multiplies token cost." Mid-turn writes defer to checkpoints; compaction is the one deliberate cache invalidation. This is the SAME principle our Context VM materializer implements (sticky-first, measured 3.4x cache cost avoided) — we independently converged on it, and ours is SHIPPED where Pi's is design.
+4. **Prompt-cache economics in compaction** (compaction.ts:150-158): summaries use `cacheRetention: "none"` + a fresh `sessionId` so one-off requests never write cache that cannot be reused. Our summary path shares the session prefix (cacheRead reuse is real for us) — a blind port could LOSE reads; needs measurement, not adoption.
+5. **Deferred tools** (ai/src/utils/deferred-tools.ts): tools only ADDED mid-conversation and never called are omitted from the prompt until first use, delivered via `additional_tools` (OpenAI Responses) / tool-search fallback. Cuts serialization + prompt tokens of rarely-used tools. **Our fork has ZERO deferred-tool machinery** — genuine gap, but the win only materializes with provider transports that support deferred loading, which our fat providers (anthropic.ts 4,539 lines vs Pi's 59-line thin delegator) don't have.
+6. **Fenced writer leases** (writer-leases.ts): takeover bumps a `fence` counter (`ON CONFLICT ... fence = fence + 1 WHERE expires <= now`); renew/release require owner+fence match. Prevents "a stale owner cannot release the replacement that succeeded it." **ADOPTED** — see below.
+7. **Evals with pass-rate-lift** (packages/evals): paired baseline-vs-candidate with repetitions, deterministic/model judges, `score >= 1` pass, lift in percentage points, token/latency/cost as paired deltas, honest missing-data diagnostics. NOT an optimizer — a measurement discipline. Our metaharness already parallels it; the harness-table pattern (declarative arms + paired deltas) is the cherry-pick.
+
+**Rejected / not worth porting:** CBOR+TypeBox protocol stack (overkill in-process), PiServer session-runtime ownership (conflicts with our concurrent session-manager), client package (collab-web covers it), full vitest-evals dependency (heavy zod schema — adopt the pattern, not the package), the harness-v2 record-log runtime (spec supersedes it, and it's unshipped).
+
+### ADOPTED: fenced task-store writes (pi quality, 2026-08-11)
+
+The one gap that is (a) real in our code, (b) kernel-local (omjai-only surface), (c) exactly Pi's mechanism, (d) testable: **`SqliteTaskStore.transition` from `running` never checked the lease holder.** Scenario: worker-a claims a task; its lease expires; `reclaimExpired` returns the task to ready; worker-b claims it. Worker-a (partitioned, stale clock) then calls `transition(id, "complete")` — it SUCCEEDED, completing the task out from under worker-b. That is precisely Pi's "stale owner cannot release the replacement" failure mode.
+
+Fix: `transition(id, to, error?, worker?)` now fences writes — a `running` task with a live lease requires the caller to be the lease holder; anonymous transitions and stale holders are rejected. Model-driven bridge transitions on unclaimed tasks stay unrestricted (`tasks.transition` passes the actor as nominal worker). Pinned by 3 regression tests (stale-holder rejected + holder completes; unleased transitions unrestricted; anonymous transition on a leased task rejected).
+
+**Ledger of adoptable qualities from Pi (honest verdicts):**
+
+| Quality | Pi status | Our status | Verdict |
+|---|---|---|---|
+| Append-only context / cache stability | design (v2.md §4) | SHIPPED (materializer, measured 3.4x) | already ahead |
+| Overflow one-compaction-per-trigger | design | timestamp-based guard (errorIsFromBeforeCompaction) | equivalent, adopted |
+| Fenced writer leases | shipped (sqlite-node) | **ADOPTED this pass** | new |
+| cacheRetention:none summaries | shipped | shares prefix — measurement needed | hold |
+| Deferred tools | shipped (ai) | absent | gap — needs provider work |
+| Durable effect sandwich | design | absent (in-memory retry) | highest-value future |
+| Evals harness-table | shipped (evals) | metaharness parallels | cherry-pick pattern |
+| CBOR protocol/server/client | shipped | n/a (in-process) | skip |
+
 ## Everyday-use optimization batch (Context VM + memory, 2026-08-11, traced)
 
 Deep trace of BOTH dimensions on real omjai sessions (the user asked: can we make them better in everyday use?):

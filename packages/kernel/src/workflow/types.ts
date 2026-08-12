@@ -74,7 +74,7 @@ export interface TaskStore {
 	get(id: TaskId): Promise<DurableTask | null>;
 	update(task: DurableTask): Promise<DurableTask>;
 	/** Transition state with validation; throws on illegal transitions. */
-	transition(id: TaskId, to: TaskState, error?: string): Promise<DurableTask>;
+	transition(id: TaskId, to: TaskState, error?: string, worker?: string): Promise<DurableTask>;
 	/** Tasks in a given state. */
 	list(state?: TaskState): Promise<DurableTask[]>;
 	/** Ready tasks (state = ready, all deps complete). */
