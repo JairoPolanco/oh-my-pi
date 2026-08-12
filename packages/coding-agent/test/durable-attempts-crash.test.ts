@@ -14,6 +14,7 @@ import {
 	DURABLE_ATTEMPT_CUSTOM_TYPE,
 	reconcileDurableAttempts,
 	reconcileToolEffects,
+	TOOL_INTERRUPTED_SOURCE,
 } from "../src/session/durable-attempts";
 
 const tempDirs: string[] = [];
@@ -204,15 +205,48 @@ describe("durable effect sandwich — crash window (integration)", () => {
 					entry.type === "message" &&
 					entry.message.role === "toolResult" &&
 					(entry.message.details as { __synthetic?: boolean } | undefined)?.__synthetic === true &&
-					(entry.message.details as { source?: string } | undefined)?.source === "tool_interrupted",
+					(entry.message.details as { source?: string } | undefined)?.source === TOOL_INTERRUPTED_SOURCE,
 			);
 			expect(interrupted).toHaveLength(1);
 			expect((interrupted[0]!.message as { toolCallId: string }).toolCallId).toBe("tool-write-1");
 
-			// The effect is classified interrupted, never rerunnable.
+			// The interrupted synthetic settled the record (written under its
+			// pre-provisioned result entry id) — the effect is classified SETTLED
+			// (never rerunnable), and a later restore emits no duplicate.
 			const effects = reconcileToolEffects(branch);
-			expect(effects.interrupted).toHaveLength(1);
+			expect(effects.settled).toHaveLength(1);
 			expect(effects.rerunnable).toHaveLength(0);
+			expect(effects.interrupted).toHaveLength(0);
+
+			// Idempotence (dogfooding finding #8): a SECOND restore of the same
+			// crashed session must NOT append another interrupted message.
+			const again = await createAgentSession({
+				cwd,
+				agentDir,
+				modelRegistry: sharedModelRegistry,
+				settings: Settings.isolated(),
+				sessionManager: restoredManager,
+				disableExtensionDiscovery: true,
+				skills: [],
+				contextFiles: [],
+				promptTemplates: [],
+				slashCommands: [],
+				enableMCP: false,
+				enableLsp: false,
+			});
+			try {
+				const branch2 = restoredManager.getBranch();
+				const interrupted2 = branch2.filter(
+					(entry): entry is Extract<typeof entry, { type: "message" }> =>
+						entry.type === "message" &&
+						entry.message.role === "toolResult" &&
+						(entry.message.details as { __synthetic?: boolean } | undefined)?.__synthetic === true &&
+						(entry.message.details as { source?: string } | undefined)?.source === TOOL_INTERRUPTED_SOURCE,
+				);
+				expect(interrupted2).toHaveLength(1); // still exactly one, not two
+			} finally {
+				await again.session.dispose();
+			}
 		} finally {
 			await session.dispose();
 		}

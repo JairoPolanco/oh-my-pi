@@ -21,6 +21,7 @@ import {
 	type DurableUsageRecord,
 	reconcileDurableAttempts,
 	reconcileToolEffects,
+	TOOL_INTERRUPTED_SOURCE,
 } from "../src/session/durable-attempts";
 
 let tempDir: string;
@@ -342,12 +343,16 @@ describe("durable effect sandwich — restore re-issue of rerunnable tools", () 
 			(entry): entry is Extract<typeof entry, { type: "message" }> =>
 				entry.type === "message" &&
 				entry.message.role === "toolResult" &&
-				(entry.message.details as { source?: string } | undefined)?.source === "tool_interrupted",
+				(entry.message.details as { source?: string } | undefined)?.source === TOOL_INTERRUPTED_SOURCE,
 		);
 		expect(synthetic).toHaveLength(1);
 		expect("toolCallId" in synthetic[0]!.message ? synthetic[0]!.message.toolCallId : undefined).toBe("call-w");
 		const reconciliation = reconcileToolEffects(branch);
-		expect(reconciliation.interrupted).toHaveLength(1);
+		// The synthetic settled the record under its provisioned id (dogfooding
+		// finding #8): the effect is SETTLED, never rerunnable, and a later
+		// restore emits no duplicate.
+		expect(reconciliation.settled).toHaveLength(1);
+		expect(reconciliation.interrupted).toHaveLength(0);
 		expect(reconciliation.rerunnable).toHaveLength(0);
 	});
 
@@ -424,7 +429,7 @@ describe("durable effect sandwich — restore re-issue of rerunnable tools", () 
 					entry.type === "message" && entry.id === "res-1",
 			);
 			expect(settledEntry).toBeDefined();
-			expect(syntheticSourceOf(settledEntry!.message)).toBe("tool_interrupted");
+			expect(syntheticSourceOf(settledEntry!.message)).toBe(TOOL_INTERRUPTED_SOURCE);
 		} finally {
 			delete Bun.env.OMP_KERNEL_EFFECT_GATE;
 			await resetKernelHosts();

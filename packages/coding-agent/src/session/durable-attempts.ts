@@ -28,6 +28,14 @@ import type { CustomEntry, SessionEntry } from "./session-entries";
 
 export const DURABLE_ATTEMPT_CUSTOM_TYPE = "kernel_attempt";
 
+/**
+ * Synthetic toolResult `details.source` for a crash-interrupted tool effect
+ * (slice 2). Shared by the restore path, the retry lookback, and tests — a
+ * bare string literal at multiple sites is exactly the typo hazard the
+ * dogfooding review flagged (#9).
+ */
+export const TOOL_INTERRUPTED_SOURCE = "tool_interrupted";
+
 /** Attempt kind: the pre-request intent record. */
 export interface DurableAttemptRecord {
 	kind: "attempt";

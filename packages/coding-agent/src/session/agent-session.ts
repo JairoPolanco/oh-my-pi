@@ -274,6 +274,7 @@ import {
 	type DurableToolRecord,
 	reconcileDurableAttempts,
 	reconcileToolEffects,
+	TOOL_INTERRUPTED_SOURCE,
 } from "./durable-attempts";
 import { EvalRunner, type EvalRunnerHost } from "./eval-runner";
 import {
@@ -2386,7 +2387,7 @@ export class AgentSession {
 					],
 					details: {
 						__synthetic: true,
-						source: "tool_interrupted",
+						source: TOOL_INTERRUPTED_SOURCE,
 						executed: false,
 						toolName: record.toolName,
 						startedAt: record.startedAt,
@@ -2394,6 +2395,14 @@ export class AgentSession {
 					isError: true,
 					timestamp: record.startedAt,
 				};
+				// Seed the pending map so the synthetic lands under the record's
+				// PRE-PROVISIONED result entry id — the same settle mechanism the
+				// re-issue path uses. Without this the record never settles and
+				// every restore of the same crashed session appends ANOTHER
+				// duplicate interrupted message (dogfooding finding #8: N restores
+				// = N duplicate warnings). Settling means a later restore sees the
+				// record as settled and emits nothing.
+				this.#pendingToolEffects.set(record.toolCallId, record);
 				this.#appendSessionMessage(message);
 			} catch (error) {
 				logger.warn("interrupted tool-effect restore failed (best-effort)", { error: String(error) });
@@ -2547,7 +2556,7 @@ export class AgentSession {
 			],
 			details: {
 				__synthetic: true,
-				source: "tool_interrupted",
+				source: TOOL_INTERRUPTED_SOURCE,
 				executed: false,
 				toolName: record.toolName,
 				startedAt: record.startedAt,
