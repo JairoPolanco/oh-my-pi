@@ -478,6 +478,15 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 			// One session-state vocabulary: the host baseline grants
 			// session.state:session (paste-8 P0 #4) — never per-op resources.
 			return [op("session.state", "write", "session")];
+		case "kernel":
+			// Direct kernel bridge tool (round-11 S1 rec #5): every op
+			// authorizes through the bridge's OWN per-op requireCapability —
+			// the always-on security floor. The broker-level resource is a
+			// coarse admit (the main agent holds internal.read:harness); a
+			// principal lacking a specific op's capability is still DENIED by
+			// the bridge before the op runs. The tool itself is replay:"never"
+			// (writes are not idempotent), so crash restore never re-runs it.
+			return [op("internal.read", "read", "harness")];
 		case "goal": {
 			const action = String(args.op ?? args.action ?? "get");
 			return action === "get" ? [op("goal.read", "read", "goal")] : [op("goal.write", "write", "goal")];

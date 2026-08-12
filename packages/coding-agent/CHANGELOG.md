@@ -4,6 +4,8 @@
 
 ### Added
 
+- Direct `kernel` bridge tool (round-11 S1 rec #5): every constitutional op (`contract.*`, `tasks.*`, `memory.*`, `artifacts.*`, `events.query`, `harness.*`, `perf.profile`, …) is now callable as `kernel({ op, ...args })` WITHOUT entering an eval cell — the measured eval-cell round trip (~10-14ms warm) is skipped; the bridge dispatch itself is ~0-21ms. The bridge stays the ALWAYS-ON security floor: every op authorizes through the same per-op `requireCapability` as the eval path, so this tool grants nothing the eval path didn't already hold. Reads map to the `read` approval tier, writes to `exec`; crash-replay is `"never"` (writes are not idempotent). Introspection-first docs: `kernel({ op: "bridge.ops" })` / `bridge.schema` before guessing args.
+
 - `kernel.perf.profile({ limit? })` — the harness profiler (round-11): per-tool call count, ok count, latency percentiles (p50/p90/p95/max/total) and output-bytes totals, ranked by total latency, from `tool.completed` events the trajectory tap records. Run it to find bottlenecks before optimizing — a tool with high p95 AND high outputBytes is both slow and cache-expensive. The tap now emits `latencyMs` + `outputBytes` on every `tool.completed` (was always unpopulated). First run on real sessions confirmed: `eval` (the kernel-bridge path, ~15s avg / 56s max) and `glob` (~25s avg) are the top latency tools.
 
 ### Removed

@@ -1779,6 +1779,14 @@ export function deriveCapabilitiesFromTools(toolNames: readonly string[], _works
 					requested.push({ id: "task.read", scope: "board", effect: "read" });
 				}
 				break;
+			case "kernel":
+				// Direct kernel bridge tool: the bridge's own per-op
+				// requireCapability is the real gate. The planner grants the
+				// coarse admit; per-op caps still deny at execution.
+				if (!requested.some(c => c.id === "internal.read")) {
+					requested.push({ id: "internal.read", scope: "harness", effect: "read" });
+				}
+				break;
 			case "hub":
 				// Multiplexed broker: request the full surface (paste-7 P0 #3,
 				// paste-8 P0 #1): process ops carry `name`, so name-scoped
