@@ -57,6 +57,12 @@ Agents marked BLOCKING run inline — results return in this call; non-blocking 
 Subagents start blank — no conversation history.{{#if ircEnabled}} Parent-to-subagent IRC delivered immediately as steering.{{/if}}
 Pass large payloads via `local://<path>` URIs, NEVER inline text.
 
+# Context handoff (children boot cold)
+Subagents have ZERO of your context — they re-discover whatever you already learned (measured: 130-190K fresh input per child re-reading what you mapped). Your `context`/`task` text is their ONLY inherited knowledge, so:
+- **Before spawning, distill what you already know INTO the batch `context`** (or single `task`): files you've read and what they contained, symbols you located, decisions already made, dead-ends you ruled out. A child that starts with "kernel-bridge.ts:120-200 defines the dispatch; host.ts:147 is the ledger" skips 20 reads.
+- The harness auto-appends your recent read/grep/glob results + the git delta to every spawn — but only what you actually explored. If you explored it, SAY it; the auto-block can't add what your context never touched.
+- Fan-outs of the same surface share ONE handoff block: siblings don't re-read the files the first child already mapped.
+
 # Format Contracts
 {{#if batchEnabled}}
 `context` format:

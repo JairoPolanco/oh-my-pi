@@ -685,6 +685,13 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 			},
 		},
 	},
+	"delegation.stats": {
+		name: "delegation.stats",
+		returns: "per-spawn delegation telemetry",
+		description:
+			"READ-ONLY delegation telemetry from the session event log (round-15): every `task` tool call records its args (batch vs single, item count, context char length). Aggregates spawn count, batch composition, and the context handoff's reach — so the cost of cold-start subagents is measurable instead of assumed. `contextBytes` = the shared context the parent supplied; `handoffAppended` = whether the orchestrator knowledge block rode along (auto-added by the task tool).",
+		args: {},
+	},
 	"contract.verify": {
 		name: "contract.verify",
 		returns: "verification report (V1-V4) with { pass, checkResults, evidence }",
@@ -1476,6 +1483,43 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 				passes: contractPasses,
 				passRate: contractRuns > 0 ? contractPasses / contractRuns : 0,
 			},
+		};
+	},
+	"delegation.stats": async (_args, _options, host, actor) => {
+		requireCapability(host, actor, "routing.read", "read", "routing");
+		// Round-15 delegation telemetry: the task tool emits a task.spawned
+		// event per spawn call (count, batch shape, context size, handoff
+		// reach). Aggregate so the cost of cold-start subagents is measured,
+		// not assumed — the same evidence that motivated the context handoff.
+		const spawned = host.events.query(e => e.payload.kind === "task.spawned") as Array<{
+			payload: {
+				count: number;
+				batch: boolean;
+				contextBytes: number;
+				handoffAppended: boolean;
+			};
+		}>;
+		let totalSpawns = 0;
+		let batches = 0;
+		let withHandoff = 0;
+		let totalContextBytes = 0;
+		for (const env of spawned) {
+			const p = env.payload;
+			totalSpawns += p.count;
+			batches += p.batch ? 1 : 0;
+			withHandoff += p.handoffAppended ? 1 : 0;
+			totalContextBytes += p.contextBytes;
+		}
+		return {
+			calls: spawned.length,
+			totalSpawns,
+			batches,
+			singleSpawns: spawned.length - batches,
+			avgContextBytes: spawned.length > 0 ? Math.round(totalContextBytes / spawned.length) : 0,
+			// Share of spawn calls that carried the orchestrator-knowledge
+			// handoff block (round-15): 1.0 = every child booted with the
+			// parent's exploration; 0 = all cold-start.
+			handoffCoverage: spawned.length > 0 ? withHandoff / spawned.length : null,
 		};
 	},
 	"perf.profile": async (args, _options, host, actor) => {

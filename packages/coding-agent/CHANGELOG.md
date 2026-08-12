@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Orchestrator → subagent context handoff (round-15): subagents spawn with ZERO prior context and re-derive the parent's exploration — measured 130-190K fresh input per child re-reading the kernel surface the parent already mapped. The task tool now appends a condensed "orchestrator knowledge" block to every spawn: the parent's recent read/grep/glob results (capped, 8 spans × 400 chars), the git delta (8 recent commit subjects), and task-relevant memory facts (queried from the parent's mnemopi bank — children alias the parent's state with `hasRecalledForFirstTurn: true`, so they never run a live recall themselves). Built ONCE per call, so a fan-out's siblings share the same block (cross-child dedup). The task.md prompt now instructs the orchestrator to distill findings INTO `context` before spawning. A `task.spawned` event records each spawn's composition + handoff reach; `kernel({ op: "delegation.stats" })` aggregates it (spawn count, batch vs single, context size, handoffCoverage).
+
 ### Fixed
 
 - Skill promotion reject-wins (round-14 prompt-2 e2e): the auto-executor lifecycle promoted a skill the rigorous executor had just REJECTED — the interactive bar (replay+heldout merely pass) ran ~3 min later and overrode the daemon-ledger reject, and the two ledgers disagreed. The lifecycle now consults the daemon ledger (`harness.versions` via the shared `gatewayRpc`) before promoting: a reject verdict for the skill wins over the weaker bar. The daemon's `harness.versions` returns full records (hypothesis included) so the skill match is possible.

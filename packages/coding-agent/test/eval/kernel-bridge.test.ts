@@ -508,6 +508,40 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(stats.models[0].cacheTelemetryCoverage).toBe(0.5);
 	});
 
+	test("delegation.stats aggregates task.spawned events + handoff reach (round-15)", async () => {
+		const host = await kernelHostFor(makeSession());
+		// One batch spawn with a handoff, one single spawn without.
+		host.events.append({
+			kind: "task.spawned",
+			count: 3,
+			batch: true,
+			contextBytes: 2000,
+			handoffAppended: true,
+		});
+		host.events.append({ kind: "task.spawned", count: 1, batch: false, contextBytes: 0, handoffAppended: false });
+
+		const stats = (await call("delegation.stats", {})) as {
+			calls: number;
+			totalSpawns: number;
+			batches: number;
+			singleSpawns: number;
+			avgContextBytes: number;
+			handoffCoverage: number | null;
+		};
+		expect(stats.calls).toBe(2);
+		expect(stats.totalSpawns).toBe(4);
+		expect(stats.batches).toBe(1);
+		expect(stats.singleSpawns).toBe(1);
+		expect(stats.avgContextBytes).toBe(1000);
+		expect(stats.handoffCoverage).toBe(0.5);
+	});
+
+	test("delegation.stats reports null coverage when no spawns recorded", async () => {
+		const stats = (await call("delegation.stats", {})) as { calls: number; handoffCoverage: number | null };
+		expect(stats.calls).toBe(0);
+		expect(stats.handoffCoverage).toBeNull();
+	});
+
 	test("perf.profile ranks tools by latency with output bytes (harness profiler)", async () => {
 		// The profiler aggregates tool.completed events (which the trajectory
 		// tap emits with latencyMs + outputBytes) into per-tool percentiles,

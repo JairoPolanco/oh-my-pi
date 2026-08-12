@@ -159,6 +159,19 @@ export interface TaskStateChanged {
 	to: string;
 }
 
+/** A subagent spawn was dispatched (round-15 delegation telemetry). */
+export interface TaskSpawned {
+	kind: "task.spawned";
+	/** Number of subagents spawned by this call (1 = single, N = batch). */
+	count: number;
+	/** True when the call used the batch `{ context, tasks[] }` shape. */
+	batch: boolean;
+	/** Char length of the shared context the parent supplied (0 for single). */
+	contextBytes: number;
+	/** Whether the orchestrator-knowledge handoff block rode along. */
+	handoffAppended: boolean;
+}
+
 /** A skill was proposed for promotion. */
 export interface SkillProposed {
 	kind: "skill.proposed";
@@ -224,6 +237,7 @@ export type HarnessEvent =
 	| AgentSpawned
 	| AgentMessageEvent
 	| TaskStateChanged
+	| TaskSpawned
 	| MemoryProposed
 	| MemoryCommitted
 	| SkillProposed

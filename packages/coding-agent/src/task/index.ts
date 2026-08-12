@@ -18,6 +18,7 @@ import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@oh-my
 import type { Usage } from "@oh-my-pi/pi-ai";
 import { $env, logger, prompt } from "@oh-my-pi/pi-utils";
 import type { ToolSession } from "..";
+import { kernelHostFor } from "../eval/kernel-bridge";
 import type { Theme } from "../modes/theme/theme";
 import subagentUserPromptTemplate from "../prompts/system/subagent-user-prompt.md" with { type: "text" };
 import taskDescriptionTemplate from "../prompts/tools/task.md" with { type: "text" };
@@ -27,6 +28,7 @@ import { TASK_EFFORTS, type TaskEffort } from "../thinking";
 import { truncateForPrompt } from "../tools/approval";
 import { isIrcEnabled } from "../tools/hub";
 import { formatBytes, formatDuration } from "../tools/render-utils";
+import { buildContextHandoff } from "./context-handoff";
 import { isReadOnlyAgent } from "./read-only-policy";
 import { isScoutSpawnable, resolveSpawnPolicy } from "./spawn-policy";
 import {
@@ -689,7 +691,48 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 		}
 
 		const spawnItems = resolveSpawnItems(params);
-		const normalizedSpawnParams = spawnItems.map(item => spawnParamsFor(params, item, defaultAgent));
+		let normalizedSpawnParams = spawnItems.map(item => spawnParamsFor(params, item, defaultAgent));
+		// Round-15: orchestrator → subagent context handoff. Children spawn
+		// with zero prior context and re-derive the parent's exploration
+		// (measured 130-190K fresh input per child re-reading what the parent
+		// already mapped). Append the parent's condensed discoveries + git
+		// delta to every spawn so children boot with knowledge instead of
+		// re-discovering it. Built ONCE per call — a fan-out's siblings share
+		// the same block (cross-child dedup).
+		let handoffAppended = false;
+		try {
+			const handoff = await buildContextHandoff(this.session, params.context ?? spawnItems[0]?.task);
+			if (handoff) {
+				handoffAppended = true;
+				normalizedSpawnParams = normalizedSpawnParams.map(spawn => ({
+					...spawn,
+					// Batch spawns carry shared `context`; single spawns carry
+					// `task`. Append to whichever exists, preferring context.
+					context: spawn.context ? `${spawn.context}\n\n${handoff}` : undefined,
+					task: spawn.context ? spawn.task : `${spawn.task ?? ""}\n\n${handoff}`,
+				}));
+			}
+		} catch (error) {
+			// Handoff must never break spawning — a failure degrades to the
+			// pre-existing cold-start behavior.
+			logger.debug("task spawn context handoff failed", { error: String(error) });
+		}
+		// delegation.stats telemetry (round-15): record the spawn composition
+		// + handoff reach into the kernel event log so the cost of cold-start
+		// subagents is measurable. Best-effort — a missing kernel host never
+		// breaks spawning.
+		try {
+			const host = await kernelHostFor(this.session);
+			host.events.append({
+				kind: "task.spawned",
+				count: normalizedSpawnParams.length,
+				batch: batchEnabled,
+				contextBytes: typeof params.context === "string" ? params.context.length : 0,
+				handoffAppended,
+			});
+		} catch (error) {
+			logger.debug("task spawn telemetry failed (best-effort)", { error: String(error) });
+		}
 		const resolvedAgents = normalizedSpawnParams.map(spawn => spawn.agent ?? defaultAgent);
 		// Resolve every item before choosing an execution path. No executor or
 		// job manager may observe a batch unless every effective policy is valid.
