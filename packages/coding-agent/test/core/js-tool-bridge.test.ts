@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { type } from "@oh-my-pi/omptype";
 import type { AgentTool, AgentToolResult } from "@oh-my-pi/pi-agent-core";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
@@ -33,6 +33,24 @@ function createSession(tools: AgentTool[]): ToolSession {
 }
 
 describe("callSessionTool", () => {
+	// Hermetic w.r.t. the harness launcher's env (round-3 lesson, repeated by
+	// the round-10 re-audit): omjai arms OMP_KERNEL_EFFECT_GATE=1, and the
+	// process env leaks into test runs. These tests exercise tool-bridge
+	// MECHANICS (intent injection, result shaping) with outside paths — under
+	// a live gate the kernel broker correctly denies them before execute,
+	// flipping 4 green tests red on gate-armed machines. Pin the gate OFF for
+	// the file; gate behavior is covered by the dedicated pin test below.
+	const gateEnv = "OMP_KERNEL_EFFECT_GATE";
+	let originalGateEnv: string | undefined;
+	beforeEach(() => {
+		originalGateEnv = Bun.env[gateEnv];
+		delete Bun.env[gateEnv];
+	});
+	afterEach(() => {
+		if (originalGateEnv === undefined) delete Bun.env[gateEnv];
+		else Bun.env[gateEnv] = originalGateEnv;
+	});
+
 	it("injects js intent and summarizes text results", async () => {
 		const execute = vi.fn().mockResolvedValue({
 			content: [{ type: "text", text: "hello" }],
