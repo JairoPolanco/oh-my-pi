@@ -308,3 +308,49 @@ describe("KernelHost workspace root (paste-7 P0 #5)", () => {
 		await host.close();
 	});
 });
+
+describe("verifier command output handling (round-11 S5)", () => {
+	const dir = `${import.meta.dir}/tmp-verify-output`;
+	const engine = new DeterministicVerificationEngine(() => true);
+
+	afterEach(async () => {
+		await fs.rm(dir, { recursive: true, force: true });
+	});
+
+	test("a >64KB stdout no longer deadlocks verification (pipe-fill regression)", async () => {
+		// The old code drained ONLY stderr and never stdout: a command
+		// emitting more than the pipe buffer (~64KB) blocked forever writing
+		// while nothing read — verification hung the session. Both streams
+		// are now drained with a byte cap, so a large stdout is truncated
+		// (tail preserved) and the check completes.
+		const report = await engine.verify(
+			contract({
+				checks: [
+					{
+						kind: "command",
+						command: [
+							"sh",
+							"-c",
+							"i=0; while [ $i -lt 100000 ]; do echo 'padding line to overflow the pipe buffer and then some more'; i=$((i+1)); done; exit 0",
+						],
+					},
+				],
+			}),
+			{ cwd: dir, artifacts: [] },
+		);
+		expect(report.pass).toBe(true);
+		expect(report.checkResults[0].pass).toBe(true);
+	}, 15_000);
+
+	test("a hanging command check times out instead of wedging the session", async () => {
+		// A command that never exits must be killed after the timeout cap
+		// and reported as a failing check — never a permanently hung verify.
+		const report = await engine.verify(
+			contract({ checks: [{ kind: "command", command: ["sh", "-c", "sleep 60"] }] }),
+			{ cwd: dir, artifacts: [] },
+		);
+		expect(report.pass).toBe(false);
+		expect(report.checkResults[0].pass).toBe(false);
+		expect(report.checkResults[0].detail).toContain("exit");
+	}, 45_000);
+});

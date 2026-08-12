@@ -4,6 +4,12 @@
 
 ### Added
 
+- Reviewer model independence enforced (round-11 C1): `contract.verify` refuses a `reviewerModel` equal to the session's own active model (a same-model review is self-certification), and the reviewer adapter fails a review that resolves to the session model — the reviewer agent's `@slow` chain previously PREPENDED the session default, silently self-certifying. The V3+ "independent review" is now actually independent by default.
+- Contract reviewer receives the resolved evidence content (round-11 C2): the reviewer previously got an empty evidence list (`renderReviewAssignment(contract, [])`) — no party other than the agent inspected what was attached. The bridge now passes each evidence artifact's content (4KB cap each).
+- `harness.versions` returns FULL hypotheses (round-11 S4): the old mapping stripped the hypothesis text, predictions, and change id — the "bisectable history" was unreadable in detail.
+- `memory.propose` schema documents the honest lifecycle (round-11 S3): live mnemopi path commits immediately (state "committed", reject/stale throw); the staged lifecycle exists only on the kernel fallback.
+- eval.md prelude corrected (round-11 S1): "most components are read-only" was backwards — MOST are editable (only 4 constitutional refused), and there is NO wired trusted evaluator for RLM proposals, so `harness.hypothesis` is telemetry that never lands.
+
 - `harness.recordEvaluation` requires the new `harness.evaluate` capability the main agent does not hold (recursive audit P0): the RLM can propose hypotheses and apply verdicts a trusted source already recorded, but can never record its own — self-certification is structurally closed, not convention.
 - Kernel bridge memory surfaces (`kernel.memory.recall`, mnemopi `search`) strip retention protocol markers at read time — stored episodes keep the framing the resume cursor needs, but the model never sees `[role: user]` / `[user:end]` noise (memory feedback loop closed, paste-17 #1).
 - `OmpContextEngine.materialize` honors its `enabled` flag: disabled governance passes the transcript through untouched instead of silently rewriting it.

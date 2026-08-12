@@ -30,6 +30,8 @@ export interface ContractReviewerOptions {
 	reviewerModel?: string;
 	/** Abort signal forwarded to the reviewer subagent. */
 	signal?: AbortSignal;
+	/** Resolved evidence content the reviewer must inspect (round-11 C2). */
+	evidence?: string[];
 }
 
 /** Render the review assignment from the contract (evidence-first). */
@@ -81,7 +83,7 @@ export async function runContractReviewer(
 		const result = await runStructuredSubagent({
 			session,
 			invocationKind: "eval",
-			assignment: renderReviewAssignment(contract, []),
+			assignment: renderReviewAssignment(contract, options.evidence ?? []),
 			agent: "reviewer",
 			model: options.reviewerModel,
 			outputSchema: reviewSchema,
@@ -89,10 +91,32 @@ export async function runContractReviewer(
 			identity: { label: "ContractReviewer" },
 			signal: options.signal,
 		});
+		const resolved = result.result.resolvedModel;
+		// Round-11 C1: the reviewer MUST be a different model than the agent
+		// under test — a same-model review is self-certification, not an
+		// independent verdict. The reviewer agent resolves "@slow" via the
+		// slow role chain, which PREPENDS the session's configured default
+		// model (the main agent's own model) when the slow role is unset —
+		// so the default path silently self-certifies. Also reject a
+		// caller-named reviewerModel that equals the active model.
+		const activeModel = session.getActiveModel?.();
+		const activeModelString = session.getActiveModelString?.();
+		const sameModel =
+			(activeModelString !== undefined && resolved === activeModelString) ||
+			(activeModel !== undefined &&
+				resolved !== undefined &&
+				resolved === `${activeModel.provider}/${activeModel.id}`);
+		if (sameModel) {
+			return {
+				reviewerModel: resolved ?? "reviewer",
+				pass: false,
+				note: `reviewer refused: model independence violated — reviewer resolved to the session's own model (${resolved}); an independent review requires a different model family`,
+			};
+		}
 		const data = result.result.structuredOutput?.data as { pass?: boolean; note?: string } | undefined;
 		const pass = data?.pass === true;
 		return {
-			reviewerModel: result.result.resolvedModel ?? "reviewer",
+			reviewerModel: resolved ?? "reviewer",
 			pass,
 			note: data?.note?.slice(0, 2000) ?? (pass ? "reviewer accepted" : "reviewer rejected"),
 		};

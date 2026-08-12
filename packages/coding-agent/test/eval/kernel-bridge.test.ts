@@ -248,6 +248,46 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(() => call("contract.verify", { id: "nope" })).toThrow(/contract not found/);
 	});
 
+	test("contract.create rejects a duplicate id — contracts are immutable (round-11 C3)", async () => {
+		// A passed contract could previously be silently redefined (upsert)
+		// and re-verified green. Duplicate ids now reject at create.
+		await call("contract.create", {
+			id: "immutable-1",
+			objective: "x",
+			checks: [{ kind: "fileExists", path: path.join(sessionDir, "anything") }],
+		});
+		await expect(
+			call("contract.create", {
+				id: "immutable-1",
+				objective: "weakened",
+				checks: [],
+			}),
+		).rejects.toThrow(/already exists — contracts are immutable/);
+	});
+
+	test("contract.verify refuses a reviewerModel equal to the session model (round-11 C1)", async () => {
+		// The reviewer must be a DIFFERENT model than the agent under test —
+		// a same-model review is self-certification. The caller can no longer
+		// defeat independence by naming its own model as reviewer.
+		await fs.writeFile(path.join(sessionDir, "out.txt"), "done");
+		await call("contract.create", {
+			id: "self-review",
+			objective: "x",
+			verificationLevel: 3,
+			checks: [{ kind: "fileExists", path: path.join(sessionDir, "out.txt") }],
+		});
+		const session = makeSession({ getActiveModelString: () => "anthropic/claude-sonnet-4-5" });
+		const report = (await call(
+			"contract.verify",
+			{ id: "self-review", reviewerModel: "anthropic/claude-sonnet-4-5" },
+			session,
+		)) as { pass: boolean; review: { pass: boolean; note: string } };
+		expect(report.review).toBeDefined();
+		expect(report.pass).toBe(false);
+		expect(report.review.pass).toBe(false);
+		expect(report.review.note).toContain("own active model");
+	});
+
 	test("contract.create rejects malformed checks with a clear error (dogfooding finding)", async () => {
 		// Regression: a bare-string check (e.g. checks: ["1+1==2"]) slipped
 		// through unvalidated and crashed contract.verify later at `r.pass`.
@@ -534,9 +574,17 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		})) as { version: number };
 		expect(committed.version).toBe(1);
 
-		const versions = (await call("harness.versions", {})) as { number: number; parent: number }[];
+		const versions = (await call("harness.versions", {})) as {
+			number: number;
+			parent: number;
+			hypothesis: { hypothesis: string; prediction: unknown[] } | null;
+		}[];
 		expect(versions).toHaveLength(2); // H0 + H1
 		expect(versions[1].parent).toBe(0);
+		// Round-11 S4: the full hypothesis (text + predictions) must survive —
+		// the old mapping stripped it, making the ledger unreadable in detail.
+		expect(versions[1]?.hypothesis?.hypothesis).toBe("lower scout effort saves cost");
+		expect(versions[1]?.hypothesis?.prediction).toHaveLength(1);
 
 		expect(() =>
 			call("harness.hypothesis", {

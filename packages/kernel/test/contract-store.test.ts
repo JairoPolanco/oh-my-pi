@@ -53,11 +53,17 @@ describe("SqliteContractStore", () => {
 		reopened.close();
 	});
 
-	test("put overwrites an existing id", async () => {
+	test("put rejects a duplicate id — contracts are immutable (round-11 C3)", async () => {
+		// The store header claims "contracts are immutable once registered"
+		// but put used ON CONFLICT DO UPDATE — a passed contract could be
+		// silently redefined and re-verified. Duplicates now reject.
 		await store.put(contract("c1"));
-		await store.put({ ...contract("c1"), objective: "updated" });
+		await expect(store.put({ ...contract("c1"), objective: "updated" })).rejects.toThrow(
+			/UNIQUE|unique|already exists/i,
+		);
+		// The original survives untouched.
 		const loaded = await store.get("c1");
-		expect(loaded?.objective).toBe("updated");
+		expect(loaded?.objective).toBe("do the thing");
 	});
 
 	test("list returns all contracts", async () => {

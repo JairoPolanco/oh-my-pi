@@ -119,14 +119,50 @@ export class DeterministicVerificationEngine implements VerificationEngine {
 					stdout: "pipe",
 					stderr: "pipe",
 				});
-				const stderr = await new Response(proc.stderr as ReadableStream<Uint8Array>).arrayBuffer();
-				const exitCode = await proc.exited;
+				// Round-11 S5: the old code drained ONLY stderr and never
+				// stdout — a command emitting >64KB of stdout pipe-fills and
+				// deadlocks verification forever (the process blocks writing
+				// while nothing reads). Cap wall time first (a hang becomes a
+				// failing check, not a wedged session), THEN drain both
+				// streams with a byte cap — reading streams before exit would
+				// block forever on a silent long-running command.
+				const CAP = 256 * 1024;
+				const TIMEOUT_MS = 30_000;
+				const exitCode = await Promise.race([
+					proc.exited,
+					Bun.sleep(TIMEOUT_MS).then(() => {
+						proc.kill();
+						return proc.exited;
+					}),
+				]);
+				const readCapped = async (stream: ReadableStream<Uint8Array> | null): Promise<string> => {
+					if (!stream) return "";
+					const reader = stream.getReader();
+					const chunks: Uint8Array[] = [];
+					let total = 0;
+					for (;;) {
+						const { done, value } = await reader.read();
+						if (done) break;
+						const room = CAP - total;
+						if (room <= 0) break;
+						const slice = value.length > room ? value.subarray(0, room) : value;
+						chunks.push(slice);
+						total += slice.length;
+						if (total >= CAP) break;
+					}
+					reader.cancel().catch(() => undefined);
+					return Buffer.concat(chunks).toString("utf8");
+				};
+				const [stdoutText, stderrText] = await Promise.all([
+					readCapped(proc.stdout as ReadableStream<Uint8Array> | null),
+					readCapped(proc.stderr as ReadableStream<Uint8Array> | null),
+				]);
 				const expected = check.expectExitCode ?? 0;
 				if (exitCode === expected) return { check, pass: true };
 				return {
 					check,
 					pass: false,
-					detail: `exit ${exitCode}, expected ${expected}\n${new TextDecoder().decode(stderr).slice(0, 2000)}`,
+					detail: `exit ${exitCode}, expected ${expected}\n${stderrText.slice(0, 2000)}${stdoutText.slice(0, 500) ? `\nstdout: ${stdoutText.slice(0, 500)}` : ""}`,
 				};
 			}
 			case "fileExists": {

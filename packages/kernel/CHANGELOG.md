@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Contracts are now IMMUTABLE (round-11 C3): `contract.create` rejects a duplicate id instead of upserting — a passed contract could previously be silently redefined and re-verified. Duplicate ids surface a clear error at create.
+- Command checks can no longer deadlock or hang verification (round-11 S5): the engine now caps wall time (30s timeout, kills the process) before draining BOTH stdout and stderr with a 256KB byte cap — the old code drained only stderr and a >64KB stdout pipe-filled, wedging the session forever.
+
 - Internal-URL reads map to their DEDICATED capabilities (round-10 re-audit P1): `skill://` → `skill.read:skills`, `memory://` → `memory.read:facts`, `artifact://` → `artifact.read:artifacts`, other internal schemes (`rule://`, `local://`, `mcp://`, `history://`, …) → `internal.read:harness`, URLs → `network:<host>`. Round-3's scheme classification had mapped everything to `fs.read:internal:…` which no capability granted — the read tool's sanctioned surface (every prompt mandates `read skill://<name>`) was denied while the bootstrap held the dedicated caps unused.
 - `internal.read:harness` capability granted in the main bootstrap for the harness-internal read surface.
 - `contract.verify` no longer trusts caller-supplied evidence refs: every evidence id is resolved through the artifact store, its content hash verified, and kind taken from the stored record — forged `{id, kind}` pairs fail verification instead of satisfying `requiredEvidence` (recursive audit P0).

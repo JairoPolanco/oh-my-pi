@@ -564,7 +564,13 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 	},
 	"memory.propose": {
 		name: "memory.propose",
-		returns: "{ id, state } (staged)",
+		// Round-11 S3: the live mnemopi path commits IMMEDIATELY (no staged
+		// state exists on the live path) — the old "(staged)" return lied,
+		// and memory.reject/memory.stale throw on every fact a live session
+		// owns. Honest contract: live path = committed; the staged lifecycle
+		// exists only on the kernel fallback.
+		returns:
+			"{ id, state } — state is 'committed' on the live mnemopi path (writes are immediate; memory.reject/stale throw there); 'proposed' only on the kernel fallback",
 		args: {
 			fact: { kind: "string", required: true, description: "The fact text" },
 			confidence: { kind: "number", required: false, description: "0-1 confidence" },
@@ -1211,6 +1217,14 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 				? args.verificationLevel
 				: 1) as CompletionContract["verificationLevel"],
 		};
+		// Contracts are immutable (round-11 C3): a duplicate id must be
+		// rejected at create, not silently overwrite the original — a passed
+		// contract could previously be redefined and re-verified (upsert).
+		if (await host.contracts.get(id)) {
+			throw new Error(
+				`__kernel__.contract.create: contract '${id}' already exists — contracts are immutable; use a new id (version the id if you need a revision)`,
+			);
+		}
 		await host.contracts.put(contractRecord);
 		return { id, checks: checks.length, evidence: requiredEvidence.length };
 	},
@@ -1278,23 +1292,51 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 			// graph, which re-enters tools/index — importing at module top
 			// level would cycle (tools/learn → kernel-bridge → reviewer).
 			const { runContractReviewer } = await import("../runtime/contract-reviewer");
-			const review = await runContractReviewer(options.session, contract, {
-				reviewerModel: typeof args.reviewerModel === "string" ? args.reviewerModel : undefined,
-				signal: options.signal,
-			});
-			if (review) {
-				report.review = review;
-				report.pass = review.pass;
-			} else {
-				// A level-3+ contract whose independent review could not run
-				// is NOT verified — no verdict means failure, not a silent
-				// downgrade to deterministic-only (paste-4 P1).
+			// Round-11 C1: a caller-named reviewerModel equal to the session's
+			// own model is a self-review attempt — reject before spawning so
+			// the agent cannot defeat independence by naming itself.
+			const requestedReviewer = typeof args.reviewerModel === "string" ? args.reviewerModel : undefined;
+			const activeModelString = options.session.getActiveModelString?.();
+			if (
+				requestedReviewer !== undefined &&
+				activeModelString !== undefined &&
+				requestedReviewer === activeModelString
+			) {
 				report.pass = false;
 				report.review = {
-					reviewerModel: "unavailable",
+					reviewerModel: requestedReviewer,
 					pass: false,
-					note: "independent reviewer could not run",
+					note: `reviewer refused: reviewerModel ${requestedReviewer} is the session's own active model — an independent review requires a different model family`,
 				};
+			} else {
+				const review = await runContractReviewer(options.session, contract, {
+					reviewerModel: requestedReviewer,
+					signal: options.signal,
+					// Round-11 C2: the reviewer previously received an EMPTY
+					// evidence list — no party other than the agent inspected
+					// what was attached. Pass the resolved evidence content so
+					// the independent review is grounded in what was verified.
+					evidence: await Promise.all(
+						artifacts.map(async ref => {
+							const bytes = await host.artifacts.read(ref.id);
+							return `${ref.id} (${ref.kind ?? "artifact"}): ${new TextDecoder().decode(bytes ?? new Uint8Array()).slice(0, 4000)}`;
+						}),
+					),
+				});
+				if (review) {
+					report.review = review;
+					report.pass = review.pass;
+				} else {
+					// A level-3+ contract whose independent review could not run
+					// is NOT verified — no verdict means failure, not a silent
+					// downgrade to deterministic-only (paste-4 P1).
+					report.pass = false;
+					report.review = {
+						reviewerModel: "unavailable",
+						pass: false,
+						note: "independent reviewer could not run",
+					};
+				}
 			}
 		}
 		host.events.append(
@@ -1546,12 +1588,15 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 	},
 	"harness.versions": async (_args, _options, host, actor) => {
 		// Phase 11 (§70): the harness version ledger — bisectable history.
-		// Read capability for uniformity (paste-9).
+		// Read capability for uniformity (paste-9). Round-11 S4: the old
+		// mapping stripped the hypothesis text, predictions, and change id —
+		// the "bisectable history" was unreadable in detail. Return the full
+		// hypothesis record.
 		requireCapability(host, actor, "harness.read", "read", "harness");
 		return host.versions.all.map(v => ({
 			number: v.number,
 			parent: v.parent,
-			hypothesis: v.hypothesis ? { component: v.hypothesis.component, observation: v.hypothesis.observation } : null,
+			hypothesis: v.hypothesis,
 			evaluation: v.evaluation,
 			rollbackTarget: v.rollbackTarget,
 		}));

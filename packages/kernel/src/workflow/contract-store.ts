@@ -60,16 +60,18 @@ export class SqliteContractStore {
 		this.#db.close();
 	}
 
-	/** Register (or overwrite) a contract by id. */
+	/**
+	 * Register a contract. IMMUTABLE (round-11 C3): a duplicate id is
+	 * rejected — the file's own claim "contracts are immutable once
+	 * registered" was false, and a passed contract could be silently
+	 * redefined and re-verified (upsert by id). The bridge's contract.create
+	 * checks existence first and surfaces the rejection to the caller.
+	 */
 	async put(contract: CompletionContract): Promise<CompletionContract> {
 		this.#db
 			.query(
 				`INSERT INTO contracts (id, objective, requirements, checks, evidence, verification_level, created_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?)
-				 ON CONFLICT(id) DO UPDATE SET
-					objective = excluded.objective, requirements = excluded.requirements,
-					checks = excluded.checks, evidence = excluded.evidence,
-					verification_level = excluded.verification_level`,
+				 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.run(
 				contract.id,
