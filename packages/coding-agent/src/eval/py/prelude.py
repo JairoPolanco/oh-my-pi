@@ -564,8 +564,9 @@ if "__omp_prelude_loaded__" not in globals():
     # RLM host bridge (blueprint §16, §84): programmatic kernel access.
     # ONE reserved identifier (`kernel`) — round-2 F1: the bare namespace
     # globals were shadowable by any local binding. `kernel.<ns>.<op>(...)`
-    # is the ONLY documented surface; the bare names below are deprecated
-    # aliases kept one cycle for backward compatibility.
+    # is the ONLY documented surface. The deprecated bare aliases served one
+    # cycle (round 2 → round 3) and were removed; they never warned in
+    # Python, so a silent shadowable surface had no reason to outlive them.
     class _KernelProxy:
         """Single reserved kernel object: `kernel.tasks.create(...)`."""
 
@@ -578,23 +579,6 @@ if "__omp_prelude_loaded__" not in globals():
             return "<kernel>"
 
     kernel = _KernelProxy()
-    # Deprecated bare-namespace aliases (round-2 F1) — use `kernel.<ns>.<op>`.
-    ctx = _KernelNamespace("ctx")
-    artifacts = _KernelNamespace("artifacts")
-    tasks = _KernelNamespace("tasks")
-    events = _KernelNamespace("events")
-    memory = _KernelNamespace("memory")
-    actors = _KernelNamespace("actors")
-    capabilities = _KernelNamespace("capabilities")
-    contract = _KernelNamespace("contract")
-    routing = _KernelNamespace("routing")
-    policy = _KernelNamespace("policy")
-    security = _KernelNamespace("security")
-    harness = _KernelNamespace("harness")
-    gateway = _KernelNamespace("gateway")
-    # Introspection (dogfooding finding #2): `kernel.bridge.ops()` lists ops,
-    # `kernel.bridge.schema({"name": ...})` returns the exact arg shapes.
-    bridge = _KernelNamespace("bridge")
 
     def completion(prompt, *, model="default", system=None, schema=None):
         """Oneshot, stateless completion against a model tier.

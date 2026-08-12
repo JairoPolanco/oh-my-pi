@@ -162,46 +162,9 @@ if (!globalThis.__omp_js_prelude_loaded__) {
 			},
 		},
 	);
-	// Deprecated bare-namespace aliases (round-2 F1): kept one cycle for
-	// backward compatibility; each warns once on first use. Never use these
-	// in new cells — a local variable with the same name shadows them.
-	const __deprecatedKernelNs = (() => {
-		const warned = new Set();
-		return (name, ns) =>
-			new Proxy(
-				{},
-				{
-					get(_target, prop) {
-						if (!warned.has(ns)) {
-							warned.add(ns);
-							globalThis.__omp_emit_status__("log", {
-								message: `kernel bridge: '${name}' is deprecated — use kernel.${ns}.*`,
-							});
-						}
-						if (typeof prop !== "string" || prop.startsWith("_")) return undefined;
-						return async args =>
-							globalThis.__omp_call_tool__("__kernel__", { ...(args ?? {}), op: `${ns}.${prop}` });
-					},
-				},
-			);
-	})();
-	const ctx = __deprecatedKernelNs("ctx", "ctx");
-	const artifacts = __deprecatedKernelNs("artifacts", "artifacts");
-	const tasks = __deprecatedKernelNs("tasks", "tasks");
-	const events = __deprecatedKernelNs("events", "events");
-	const memory = __deprecatedKernelNs("memory", "memory");
-	const actors = __deprecatedKernelNs("actors", "actors");
-	const capabilities = __deprecatedKernelNs("capabilities", "capabilities");
-	const contract = __deprecatedKernelNs("contract", "contract");
-	const routing = __deprecatedKernelNs("routing", "routing");
-	const policy = __deprecatedKernelNs("policy", "policy");
-	const security = __deprecatedKernelNs("security", "security");
-	const harness = __deprecatedKernelNs("harness", "harness");
-	const gateway = __deprecatedKernelNs("gateway", "gateway");
 	// Introspection (dogfooding finding #2): `kernel.bridge.ops()` lists ops,
 	// `kernel.bridge.schema({name})` returns the exact arg shapes — no more
 	// guessing from the prelude or reading engine source.
-	const bridge = __deprecatedKernelNs("bridge", "bridge");
 
 	const output = async (...args) => {
 		let opts = {};
@@ -410,20 +373,6 @@ if (!globalThis.__omp_js_prelude_loaded__) {
 	globalThis.readText = readText;
 	globalThis.bashOut = bashOut;
 	globalThis.globFiles = globFiles;
-	globalThis.ctx = ctx;
-	globalThis.artifacts = artifacts;
-	globalThis.tasks = tasks;
-	globalThis.events = events;
-	globalThis.memory = memory;
-	globalThis.actors = actors;
-	globalThis.capabilities = capabilities;
-	globalThis.contract = contract;
-	globalThis.routing = routing;
-	globalThis.policy = policy;
-	globalThis.security = security;
-	globalThis.harness = harness;
-	globalThis.gateway = gateway;
-	globalThis.bridge = bridge;
 	globalThis.kernel = kernel;
 	globalThis.completion = completion;
 	globalThis.output = output;

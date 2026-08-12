@@ -105,6 +105,8 @@ describe("python prelude", () => {
 	});
 
 	it("routes kernel namespaces (ctx/artifacts/tasks/events) to the __kernel__ bridge", async () => {
+		// Round-3: the deprecated bare aliases are gone; the test exercises the
+		// documented `kernel.<ns>.<op>` surface only.
 		const requests: { name: string; args: Record<string, unknown> }[] = [];
 		const server = Bun.serve({
 			hostname: "127.0.0.1",
@@ -119,19 +121,19 @@ describe("python prelude", () => {
 		try {
 			const result = await runPrelude(
 				[
-					'print(ctx.materialize({"tokenBudget": 1000}))',
-					'print(artifacts.put({"text": "x"}))',
-					'print(tasks.create({"id": "t1", "objective": "o"}))',
-					'print(events.query({"kind": "task.state"}))',
-					'print(memory.propose({"fact": "f"}))',
-					'print(actors.status({"id": "Main"}))',
-					"print(capabilities.effective({}))",
-					'print(contract.create({"id": "c", "objective": "o"}))',
-					'print(routing.resolve({"role": "main", "taskComplexity": 0.5}))',
-					'print(policy.authorize({"id": "fs.read", "effect": "read", "resource": "repo/x.ts"}))',
-					"print(security.profile({}))",
-					'print(harness.hypothesis({"component": "tool-default", "observation": "o", "hypothesis": "h"}))',
-					"print(gateway.status({}))",
+					'print(kernel.ctx.materialize({"tokenBudget": 1000}))',
+					'print(kernel.artifacts.put({"text": "x"}))',
+					'print(kernel.tasks.create({"id": "t1", "objective": "o"}))',
+					'print(kernel.events.query({"kind": "task.state"}))',
+					'print(kernel.memory.propose({"fact": "f"}))',
+					'print(kernel.actors.status({"id": "Main"}))',
+					"print(kernel.capabilities.effective({}))",
+					'print(kernel.contract.create({"id": "c", "objective": "o"}))',
+					'print(kernel.routing.resolve({"role": "main", "taskComplexity": 0.5}))',
+					'print(kernel.policy.authorize({"id": "fs.read", "effect": "read", "resource": "repo/x.ts"}))',
+					"print(kernel.security.profile({}))",
+					'print(kernel.harness.hypothesis({"component": "tool-default", "observation": "o", "hypothesis": "h"}))',
+					"print(kernel.gateway.status({}))",
 				].join("\n"),
 				{
 					PI_TOOL_BRIDGE_URL: server.url.toString(),

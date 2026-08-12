@@ -2,9 +2,10 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { getActiveRules, setActiveRules } from "@oh-my-pi/pi-coding-agent/capability/rule";
 import { ModelRegistry } from "@oh-my-pi/pi-coding-agent/config/model-registry";
 import { Settings } from "@oh-my-pi/pi-coding-agent/config/settings";
-import { getActiveSkills } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
+import { getActiveSkills, setActiveSkills } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
 import type { Skill } from "@oh-my-pi/pi-coding-agent/sdk";
 import { createAgentSession } from "@oh-my-pi/pi-coding-agent/sdk";
 import type { AgentSession } from "@oh-my-pi/pi-coding-agent/session/agent-session";
@@ -245,6 +246,13 @@ This skill is added after session creation.
 
 	it("manage_skill hot-registers managed skills in the active session", async () => {
 		const originalAgentDir = getAgentDir();
+		// The harness launcher arms OMP_KERNEL_SKILL_PROMOTION_GATE by default;
+		// under the gate, writes land in staging/ where discovery (active-only)
+		// never sees them, so hot-registration is a GATE-OFF contract. Pin the
+		// env to gate-off for this test (restored in finally) — without it the
+		// test fails on any gate-armed machine while passing on bare omp.
+		const originalGate = Bun.env.OMP_KERNEL_SKILL_PROMOTION_GATE;
+		delete Bun.env.OMP_KERNEL_SKILL_PROMOTION_GATE;
 		const managedAgentDir = path.join(tempHomeDir, ".omp", "agent");
 		setAgentDir(managedAgentDir);
 		const settings = createIsolatedSkillsSettings();
@@ -297,6 +305,8 @@ This skill is added after session creation.
 			await session.dispose();
 			unsubscribeCommandMetadata();
 			setAgentDir(originalAgentDir);
+			if (originalGate === undefined) delete Bun.env.OMP_KERNEL_SKILL_PROMOTION_GATE;
+			else Bun.env.OMP_KERNEL_SKILL_PROMOTION_GATE = originalGate;
 		}
 	});
 
@@ -338,5 +348,67 @@ This skill is added after session creation.
 		expect(session.skills).toEqual([customSkill]);
 		// No warnings since we didn't discover
 		expect(session.skillWarnings).toEqual([]);
+	});
+
+	it("internalSession sessions never install the process-global skill/rule snapshots", async () => {
+		// Round-3 audit drift: the skill-promotion probes used to be created
+		// without parentTaskPrefix, so createAgentSession treated them as
+		// top-level and replaced getActiveSkills()/getActiveRules() with the
+		// probe's single injected skill — breaking skill:// and rule://
+		// resolution for the parent session for the rest of the process.
+		const beforeSkills = getActiveSkills();
+		const beforeRules = getActiveRules();
+		const normalSkill: Skill = {
+			name: "normal-session-skill",
+			description: "A normal session skill",
+			filePath: "/fake/normal/SKILL.md",
+			baseDir: "/fake/normal",
+			source: "custom" as const,
+		};
+		const probeSkill: Skill = {
+			name: "probe-injected-skill",
+			description: "Injected staged skill",
+			filePath: "/fake/staging/probe-injected-skill/SKILL.md",
+			baseDir: "/fake/staging",
+			source: "auto-executor" as const,
+		};
+
+		// Control: a normal top-level session still installs the snapshots.
+		const normal = await createAgentSession({
+			cwd: tempDir,
+			agentDir: tempDir,
+			sessionManager: SessionManager.inMemory(),
+			modelRegistry: sharedModelRegistry,
+			skills: [normalSkill],
+			settings: createIsolatedSkillsSettings(),
+		});
+		await normal.session.dispose();
+		expect(getActiveSkills()).toEqual([normalSkill]);
+		// The normal session also installed the rule snapshot (discovered
+		// builtin-defaults rules) — that is the baseline a probe must not
+		// disturb. Same-reference comparison proves no reinstall happened.
+		const afterNormalSkills = getActiveSkills();
+		const afterNormalRules = getActiveRules();
+		expect(afterNormalRules.length).toBeGreaterThan(0);
+
+		// Probe: internalSession must leave the installed snapshots untouched.
+		const internal = await createAgentSession({
+			cwd: tempDir,
+			agentDir: tempDir,
+			sessionManager: SessionManager.inMemory(),
+			modelRegistry: sharedModelRegistry,
+			skills: [probeSkill],
+			rules: [],
+			internalSession: true,
+			settings: createIsolatedSkillsSettings(),
+		});
+		try {
+			expect(getActiveSkills()).toBe(afterNormalSkills);
+			expect(getActiveRules()).toBe(afterNormalRules);
+		} finally {
+			await internal.session.dispose();
+			setActiveSkills(beforeSkills);
+			setActiveRules(beforeRules);
+		}
 	});
 });

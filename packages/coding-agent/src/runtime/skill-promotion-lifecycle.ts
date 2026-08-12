@@ -66,6 +66,16 @@ interface SkillPromotionLifecycleOptions {
 	session: AgentSession;
 	/** Kernel host for recording the trusted verdict in the harness ledger. */
 	host: KernelHost;
+	/**
+	 * Session kind, defaulting to "main". Subagent sessions must NOT sweep:
+	 * every session's tool gate attaches this lifecycle, so without the guard
+	 * a task subagent's sweep could promote a staged skill while the main
+	 * session's probe is mid-flight — dangling the probe's injected
+	 * `staging/<name>/SKILL.md` path ("skill exists but its file vanished")
+	 * and double-evaluating the same skill. One sweep per process: the main
+	 * session's.
+	 */
+	agentKind?: "main" | "sub";
 }
 
 export class SkillPromotionLifecycle {
@@ -79,6 +89,12 @@ export class SkillPromotionLifecycle {
 
 	attach(): () => void {
 		if (this.#detach) return this.#detach;
+		if ((this.#options.agentKind ?? "main") !== "main") {
+			// Subagent sessions must never sweep (concurrent promotion races the
+			// main session's probes and double-evaluates staged skills).
+			this.#detach = () => {};
+			return this.#detach;
+		}
 		this.#detach = this.#options.session.subscribe(event => this.#onEvent(event));
 		return this.#detach;
 	}
@@ -198,6 +214,11 @@ export class SkillPromotionLifecycle {
 				hasUI: false,
 				enableMCP: false,
 				enableLsp: false,
+				// Internal evaluation probe: must NOT install the process-global
+				// skill/rule snapshots (its single injected staged skill would
+				// clobber the parent session's resolvable surface — round-3
+				// audit drift) and must not retain into shared memory.
+				internalSession: true,
 				skills: [
 					{
 						name,
@@ -247,13 +268,17 @@ export class SkillPromotionLifecycle {
 				model: session.model,
 				authStorage: session.modelRegistry.authStorage,
 				modelRegistry: session.modelRegistry,
-				// Internal evaluation session: no retention into shared memory.
+				// Internal evaluation session: no retention into shared memory,
+				// and no process-global skill/rule snapshot install (round-3
+				// audit drift — the probes must not clobber the parent's
+				// resolvable surface).
 				settings: probeSessionSettings(),
 				sessionManager: SessionManager.inMemory(session.sessionManager.getCwd()),
 				agentRegistry: new AgentRegistry(),
 				hasUI: false,
 				enableMCP: false,
 				enableLsp: false,
+				internalSession: true,
 				skills: [
 					{
 						name,
@@ -299,6 +324,7 @@ export class SkillPromotionLifecycle {
 export function attachSkillPromotionLifecycle(
 	session: AgentSession,
 	host: SkillPromotionLifecycleOptions["host"],
+	options: Pick<SkillPromotionLifecycleOptions, "agentKind"> = {},
 ): () => void {
-	return new SkillPromotionLifecycle({ session, host }).attach();
+	return new SkillPromotionLifecycle({ session, host, ...options }).attach();
 }

@@ -528,6 +528,16 @@ export interface CreateAgentSessionOptions {
 	/** Parent task ID prefix for nested artifact naming (e.g., "Extensions") */
 	parentTaskPrefix?: string;
 	/**
+	 * Marks the session as an internal/programmatic evaluation session (e.g.
+	 * the skill-promotion auto-executor's probe sessions). Such sessions must
+	 * NOT install the process-global skill/rule/async-job snapshots that
+	 * top-level sessions own: a probe replacing `getActiveSkills()` with its
+	 * single injected skill would break the parent session's `skill://`
+	 * resolution, `manage_skill` name-collision checks, and `rule://` lookups
+	 * for the rest of the process (round-3 audit drift).
+	 */
+	internalSession?: boolean;
+	/**
 	 * Registry id of the spawning agent, recorded as this subagent's parent in
 	 * the agent registry. Distinct from `parentTaskPrefix`, which is this agent's
 	 * own artifact/output-id prefix (the executor passes the child's own id
@@ -1794,12 +1804,17 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 
 		// Wire process-wide internal URL singletons owned by their real classes.
 		// Top-level sessions install the active snapshots; subagents inherit them.
+		// Internal evaluation sessions (internalSession) install nothing — they
+		// are transient probes whose injected skill/rule lists must never
+		// replace the owning session's global surface (round-3 audit: the
+		// skill-promotion probes used to clobber getActiveSkills()/getActiveRules(),
+		// breaking skill:// and rule:// resolution for the parent thereafter).
 		// Artifact and agent-output URLs resolve via `AgentRegistry.global()` —
 		// the protocol handlers walk each ref's `sessionManager.getArtifactsDir()`,
 		// which collapses to the parent's dir for subagents (they adopt the
 		// parent's ArtifactManager) so one lookup hits everything.
 		const getArtifactsDir = () => sessionManager.getArtifactsDir();
-		if (!options.parentTaskPrefix) {
+		if (!options.parentTaskPrefix && !options.internalSession) {
 			setActiveSkills(skills);
 			// Include TTSR rules so `rule://<name>` can resolve them too. They are
 			// registered with the manager and bucketed out before rulebook/always,
@@ -1812,7 +1827,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			getArtifactsDir,
 			getSessionId: () => sessionManager.getSessionId?.() ?? null,
 		};
-		if (options.localProtocolOptions && !options.parentTaskPrefix) {
+		if (options.localProtocolOptions && !options.parentTaskPrefix && !options.internalSession) {
 			LocalProtocolHandler.setOverride(options.localProtocolOptions);
 		}
 		toolSession.getArtifactsDir = getArtifactsDir;
@@ -1912,8 +1927,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// Only top-level sessions own the global MCPManager. Subagents already
 		// receive the parent's manager via `options.mcpManager`, and reassigning
 		// the singleton to the same value is a no-op — keep the gate explicit
-		// to mirror the AsyncJobManager ownership rule.
-		if (mcpManager && !options.parentTaskPrefix) MCPManager.setInstance(mcpManager);
+		// to mirror the AsyncJobManager ownership rule. Internal evaluation
+		// sessions (probes) own nothing global either.
+		if (mcpManager && !options.parentTaskPrefix && !options.internalSession) MCPManager.setInstance(mcpManager);
 
 		const builtInToolNames = [...toolRegistry.keys()];
 		let customToolPaths: ToolPathWithSource[] = [];

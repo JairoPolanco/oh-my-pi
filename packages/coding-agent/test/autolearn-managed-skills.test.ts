@@ -18,14 +18,24 @@ describe("managed-skills primitives", () => {
 	let tempHome: string;
 
 	let originalAgentDir: string;
+	const gateEnv = "OMP_KERNEL_SKILL_PROMOTION_GATE";
+	let originalGateEnv: string | undefined;
 	beforeEach(async () => {
 		originalAgentDir = getAgentDir();
+		// Hermetic w.r.t. the promotion gate: the harness launcher arms it by
+		// default, and under the gate writes land in staging/ (tested in the
+		// dedicated gate describes below). This describe assumes the gate-off
+		// direct-write contract — pin it here, restore in afterEach.
+		originalGateEnv = Bun.env[gateEnv];
+		delete Bun.env[gateEnv];
 		tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "omp-managed-skills-"));
 		spyOn(os, "homedir").mockReturnValue(tempHome);
 		setAgentDir(path.join(tempHome, ".omp", "agent"));
 	});
 
 	afterEach(async () => {
+		if (originalGateEnv === undefined) delete Bun.env[gateEnv];
+		else Bun.env[gateEnv] = originalGateEnv;
 		spyOn(os, "homedir").mockRestore();
 		setAgentDir(originalAgentDir);
 		await removeWithRetries(tempHome);

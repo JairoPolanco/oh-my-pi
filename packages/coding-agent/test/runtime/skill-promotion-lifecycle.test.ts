@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getManagedSkillStagingDir, writeManagedSkill } from "@oh-my-pi/pi-coding-agent/autolearn/managed-skills";
+import { resetActiveSkillsForTests, setActiveSkills } from "@oh-my-pi/pi-coding-agent/extensibility/skills";
+import { parseInternalUrl } from "@oh-my-pi/pi-coding-agent/internal-urls/parse";
+import { SkillProtocolHandler } from "@oh-my-pi/pi-coding-agent/internal-urls/skill-protocol";
 import { KernelHost } from "@oh-my-pi/pi-kernel";
 import { getAgentDir, setAgentDir } from "@oh-my-pi/pi-utils/dirs";
 import { SkillPromotionLifecycle } from "../../src/runtime/skill-promotion-lifecycle";
@@ -17,6 +20,10 @@ class FakeSession {
 	subscribe(fn: (event: { type: string }) => void): () => void {
 		this.#listeners.add(fn);
 		return () => this.#listeners.delete(fn);
+	}
+
+	listenerCount(): number {
+		return this.#listeners.size;
 	}
 
 	emit(event: { type: string }): void {
@@ -85,8 +92,10 @@ describe("SkillPromotionLifecycle", () => {
 		// session references the skill name (proves it loaded). Capture the
 		// settings each probe session receives.
 		const probeSettings: unknown[] = [];
+		const probeOptions: unknown[] = [];
 		vi.spyOn(sdkModule, "createAgentSession").mockImplementation(async options => {
 			probeSettings.push(options?.settings);
+			probeOptions.push(options);
 			return {
 				session: fakeReplaySession("I completed the task using good-skill guidance."),
 				modelFallbackMessage: undefined,
@@ -118,10 +127,21 @@ describe("SkillPromotionLifecycle", () => {
 		const promotedVersion = versions.find(v => v.evaluation?.decision === "promote");
 		expect(promotedVersion?.evaluation?.reason).toContain("auto-executor");
 		// Harmony seam: the probe sessions are INTERNAL evaluations and must
-		// not retain episodes into the shared memory bank.
+		// not retain episodes into the shared memory bank, and must not
+		// install the process-global skill/rule snapshots (round-3 audit:
+		// without internalSession, a probe's single injected skill clobbered
+		// the parent's resolvable surface after every sweep).
 		expect(probeSettings.length).toBeGreaterThanOrEqual(2);
 		for (const settings of probeSettings) {
 			expect((settings as { get: (k: string) => unknown }).get("mnemopi.autoRetain")).toBe(false);
+		}
+		for (const options of probeOptions) {
+			expect(
+				options !== null &&
+					typeof options === "object" &&
+					"internalSession" in options &&
+					options.internalSession === true,
+			).toBe(true);
 		}
 	});
 
@@ -165,5 +185,148 @@ describe("SkillPromotionLifecycle", () => {
 		// No promote verdict was recorded.
 		const promoted = host.versions.all.find(v => v.evaluation?.decision === "promote");
 		expect(promoted).toBeUndefined();
+	});
+
+	test("subagent-kind sessions never sweep (main-only cadence — no concurrent promotion race)", async () => {
+		// Round-3 audit: every session's tool gate attaches the lifecycle, so
+		// without the agentKind guard a task subagent's sweep could promote a
+		// staged skill while the main session's probe is mid-flight — dangling
+		// the probe's injected staging path ("skill exists but its file
+		// vanished") and double-evaluating the skill.
+		await stageSkill("sub-skill", "# Sub\n\nBody.");
+		const createSpy = vi.spyOn(sdkModule, "createAgentSession").mockResolvedValue({
+			session: fakeReplaySession("I used sub-skill and it worked."),
+			modelFallbackMessage: undefined,
+		} as unknown as CreateAgentSessionResult);
+
+		const session = makeSession([{ role: "user", content: [{ type: "text", text: "Fix the sub task." }] }]);
+		const fake = session as unknown as FakeSession;
+		const lifecycle = new SkillPromotionLifecycle({ session, host, agentKind: "sub" });
+		lifecycle.attach();
+
+		// The guard refuses the subscription outright — a sub-kind lifecycle
+		// never hears turn_end, so no async sweep can ever be scheduled.
+		expect(fake.listenerCount()).toBe(0);
+		for (let t = 0; t < 9; t++) fake.emit({ type: "turn_end" });
+		expect(createSpy).not.toHaveBeenCalled();
+
+		// The staged skill is untouched: no SOURCE sidecar, no promotion.
+		const sourcePath = path.join(getManagedSkillStagingDir(), "sub-skill", "SOURCE.txt");
+		const hasSource = await fs
+			.readFile(sourcePath, "utf8")
+			.then(() => true)
+			.catch(() => false);
+		expect(hasSource).toBe(false);
+		const stagedPath = path.join(getManagedSkillStagingDir(), "sub-skill", "SKILL.md");
+		const stillStaged = await fs
+			.readFile(stagedPath, "utf8")
+			.then(() => true)
+			.catch(() => false);
+		expect(stillStaged).toBe(true);
+		const promoted = host.versions.all.find(v => v.evaluation?.decision === "promote");
+		expect(promoted).toBeUndefined();
+	});
+});
+
+describe("advertised surface == resolvable surface (skill promotion reconciliation)", () => {
+	let host: KernelHost;
+	let originalAgentDir: string;
+
+	beforeEach(async () => {
+		originalAgentDir = getAgentDir();
+		setAgentDir(path.join(testDir, "agent"));
+		Bun.env.OMP_KERNEL_SKILL_PROMOTION_GATE = "1";
+		host = new KernelHost(path.join(testDir, "kernel"));
+		await host.warm();
+	});
+
+	afterEach(async () => {
+		vi.restoreAllMocks();
+		resetActiveSkillsForTests();
+		delete Bun.env.OMP_KERNEL_SKILL_PROMOTION_GATE;
+		setAgentDir(originalAgentDir);
+		await host.close();
+		await fs.rm(testDir, { recursive: true, force: true });
+	});
+
+	async function stageSkill(name: string, body: string): Promise<void> {
+		await writeManagedSkill({
+			action: "create",
+			name,
+			description: "test staged skill",
+			body,
+		});
+	}
+
+	const parentSkill = (name: string, dir: string) => ({
+		name,
+		description: "parent-discovered skill",
+		filePath: `${dir}/${name}/SKILL.md`,
+		baseDir: dir,
+		source: "native" as const,
+	});
+
+	test("a staged skill is unknown to the parent's surface but resolvable through the probe's injected context", async () => {
+		await stageSkill("staged-probe-skill", "# Staged\n\nBody.");
+		const handler = new SkillProtocolHandler();
+		const activeDir = path.join(getManagedSkillStagingDir(), "..", "active");
+
+		// The parent session's surface: discovery reads only active/ when the
+		// gate is armed, so the staged name is not in it at all — resolving
+		// it must fail as unknown, never fall through to a live path.
+		const parentContext = { skills: [parentSkill("active-live-skill", activeDir)] as never[] };
+		await expect(handler.resolve(parseInternalUrl("skill://staged-probe-skill"), parentContext)).rejects.toThrow(
+			/Unknown skill/,
+		);
+
+		// The probe's injected context (staging path) resolves while staged.
+		const probeContext = {
+			skills: [
+				{
+					name: "staged-probe-skill",
+					description: "auto-evaluated staged skill",
+					filePath: `${getManagedSkillStagingDir()}/staged-probe-skill/SKILL.md`,
+					baseDir: getManagedSkillStagingDir(),
+					source: "auto-executor",
+				},
+			] as never[],
+		};
+		const resource = await handler.resolve(parseInternalUrl("skill://staged-probe-skill"), probeContext);
+		expect(resource.content).toContain("Staged");
+	});
+
+	test("context.skills takes precedence over the process-global snapshot", async () => {
+		// Even if the global snapshot were clobbered (pre-fix behavior: the
+		// probe's single skill replaced the parent's list), a session-bound
+		// resolve must serve its own skills — read/grep/glob all pass
+		// context.skills.
+		await stageSkill("ctx-priority-skill", "# Ctx\n\nBody.");
+		const handler = new SkillProtocolHandler();
+		setActiveSkills([
+			{
+				name: "global-only-skill",
+				description: "global",
+				filePath: "/fake/global/SKILL.md",
+				baseDir: "/fake/global",
+				source: "native",
+			},
+		]);
+		const context = {
+			skills: [
+				{
+					name: "ctx-priority-skill",
+					description: "auto-evaluated staged skill",
+					filePath: `${getManagedSkillStagingDir()}/ctx-priority-skill/SKILL.md`,
+					baseDir: getManagedSkillStagingDir(),
+					source: "auto-executor",
+				},
+			] as never[],
+		};
+		const resource = await handler.resolve(parseInternalUrl("skill://ctx-priority-skill"), context);
+		expect(resource.content).toContain("Ctx");
+		// The clobbered-global-only name stays unresolvable through this context.
+		await expect(handler.resolve(parseInternalUrl("skill://global-only-skill"), context)).rejects.toThrow(
+			/Unknown skill/,
+		);
 	});
 });

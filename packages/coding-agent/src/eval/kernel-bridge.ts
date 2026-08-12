@@ -6,10 +6,10 @@
  * {@link EVAL_KERNEL_BRIDGE_NAME} gives the model programmatic access to the
  * constitutional kernel inside a persistent cell — the RLM host bridge:
  *
- *     ctx.materialize({ objective, candidates, tokenBudget }) → ContextView
- *     artifacts.put(text) / artifacts.read(id) / artifacts.has(id)
- *     tasks.create(...) / tasks.transition(...) / tasks.list() / tasks.ready()
- *     events.query({ kind }) → recent harness events
+ *     kernel.ctx.materialize({ objective, candidates, tokenBudget }) → ContextView
+ *     kernel.artifacts.put(text) / kernel.artifacts.read(id) / kernel.artifacts.has(id)
+ *     kernel.tasks.create(...) / kernel.tasks.transition(...) / kernel.tasks.list() / kernel.tasks.ready()
+ *     kernel.events.query({ kind }) → recent harness events
  *
  * The host owns all authoritative state: the artifact store is
  * content-addressed and immutable (blueprint §8), the task store is
@@ -399,8 +399,8 @@ export function kernelEffectGateEnabled(): boolean {
  * finding #2: the prelude named the namespaces but not the per-op shapes —
  * the model had to read engine source to discover e.g. that
  * `contract.verify` takes `evidence: [{id, kind}]` and `requiredEvidence`
- * is artifactKind-matched). Exposed to the model via `bridge.schema({op})`
- * and `bridge.ops()` so argument shapes are discoverable, not guesswork.
+ * is artifactKind-matched). Exposed to the model via `kernel.bridge.schema({op})`
+ * and `kernel.bridge.ops()` so argument shapes are discoverable, not guesswork.
  *
  * `required` = the op throws without it; `kind` is a loose type hint (the
  * engine's real validation is in each case). Keep in sync with the cases.

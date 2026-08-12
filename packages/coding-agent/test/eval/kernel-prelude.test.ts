@@ -126,10 +126,10 @@ describe("kernel prelude globals (JS worker)", () => {
 			execute: async () => ({ content: [{ type: "text", text: "" }] }),
 		} as unknown as AgentTool);
 		const code = `
-			const record = await artifacts.put({ text: "payload-a", kind: "tool-output" });
-			const dup = await artifacts.put({ text: "payload-a" });
-			const read = await artifacts.read({ id: record.id });
-			const has = await artifacts.has({ id: record.id });
+			const record = await kernel.artifacts.put({ text: "payload-a", kind: "tool-output" });
+			const dup = await kernel.artifacts.put({ text: "payload-a" });
+			const read = await kernel.artifacts.read({ id: record.id });
+			const has = await kernel.artifacts.has({ id: record.id });
 			return JSON.stringify({ id: record.id, sameId: dup.id === record.id, text: read.text, has });
 		`;
 		const result = await executeJs(code, { cwd: tempDir.path(), sessionId, session });
@@ -144,7 +144,7 @@ describe("kernel prelude globals (JS worker)", () => {
 	it("ctx.materialize respects the token budget", async () => {
 		const session = makeSession(tempDir.path());
 		const code = `
-			const view = await ctx.materialize({
+			const view = await kernel.ctx.materialize({
 				tokenBudget: 1000,
 				objective: "debug auth",
 				candidates: [
@@ -164,10 +164,10 @@ describe("kernel prelude globals (JS worker)", () => {
 	it("tasks create/transition through the bridge and land in events", async () => {
 		const session = makeSession(tempDir.path());
 		const code = `
-			await tasks.create({ id: "t1", objective: "durable work", dependencies: [] });
-			const after = await tasks.transition({ id: "t1", to: "ready" });
-			const list = await tasks.list({ state: "ready" });
-			const ev = await events.query({ kind: "task.state" });
+			await kernel.tasks.create({ id: "t1", objective: "durable work", dependencies: [] });
+			const after = await kernel.tasks.transition({ id: "t1", to: "ready" });
+			const list = await kernel.tasks.list({ state: "ready" });
+			const ev = await kernel.events.query({ kind: "task.state" });
 			return JSON.stringify({ state: after.state, listed: list.length, events: ev.length });
 		`;
 		const result = await executeJs(code, { cwd: tempDir.path(), sessionId, session });
@@ -181,10 +181,10 @@ describe("kernel prelude globals (JS worker)", () => {
 	it("memory propose/commit/recall through the bridge (proposed is not active)", async () => {
 		const session = makeSession(tempDir.path());
 		const code = `
-			const proposed = await memory.propose({ fact: "deploys via fly", confidence: 0.85, scope: "project" });
-			const beforeCommit = await memory.recall({ scope: "project" });
-			const committed = await memory.commit({ id: proposed.id });
-			const afterCommit = await memory.recall({ scope: "project" });
+			const proposed = await kernel.memory.propose({ fact: "deploys via fly", confidence: 0.85, scope: "project" });
+			const beforeCommit = await kernel.memory.recall({ scope: "project" });
+			const committed = await kernel.memory.commit({ id: proposed.id });
+			const afterCommit = await kernel.memory.recall({ scope: "project" });
 			return JSON.stringify({
 				proposed: !!proposed.id,
 				hidden: !beforeCommit.some(f => f.fact === "deploys via fly"),
@@ -204,12 +204,12 @@ describe("kernel prelude globals (JS worker)", () => {
 	it("contract/routing/policy through the bridge", async () => {
 		const session = makeSession(tempDir.path());
 		const code = `
-			await contract.create({ id: "pc1", objective: "probe", checks: [] });
-			const report = await contract.verify({ id: "pc1" });
-			await routing.register({ role: "scout", provider: "openai", model: "gpt-5" });
-			const selection = await routing.resolve({ role: "scout", taskComplexity: 0.5, risk: 0.2 });
-			const denied = await policy.authorize({ id: "fs.write", effect: "write", resource: "repo/x.ts", actor: "Unprivileged" });
-			const profile = await security.profile({});
+			await kernel.contract.create({ id: "pc1", objective: "probe", checks: [] });
+			const report = await kernel.contract.verify({ id: "pc1" });
+			await kernel.routing.register({ role: "scout", provider: "openai", model: "gpt-5" });
+			const selection = await kernel.routing.resolve({ role: "scout", taskComplexity: 0.5, risk: 0.2 });
+			const denied = await kernel.policy.authorize({ id: "fs.write", effect: "write", resource: "repo/x.ts", actor: "Unprivileged" });
+			const profile = await kernel.security.profile({});
 			return JSON.stringify({
 				verified: report.pass,
 				effort: selection.effort,
@@ -229,19 +229,19 @@ describe("kernel prelude globals (JS worker)", () => {
 	it("harness + gateway through the bridge", async () => {
 		const session = makeSession(tempDir.path());
 		const code = `
-			const hyp = await harness.hypothesis({
+			const hyp = await kernel.harness.hypothesis({
 				component: "context-heuristic",
 				observation: "evidence band underused",
 				hypothesis: "raising evidence band improves recall",
 				prediction: [{ metric: "success", expectedDelta: 0.01, tolerance: 0.005 }],
 			});
-			const versions = await harness.versions();
-			const status = await gateway.status();
+			const versions = await kernel.harness.versions();
+			const status = await kernel.gateway.status();
 			// Trusted-verdict ledger path (dead-code fix): the evaluator
 			// records a promote verdict, and promote applies it.
-			const recorded = await harness.recordEvaluation({ version: hyp.version, decision: "promote", reason: "heldout passed" });
-			const promoted = await harness.promote({ version: hyp.version });
-			const after = await harness.versions();
+			const recorded = await kernel.harness.recordEvaluation({ version: hyp.version, decision: "promote", reason: "heldout passed" });
+			const promoted = await kernel.harness.promote({ version: hyp.version });
+			const after = await kernel.harness.versions();
 			return JSON.stringify({
 				version: hyp.version,
 				ledger: versions.length,
@@ -266,7 +266,7 @@ describe("kernel prelude globals (JS worker)", () => {
 		const session = makeSession(tempDir.path());
 		const code = `
 			try {
-				await artifacts.read({ id: "missing" });
+				await kernel.artifacts.read({ id: "missing" });
 				return "unreachable";
 			} catch (err) {
 				return String(err);
@@ -295,18 +295,24 @@ describe("kernel prelude globals (JS worker)", () => {
 		expect(parsed.taskList).toBe(true);
 	});
 
-	it("deprecated bare namespace aliases still dispatch (round-2 F1 backward compat)", async () => {
+	it("deprecated bare namespace aliases are GONE after the one-cycle window (round-3 removal pin)", async () => {
+		// Round-2 F1 kept `ctx`/`tasks`/`bridge`/… as deprecated aliases for
+		// one cycle; round-3 removes them. A cell that reaches for a bare
+		// namespace must fail loudly (ReferenceError), never silently resolve
+		// to a shadowable global. The shadowing-local test above pins that
+		// `kernel.*` is immune to shadowing — this pins the aliases' absence.
 		const session = makeSession(tempDir.path());
 		const code = `
-			const ops = await bridge.ops();
-			const created = await tasks.create({ id: "legacy-alias-task", objective: "alias probe" });
-			return JSON.stringify({ hasBridge: Array.isArray(ops), state: created.state });
+			try {
+				await bridge.ops();
+				return "bridge-alias-still-present";
+			} catch (err) {
+				return String(err);
+			}
 		`;
 		const result = await executeJs(code, { cwd: tempDir.path(), sessionId, session });
 		expect(result.exitCode).toBe(0);
-		const parsed = JSON.parse(result.output.trim());
-		expect(parsed.hasBridge).toBe(true);
-		expect(parsed.state).toBe("triage");
+		expect(result.output.trim()).toContain("bridge is not defined");
 	});
 
 	it("cleans up kernel state between sessions", async () => {

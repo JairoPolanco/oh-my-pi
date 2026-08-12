@@ -4172,6 +4172,13 @@ export class AgentSession {
 		this.#detachUsageBeforeQueueDequeue = undefined;
 		this.#detachUsageBeforeModelCall?.();
 		this.#detachUsageBeforeModelCall = undefined;
+		// Slice-1 leak (round-3 audit): the durable-attempt pre-provision hook
+		// was assigned in the constructor but never detached, so a disposed
+		// session kept pre-provisioning attempts on any later model call and
+		// leaked the agent-side hook subscription. Detach it with its sibling
+		// usage hooks.
+		this.#detachDurableAttemptBeforeModelCall?.();
+		this.#detachDurableAttemptBeforeModelCall = undefined;
 		this.#memory.cancelLocalMemoryStartup();
 		this.#titleGenerationAbortController.abort();
 		this.#abortAutolearnCapture();
@@ -5124,10 +5131,17 @@ export class AgentSession {
 				// on the sweep cadence and promoted live on evidence — arming
 				// the gate no longer strands learned skills. Only attaches
 				// when the gate is armed; plain omp (gate off) is untouched.
+				// The lifecycle itself refuses subagent sessions (agentKind
+				// "sub") so only the main session sweeps — subagent sweeps
+				// used to race the main session's probes on the same staged
+				// skill (round-3 audit: concurrent promotion dangles the
+				// probe's staging path mid-evaluation).
 				if (Bun.env.OMP_KERNEL_SKILL_PROMOTION_GATE === "1") {
 					void import("../runtime/skill-promotion-lifecycle").then(({ attachSkillPromotionLifecycle }) => {
 						if (this.#detachKernelTrajectoryTap === undefined) return;
-						const detachSkills = attachSkillPromotionLifecycle(this, host);
+						const detachSkills = attachSkillPromotionLifecycle(this, host, {
+							agentKind: this.#agentKind,
+						});
 						const prev = this.#detachKernelTrajectoryTap;
 						this.#detachKernelTrajectoryTap = () => {
 							prev();
