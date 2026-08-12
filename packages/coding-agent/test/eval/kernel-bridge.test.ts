@@ -438,16 +438,36 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		// verify aggregation.
 		const host = await kernelHostFor(makeSession());
 		host.events.append({ kind: "model.request", model: "m1", contextTokens: 1000 });
-		host.events.append({ kind: "model.response", model: "m1", outputTokens: 500, latencyMs: 100 });
+		host.events.append({
+			kind: "model.response",
+			model: "m1",
+			outputTokens: 500,
+			cacheReadTokens: 8000,
+			latencyMs: 100,
+		});
 		host.events.append({ kind: "model.request", model: "m1", contextTokens: 2000 });
-		host.events.append({ kind: "model.response", model: "m1", outputTokens: 700, latencyMs: 150 });
+		host.events.append({
+			kind: "model.response",
+			model: "m1",
+			outputTokens: 700,
+			cacheReadTokens: 12000,
+			latencyMs: 150,
+		});
 		const stats = (await call("routing.stats", {})) as {
-			models: { model: string; calls: number; inputTokens: number; outputTokens: number }[];
+			models: {
+				model: string;
+				calls: number;
+				inputTokens: number;
+				outputTokens: number;
+				cacheReadTokens: number;
+			}[];
 		};
 		expect(stats.models).toHaveLength(1);
 		expect(stats.models[0].calls).toBe(2);
 		expect(stats.models[0].inputTokens).toBe(3000);
 		expect(stats.models[0].outputTokens).toBe(1200);
+		// Round-13 c5: cache token share aggregated alongside fresh tokens.
+		expect(stats.models[0].cacheReadTokens).toBe(20000);
 	});
 
 	test("perf.profile ranks tools by latency with output bytes (harness profiler)", async () => {
@@ -641,6 +661,39 @@ describe("kernel bridge memory + actors + capabilities", () => {
 				hypothesis: "h",
 			}),
 		).toThrow(/constitutional/);
+	});
+
+	test("harness.void retracts a junk proposal and drops it from versions (round-13 c2b)", async () => {
+		await call("harness.hypothesis", {
+			component: "routing-policy",
+			observation: "probe junk",
+			hypothesis: "junk hypothesis",
+		});
+		expect((await call("harness.versions", {})) as unknown[]).toHaveLength(2); // H0 + H1
+
+		const result = (await call("harness.void", { version: 1 })) as { version: number; voided: boolean };
+		expect(result).toEqual({ version: 1, voided: true });
+
+		// Voided versions drop out of the list; the baseline stays.
+		const versions = (await call("harness.versions", {})) as unknown[];
+		expect(versions).toHaveLength(1);
+	});
+
+	test("harness.void refuses the baseline and non-authors", async () => {
+		await call("harness.hypothesis", {
+			component: "routing-policy",
+			observation: "o",
+			hypothesis: "h",
+		});
+		// The frozen baseline (H0) is never voidable.
+		await expect(call("harness.void", { version: 0 })).rejects.toThrow(/baseline/);
+		// A different session principal with the propose capability cannot
+		// void another's proposal (author-scoped in the ledger).
+		const host = await kernelHostFor(makeSession());
+		host.capabilities.setParent("OtherAuthor", "Main");
+		host.capabilities.grant("OtherAuthor", { id: "harness.propose", scope: "harness", effect: "write" });
+		const other = makeSession({ getAgentId: () => "OtherAuthor" });
+		await expect(call("harness.void", { version: 1 }, other)).rejects.toThrow(/only its author can void/);
 	});
 
 	test("harness.promote refuses self-certified comparisons (audit regression)", async () => {

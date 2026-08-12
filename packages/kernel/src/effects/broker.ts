@@ -367,7 +367,20 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 			// SecurityScanTool declares approval "exec" (paste-8 P0 #8) —
 			// scans/cloud/model operations execute code. NEVER fs.read.
 			return [op("process.exec", "execute", canonicalProcessResource(args.cwd as string | undefined, root))];
-		case "write":
+		case "write": {
+			// xd:// device dispatches (round-13 c4): `write xd://<tool>` executes
+			// a mounted device, NOT a filesystem write. Classifying the raw
+			// `xd://browser` string as `repo/xd:/browser` fabricated an in-repo
+			// resource — any principal with fs.write:repo/** could drive
+			// debug/browser/memory_edit/ast_edit without the device's real
+			// capability. Route the internal scheme through the same
+			// internal.read:harness capability the read side uses (Main's
+			// bootstrap holds it; a plain fs.write grant does not).
+			const rawPath = firstString(args) ?? "";
+			const nonFile = classifyNonFileTarget(rawPath);
+			if (nonFile) return [nonFileOperation(nonFile)];
+			return [op("fs.write", "write", canonicalFileResource(rawPath, root))];
+		}
 		case "edit":
 		case "ast_edit":
 		case "apply-patch":
@@ -396,8 +409,21 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 		case "fetch":
 		case "web_search":
 		case "github":
-		case "browser":
 			return [op("network", "network", hostOf(firstString(args) ?? "remote"))];
+		case "browser": {
+			// Browser maps BY ACTION (round-13 P1): navigation (open/close)
+			// is network, but `run` executes arbitrary JS with full Node
+			// access ("not sandboxed" per the tool doc) and `app.path` spawns
+			// a binary — both are process.exec. A network-only principal must
+			// never drive code execution through the browser surface; the
+			// baseline holds both caps so Main is unaffected.
+			const action = String(args.action ?? "");
+			const app = (args.app ?? {}) as Record<string, unknown>;
+			if (action === "run" || typeof app.path === "string") {
+				return [op("process.exec", "execute", canonicalProcessResource(undefined, root))];
+			}
+			return [op("network", "network", hostOf(firstString(args) ?? "remote"))];
+		}
 		case "task":
 			// TaskTool spawns subagents — agent.spawn, NOT board work.
 			return [op("agent.spawn", "spawn", "actor")];

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import * as fs from "node:fs";
 import {
 	CONSTITUTIONAL_COMPONENTS,
 	EDITABLE_COMPONENTS,
@@ -152,6 +153,11 @@ describe("HarnessVersionLedger", () => {
 
 	test("versions and the active head survive reopen (durability, regression §70)", () => {
 		const dbPath = `${import.meta.dir}/tmp-harness-ledger.db`;
+		try {
+			fs.rmSync(dbPath);
+		} catch {
+			// first run — no stale file
+		}
 		const ledger = new HarnessVersionLedger(dbPath);
 		ledger.propose(
 			{ id: "d1" },
@@ -176,6 +182,91 @@ describe("HarnessVersionLedger", () => {
 		expect(reopened.head).toBe(1); // active head persisted
 		expect(reopened.get(1)?.evaluation?.decision).toBe("promote");
 		expect(reopened.ancestry(1).map(v => v.number)).toEqual([0, 1]);
+		reopened.close();
+	});
+
+	test("void retracts a candidate, drops it from `all`, and never promotes (round-13 c2b)", () => {
+		const ledger = new HarnessVersionLedger();
+		ledger.propose(
+			{ id: "d1" },
+			{
+				id: "h1",
+				component: "context-heuristic",
+				observation: "probe junk",
+				hypothesis: "junk",
+				prediction: [],
+				change: { id: "p1" },
+				evaluationSlice: "s",
+				author: "probe",
+				createdAt: 1,
+			},
+			"probe",
+		);
+		expect(ledger.all).toHaveLength(2);
+
+		ledger.void(1, "probe");
+		expect(ledger.all).toHaveLength(1); // voided candidate excluded
+		expect(ledger.get(1)?.voided).toBe(true);
+		// Voided versions never promote, even with a recorded verdict.
+		expect(() => ledger.promote(1)).toThrow(/voided/);
+	});
+
+	test("void is author-scoped and refuses the baseline and active head", () => {
+		const ledger = new HarnessVersionLedger();
+		ledger.propose(
+			{ id: "d1" },
+			{
+				id: "h1",
+				component: "tool-default",
+				observation: "o",
+				hypothesis: "h",
+				prediction: [],
+				change: { id: "p1" },
+				evaluationSlice: "s",
+				author: "a",
+				createdAt: 1,
+			},
+			"a",
+		);
+		expect(() => ledger.void(1, "someone-else")).toThrow(/only its author/);
+		expect(() => ledger.void(0, "a")).toThrow(/baseline/);
+		expect(ledger.get(1)?.voided).not.toBe(true);
+
+		// The promoted head is never voidable (retract by promoting over it).
+		ledger.recordEvaluation(1, { decision: "promote", reason: "ok" });
+		ledger.promote(1);
+		expect(() => ledger.void(1, "a")).toThrow(/active head/);
+	});
+
+	test("void survives reopen (durability, round-13 c2b)", () => {
+		const dbPath = `${import.meta.dir}/tmp-harness-ledger-void.db`;
+		try {
+			fs.rmSync(dbPath);
+		} catch {
+			// first run — no stale file
+		}
+		const ledger = new HarnessVersionLedger(dbPath);
+		ledger.propose(
+			{ id: "d1" },
+			{
+				id: "h1",
+				component: "context-heuristic",
+				observation: "o",
+				hypothesis: "h",
+				prediction: [],
+				change: { id: "p1" },
+				evaluationSlice: "s",
+				author: "a",
+				createdAt: 1,
+			},
+			"a",
+		);
+		ledger.void(1, "a");
+		ledger.close();
+
+		const reopened = new HarnessVersionLedger(dbPath);
+		expect(reopened.all).toHaveLength(1);
+		expect(reopened.get(1)?.voided).toBe(true);
 		reopened.close();
 	});
 });

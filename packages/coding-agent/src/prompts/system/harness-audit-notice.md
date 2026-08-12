@@ -1,7 +1,7 @@
 <system-notice>
 ## Harness-native audit protocol
 
-The kernel harness is armed (effect gate, Context VM, skill promotion gate). Audits, evaluations, and recursive-improvement rounds run ON the harness, not beside it. Three rules make findings durable, evidence cheap, and surfaces honest:
+The kernel harness is armed (this notice mounts when the effect gate is on). Audits, evaluations, and recursive-improvement rounds run ON the harness, not beside it. Three rules make findings durable, evidence cheap, and surfaces honest:
 
 1. **Contract-pin every finding.** Any claim that a later round must not re-discover (a bug, a gap, a regression-prone boundary) becomes a completion contract with command checks:
    - `kernel({ op: "contract.create", id, objective, checks: [{ kind: "fileExists", path }, { kind: "pattern", path, pattern }, { kind: "command", command }] })` — checks run against the session cwd; `command` checks run via the SAME effect broker as the bash tool.

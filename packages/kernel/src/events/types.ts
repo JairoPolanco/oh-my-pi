@@ -85,6 +85,10 @@ export interface ModelResponse {
 	kind: "model.response";
 	model: string;
 	outputTokens: number;
+	/** Cached-prefix tokens charged to this request (round-13 c5): lets
+	 *  kernel-side consumers compute cacheRead% — the success metric of the
+	 *  cache-cost levers — instead of only fresh input/output. */
+	cacheReadTokens: number;
 	latencyMs: number;
 }
 

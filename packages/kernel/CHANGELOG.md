@@ -6,6 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- `HarnessVersionLedger.void(number, author)` (round-13 c2b): retract a junk/probe hypothesis version. Author-scoped — only the proposal's author can void it; the frozen baseline (H0) and the promoted head are never voidable (retract the head by promoting over it or rolling back). Voided versions drop out of `ledger.all` and can never be promoted, even with a recorded verdict. Housekeeping only: voiding never records an evaluation, keeping the trusted-verdict path evaluator-only. Durable via a new `voided` column with in-place migration for pre-existing ledger files.
+
+- `harness.void` kernel bridge op (round-13 c2b): `kernel({ op: "harness.void", version })` retracts a junk proposal through the SAME `harness.propose` capability that created it — never the evaluator-only `harness.evaluate`, so voiding can never be (mis)used to record a verdict. Closes the S4 ledger-pollution gap: the 9 probe versions that polluted `harness.versions` with no removal path can now be cleaned up by their authors.
+
+### Fixed
+
+- Browser tool effect classification (round-13 P1, capability-boundary bypass): `browser` mapped ALL actions to `network` — but `action:"run"` executes arbitrary JS with full Node access ("not sandboxed") and `app.path` spawns a binary, both process.exec. A network-only child could previously drive code execution through the browser surface (identical authority as `bash` was denied). The broker now splits by action: navigation (`open`/`close`) stays `network`, `run`/`app.path` require `process.exec`. `deriveCapabilitiesFromTools` requests both for browser (planner sees tool NAMES only; the broker still splits at execution).
+- `write xd://<device>` effect classification (round-13 c4): the write case canonicalized `xd://browser` as `repo/xd:/browser` — a fabricated in-repo resource, so any principal with `fs.write:repo/**` could drive debug/browser/memory_edit/ast_edit without the device's real capability. `xd://` targets now route through the same `internal.read:harness` capability the read side uses (Main's bootstrap holds it; a plain fs.write grant does not).
+
+### Changed
+
+- `ModelResponse` events carry `cacheReadTokens` (round-13 c5): the trajectory tap surfaces the provider usage record's cached-prefix tokens on every `model.response`, and `routing.stats` aggregates `cacheReadTokens` per model — so `cacheRead% = cacheReadTokens / (inputTokens + cacheReadTokens)`, the named success metric of the cache-cost levers (tool-result spill, consumed-read elision), is finally measurable from the kernel surface instead of being invisible.
+
 - `ToolCompleted` events now carry `latencyMs` + `outputBytes` (harness profiler): the trajectory tap records per-call duration and estimated output size — 4 chars ≈ 1 token ≈ the per-turn fresh-cache cost — so bottlenecks are observable instead of invisible.
 
 ### Fixed

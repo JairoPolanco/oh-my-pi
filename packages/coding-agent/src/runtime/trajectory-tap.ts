@@ -112,12 +112,20 @@ export class KernelTrajectoryTap {
 				// routing.stats() could never compute real output tokens or
 				// latency from ordinary sessions. The finalized assistant
 				// message carries the provider usage record — surface it.
-				const assistant = event.message as { usage?: { output?: number } };
+				const assistant = event.message as { usage?: { output?: number; cacheRead?: number } };
 				const usage = assistant.usage;
 				this.#append({
 					kind: "model.response",
 					model: this.#session.agent.state.model.id,
 					outputTokens: usage?.output ?? 0,
+					// cacheReadTokens (round-13 c5): the cache-cost levers
+					// (tool-result spill, consumed-read elision) exist to move
+					// fresh input into the cached prefix — without the cache
+					// token count in harness events, cacheRead% — the named
+					// success metric of those commits — was unmeasurable from
+					// the kernel surface. Now every completed request carries
+					// its cached-token share alongside output tokens.
+					cacheReadTokens: usage?.cacheRead ?? 0,
 					latencyMs: 0,
 				});
 			}

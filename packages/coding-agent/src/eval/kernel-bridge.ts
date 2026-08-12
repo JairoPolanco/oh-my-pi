@@ -657,7 +657,7 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 		name: "routing.stats",
 		returns: "per-model stats + contract pass rate",
 		description:
-			"READ-ONLY telemetry from the session event log (the trajectory tap feeds model.request/model.response automatically — routing.record was removed as dead). Per-model call volume, tokens, latency, plus contract pass rate.",
+			"READ-ONLY telemetry from the session event log (the trajectory tap feeds model.request/model.response automatically — routing.record was removed as dead). Per-model call volume, tokens (incl. cacheReadTokens, round-13 c5), latency, plus contract pass rate.",
 		args: {},
 	},
 	"contract.create": {
@@ -730,6 +730,15 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 		name: "harness.versions",
 		returns: "version[]",
 		args: {},
+	},
+	"harness.void": {
+		name: "harness.void",
+		returns: "version",
+		args: {
+			version: { kind: "number", required: true, description: "Hypothesis version to retract" },
+		},
+		description:
+			"Retract a junk/probe hypothesis version (round-13 c2b). Author-scoped: only the proposal's author can void it; the baseline and active head are never voidable. Housekeeping only — never records an evaluation verdict, never promotes. Voided versions drop out of harness.versions.",
 	},
 	"security.profile": {
 		name: "security.profile",
@@ -1381,19 +1390,46 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 		const responses = host.events.query(e => e.payload.kind === "model.response");
 		const byModel = new Map<
 			string,
-			{ calls: number; inputTokens: number; outputTokens: number; latencyMs: number }
+			{
+				calls: number;
+				inputTokens: number;
+				outputTokens: number;
+				cacheReadTokens: number;
+				latencyMs: number;
+			}
 		>();
 		for (const env of requests) {
 			const payload = env.payload as { model: string; contextTokens: number };
-			const stats = byModel.get(payload.model) ?? { calls: 0, inputTokens: 0, outputTokens: 0, latencyMs: 0 };
+			const stats = byModel.get(payload.model) ?? {
+				calls: 0,
+				inputTokens: 0,
+				outputTokens: 0,
+				cacheReadTokens: 0,
+				latencyMs: 0,
+			};
 			stats.calls += 1;
 			stats.inputTokens += payload.contextTokens;
 			byModel.set(payload.model, stats);
 		}
 		for (const env of responses) {
-			const payload = env.payload as { model: string; outputTokens: number; latencyMs: number };
-			const stats = byModel.get(payload.model) ?? { calls: 0, inputTokens: 0, outputTokens: 0, latencyMs: 0 };
+			const payload = env.payload as {
+				model: string;
+				outputTokens: number;
+				cacheReadTokens?: number;
+				latencyMs: number;
+			};
+			const stats = byModel.get(payload.model) ?? {
+				calls: 0,
+				inputTokens: 0,
+				outputTokens: 0,
+				cacheReadTokens: 0,
+				latencyMs: 0,
+			};
 			stats.outputTokens += payload.outputTokens;
+			// Round-13 c5: cached-prefix tokens (0 for pre-c5 events). Lets a
+			// session compute cacheRead% = cacheReadTokens / (input + cacheRead)
+			// — the success metric of the cache-cost levers.
+			stats.cacheReadTokens += payload.cacheReadTokens ?? 0;
 			stats.latencyMs += payload.latencyMs;
 			byModel.set(payload.model, stats);
 		}
@@ -1411,6 +1447,7 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 				calls: stats.calls,
 				inputTokens: stats.inputTokens,
 				outputTokens: stats.outputTokens,
+				cacheReadTokens: stats.cacheReadTokens,
 				latencyMs: stats.latencyMs,
 			})),
 			contracts: {
@@ -1637,6 +1674,25 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 			rollbackTarget: v.rollbackTarget,
 		}));
 	},
+	"harness.void": async (args, options, host, actor) => {
+		// Round-13 c2b: retract a junk/probe hypothesis. Housekeeping — the
+		// ledger had NO way to remove the 9 probe versions that pollute
+		// harness.versions (S4). Author-scoped via the ledger (only the
+		// proposal's author can void it), gated on the SAME propose
+		// capability that created it — never the evaluator-only
+		// harness.evaluate, so voiding can never be (mis)used to record a
+		// verdict. Voided versions drop out of `all` (and thus versions).
+		requireCapability(host, actor, "harness.propose", "write", "harness");
+		const version = requireArg(args, "version");
+		if (typeof version !== "number") throw new Error("__kernel__.harness.void requires number 'version'");
+		const author = options.session.getAgentId?.() ?? "eval";
+		const voided = host.versions.void(version, author);
+		host.events.append(
+			{ kind: "harness.experiment", experimentId: version.toString(), hypothesis: "(voided)", cohort: "harness" },
+			{ sessionId: options.session.getSessionId?.() ?? "default" },
+		);
+		return { version: voided.number, voided: true };
+	},
 	"gateway.status": async (_args, _options, host, _actor) => {
 		// Phase 12 (§58, §92): control-plane surface — runtimes + method roster.
 		return {
@@ -1764,9 +1820,22 @@ export function deriveCapabilitiesFromTools(toolNames: readonly string[], _works
 			case "fetch":
 			case "web_search":
 			case "github":
-			case "browser":
 				if (!requested.some(c => c.id === "network")) {
 					requested.push({ id: "network", scope: "*", effect: "network" });
+				}
+				break;
+			case "browser":
+				// Browser maps by action (round-13 P1): navigation is network,
+				// but `run` executes arbitrary JS and `app.path` spawns a
+				// binary — both process.exec. The planner sees tool NAMES
+				// only → request both; the broker still splits by action at
+				// execution, so a network-only grant authorizes navigation
+				// but denies code execution.
+				if (!requested.some(c => c.id === "network")) {
+					requested.push({ id: "network", scope: "*", effect: "network" });
+				}
+				if (!requested.some(c => c.id === "process.exec")) {
+					requested.push({ id: "process.exec", scope: "repo/**", effect: "execute" });
 				}
 				break;
 			case "task":

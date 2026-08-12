@@ -28,7 +28,8 @@ Never invent argument names from the op name alone.
 
 - **Durable:** `contract.*`, `tasks.*` (same store as the hidden `board` tool), `artifacts.*`, `memory.*` (same mnemopi bank as `recall`/`retain` when active), `events.*`, `harness.*` versions.
 - **Advisory:** `routing.resolve` (rule-based recommendation, does not influence the live model), `ctx.materialize` (previews Context VM selection, modifies nothing).
-- **Dead-ends by design:** `harness.recordEvaluation` denies (evaluator-only); `harness.promote` returns "awaiting trusted verdict" for your proposals (no wired evaluator for RLM proposals — treat `harness.hypothesis` as telemetry, not a change you can land).
+- **Dead-ends by design:** `harness.recordEvaluation` denies (evaluator-only); `harness.promote` returns "awaiting trusted verdict" for your proposals (no wired evaluator for RLM proposals — treat `harness.hypothesis` as telemetry, not a change you can land). `harness.void` retracts YOUR OWN junk/probe proposals (author-scoped; the baseline and active head are never voidable).
+- **Cost telemetry:** `routing.stats` reports per-model `cacheReadTokens` alongside fresh input/output (round-13) — `cacheRead% = cacheReadTokens / (inputTokens + cacheReadTokens)` is the cache-cost levers' success metric; `perf.profile` ranks tools by latency + output bytes.
 
 ## Verification note
 

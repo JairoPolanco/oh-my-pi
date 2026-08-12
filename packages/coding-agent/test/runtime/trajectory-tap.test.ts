@@ -101,6 +101,9 @@ describe("KernelTrajectoryTap", () => {
 		expect(kinds).toEqual(["model.request", "model.response", "tool.called", "user.message"]);
 		const response = events.find(e => e.payload.kind === "model.response");
 		expect((response!.payload as { outputTokens: number }).outputTokens).toBe(42);
+		// Round-13 c5: the cache token share rides the same event so kernel
+		// consumers can compute cacheRead% (the cache-cost levers' metric).
+		expect((response!.payload as { cacheReadTokens?: number }).cacheReadTokens).toBe(0);
 		for (const event of events) {
 			expect(event.sessionId).toBe("tap-test");
 		}

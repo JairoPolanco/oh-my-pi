@@ -62,6 +62,10 @@ export interface HarnessVersion {
 	createdAt: number;
 	/** Rollback target for a failed candidate. */
 	rollbackTarget: number;
+	/** Retracted by its author (round-13 c2b): junk/probe proposals can be
+	 *  voided so the ledger stops surfacing them — voided versions are never
+	 *  promotable and carry no evaluation verdict. */
+	voided?: boolean;
 }
 
 export type PromotionVerdict =

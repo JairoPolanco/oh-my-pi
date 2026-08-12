@@ -29,6 +29,7 @@ interface VersionRow {
 	created_at: number;
 	rollback_target: number;
 	active: number;
+	voided?: number;
 }
 
 function rowToVersion(row: VersionRow): HarnessVersion {
@@ -41,6 +42,7 @@ function rowToVersion(row: VersionRow): HarnessVersion {
 		author: row.author,
 		createdAt: row.created_at,
 		rollbackTarget: row.rollback_target,
+		voided: row.voided === 1,
 	};
 }
 
@@ -65,9 +67,17 @@ export class HarnessVersionLedger {
 					author TEXT NOT NULL,
 					created_at INTEGER NOT NULL,
 					rollback_target INTEGER NOT NULL,
-					active INTEGER NOT NULL DEFAULT 0
+					active INTEGER NOT NULL DEFAULT 0,
+					voided INTEGER NOT NULL DEFAULT 0
 				);
 			`);
+			// Migration for pre-void DBs (round-13 c2b): existing ledger files
+			// predate the column; add it in place so stored versions survive.
+			try {
+				this.#db.query("SELECT voided FROM harness_versions LIMIT 1").get();
+			} catch {
+				this.#db.exec("ALTER TABLE harness_versions ADD COLUMN voided INTEGER NOT NULL DEFAULT 0");
+			}
 		} else {
 			this.#db = new Database(":memory:");
 			this.#db.exec(`
@@ -80,7 +90,8 @@ export class HarnessVersionLedger {
 					author TEXT NOT NULL,
 					created_at INTEGER NOT NULL,
 					rollback_target INTEGER NOT NULL,
-					active INTEGER NOT NULL DEFAULT 0
+					active INTEGER NOT NULL DEFAULT 0,
+					voided INTEGER NOT NULL DEFAULT 0
 				);
 			`);
 		}
@@ -128,8 +139,8 @@ export class HarnessVersionLedger {
 		this.#db
 			.query(
 				`INSERT OR REPLACE INTO harness_versions
-				 (number, parent, diff, hypothesis, evaluation, author, created_at, rollback_target, active)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				 (number, parent, diff, hypothesis, evaluation, author, created_at, rollback_target, active, voided)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			)
 			.run(
 				number,
@@ -141,6 +152,7 @@ export class HarnessVersionLedger {
 				version.createdAt,
 				version.rollbackTarget,
 				number === this.#activeHead ? 1 : 0,
+				version.voided === true ? 1 : 0,
 			);
 	}
 
@@ -197,6 +209,32 @@ export class HarnessVersionLedger {
 	}
 
 	/**
+	 * Retract a candidate version (round-13 c2b). Housekeeping, NOT an
+	 * evaluation: junk/probe proposals pollute the ledger with no way to
+	 * remove them. Author-scoped — only the proposal's author may void it,
+	 * so one session can never erase another's evidence. The baseline (0)
+	 * and the promoted head are never voidable (the head is the live state;
+	 * retract it by promoting over it or rolling back).
+	 */
+	void(number: number, author: string): HarnessVersion {
+		const version = this.#versions.get(number);
+		if (!version) throw new Error(`harness version ${number} not found`);
+		if (number === 0) throw new Error("harness version 0 is the frozen baseline and cannot be voided");
+		if (version.author !== author) {
+			throw new Error(`harness version ${number} was authored by ${version.author}; only its author can void it`);
+		}
+		if (version.number === this.#activeHead) {
+			throw new Error(
+				`harness version ${number} is the active head and cannot be voided; promote or roll back first`,
+			);
+		}
+		const updated = { ...version, voided: true };
+		this.#versions.set(number, updated);
+		this.#insert(number, updated);
+		return updated;
+	}
+
+	/**
 	 * Promote a candidate: advance the active head ONLY if the candidate's
 	 * evaluation is a promote verdict. Rejected/pending candidates cannot
 	 * become active.
@@ -204,6 +242,9 @@ export class HarnessVersionLedger {
 	promote(number: number): HarnessVersion {
 		const version = this.#versions.get(number);
 		if (!version) throw new Error(`harness version ${number} not found`);
+		if (version.voided === true) {
+			throw new Error(`harness version ${number} is voided and cannot be promoted`);
+		}
 		if (version.evaluation?.decision !== "promote") {
 			throw new Error(
 				`harness version ${number} cannot be promoted: evaluation is ${version.evaluation?.decision ?? "pending"}`,
@@ -237,8 +278,10 @@ export class HarnessVersionLedger {
 		return chain;
 	}
 
-	/** All versions, oldest first. */
+	/** All versions, oldest first (voided candidates excluded — round-13 c2b). */
 	get all(): HarnessVersion[] {
-		return [...this.#versions.values()].sort((a, b) => a.number - b.number);
+		return [...this.#versions.values()]
+			.filter(version => version.voided !== true)
+			.sort((a, b) => a.number - b.number);
 	}
 }
