@@ -414,4 +414,74 @@ describe("task tool plan-mode prewalk guard", () => {
 	it("keeps the agent definition's prewalk outside plan mode", async () => {
 		expect(await spawnedAgentPrewalk(false)).toBe(true);
 	});
+
+	it("delivers the orchestrator-knowledge handoff to the child's task (round-15 delivery fix)", async () => {
+		// Regression: the handoff was composed and flagged but DISCARDED at
+		// every dispatch path (probe 019ff7e7 — each path rebuilt params via
+		// spawnParamsFor from the originals). The child must receive the
+		// block in its task text.
+		vi.spyOn(discoveryModule, "discoverAgents").mockResolvedValue({
+			agents: [prewalkAgent],
+			projectAgentsDir: null,
+		});
+		vi.spyOn(executorModule, "runSubprocess").mockResolvedValue({
+			index: 0,
+			id: "X",
+			agent: "task",
+			agentSource: "bundled",
+			task: "t",
+			assignment: "do the thing",
+			exitCode: 0,
+			output: "done",
+			stderr: "",
+			truncated: false,
+			durationMs: 1,
+			tokens: 0,
+			requests: 1,
+		});
+		// A parent session whose branch holds a discovery result (the
+		// collector's source) + git log mocked to avoid a real spawn.
+		const branch = [
+			{
+				type: "message",
+				message: {
+					role: "toolResult",
+					toolName: "read",
+					isError: false,
+					content: [{ type: "text", text: "packages/kernel/src/host.ts:147 — the ledger lives here." }],
+				},
+			},
+		];
+		const git = await import("@oh-my-pi/pi-coding-agent/utils/git");
+		vi.spyOn(git.log, "subjects").mockResolvedValue(["feat(kernel): add widget"]);
+		let receivedTask = "";
+		vi.spyOn(executorModule, "runSubprocess").mockImplementation(async (options): Promise<SingleResult> => {
+			receivedTask = options.task ?? "";
+			return {
+				index: options.index ?? 0,
+				id: options.id ?? "X",
+				agent: "task",
+				agentSource: "bundled",
+				task: "t",
+				assignment: "do the thing",
+				exitCode: 0,
+				output: "done",
+				stderr: "",
+				truncated: false,
+				durationMs: 1,
+				tokens: 0,
+				requests: 1,
+			};
+		});
+		const session = toolSession(false) as { sessionManager?: unknown } & ToolSession;
+		session.sessionManager = { getBranch: () => branch as never } as unknown as ToolSession["sessionManager"];
+		const tool = await TaskTool.create(session);
+		await tool.execute("tc", { task: "explore the ledger" });
+
+		// The child's task text carries BOTH the base assignment and the
+		// orchestrator-knowledge handoff — the delivery that was dropped.
+		expect(receivedTask).toContain("explore the ledger");
+		expect(receivedTask).toContain("Orchestrator knowledge");
+		expect(receivedTask).toContain("host.ts:147");
+	});
 });

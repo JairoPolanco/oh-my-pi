@@ -314,6 +314,8 @@ interface SyncSpawnRef {
 	item: TaskItem;
 	index: number;
 	preAllocatedId?: string;
+	/** Round-15: the augmented spawn params (base + orchestrator handoff). */
+	spawnParams: TaskParams;
 }
 
 /** Merged view of a sync spawn set's payloads: joined text plus flattened results/usage/paths. */
@@ -699,11 +701,11 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 		// delta to every spawn so children boot with knowledge instead of
 		// re-discovering it. Built ONCE per call — a fan-out's siblings share
 		// the same block (cross-child dedup).
-		let handoffAppended = false;
+		let handoffBytes = 0;
 		try {
 			const handoff = await buildContextHandoff(this.session, params.context ?? spawnItems[0]?.task);
 			if (handoff) {
-				handoffAppended = true;
+				handoffBytes = handoff.length;
 				normalizedSpawnParams = normalizedSpawnParams.map(spawn => ({
 					...spawn,
 					// Batch spawns carry shared `context`; single spawns carry
@@ -728,7 +730,11 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 				count: normalizedSpawnParams.length,
 				batch: batchEnabled,
 				contextBytes: typeof params.context === "string" ? params.context.length : 0,
-				handoffAppended,
+				// Byte size of the handoff block actually appended to the
+				// spawn params that dispatch consumes (round-15 fix: the
+				// boolean said 'a block was built' even when it never reached
+				// a child — the size now reflects DELIVERY, 0 = none).
+				handoffBytes,
 			});
 		} catch (error) {
 			logger.debug("task spawn telemetry failed (best-effort)", { error: String(error) });
@@ -799,9 +805,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 					});
 			const result = await this.#executeSyncFanout(
 				toolCallId,
-				params,
-				spawnItems.map((item, index) => ({ item, index })),
-				defaultAgent,
+				normalizedSpawnParams.map((spawnParams, index) => ({ item: spawnItems[index]!, index, spawnParams })),
 				signal,
 				onUpdate,
 			);
@@ -854,9 +858,11 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 			return withAdvisory(
 				await this.#executeSyncFanout(
 					toolCallId,
-					params,
-					spawnItems.map((item, index) => ({ item, index })),
-					defaultAgent,
+					normalizedSpawnParams.map((spawnParams, index) => ({
+						item: spawnItems[index]!,
+						index,
+						spawnParams,
+					})),
 					signal,
 					onUpdate,
 				),
@@ -876,6 +882,13 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 			item: TaskItem;
 			index: number;
 			blocking: boolean;
+			/** Round-15: the AUGMENTED spawn params — base params + the
+			 *  orchestrator-knowledge handoff block. Dispatch MUST use this
+			 *  (never re-derive from `params`), or the handoff is composed
+			 *  and dropped (probe 019ff7e7: block built, flagged, never
+			 *  delivered — every dispatch path rebuilt via spawnParamsFor
+			 *  from the originals). */
+			spawnParams: TaskParams;
 			progress: AgentProgress;
 		}> = [];
 		for (const [index, item] of spawnItems.entries()) {
@@ -889,6 +902,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 				item,
 				index,
 				blocking: itemBlocking[index],
+				spawnParams: normalizedSpawnParams[index]!,
 				progress: {
 					index,
 					id: agentId,
@@ -945,7 +959,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 				const jobId = this.#registerSpawnJob({
 					manager,
 					toolCallId,
-					spawnParams: spawnParamsFor(params, spawn.item, defaultAgent),
+					spawnParams: spawn.spawnParams,
 					agentId: spawn.agentId,
 					progress: spawn.progress,
 					ircEnabled,
@@ -1042,10 +1056,13 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 		});
 		const payloads = await this.#runSyncSpawns({
 			toolCallId,
-			params,
-			defaultAgent,
 			signal,
-			spawns: syncSpawns.map(spawn => ({ item: spawn.item, index: spawn.index, preAllocatedId: spawn.agentId })),
+			spawns: syncSpawns.map(spawn => ({
+				item: spawn.item,
+				index: spawn.index,
+				preAllocatedId: spawn.agentId,
+				spawnParams: spawn.spawnParams,
+			})),
 			onItemProgress: onUpdate
 				? (index, progress) => {
 						const spawn = spawns.find(candidate => candidate.index === index);
@@ -1058,7 +1075,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 				: undefined,
 		});
 		const merged = mergeSyncPayloads(
-			syncSpawns.map(spawn => ({ item: spawn.item, index: spawn.index })),
+			syncSpawns.map(spawn => ({ item: spawn.item, index: spawn.index, spawnParams: spawn.spawnParams })),
 			payloads,
 		);
 		syncResults.push(...merged.results);
@@ -1280,9 +1297,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 	 */
 	async #executeSyncFanout(
 		toolCallId: string,
-		params: TaskParams,
 		spawns: SyncSpawnRef[],
-		defaultAgent: string,
 		signal?: AbortSignal,
 		onUpdate?: AgentToolUpdateCallback<TaskToolDetails>,
 	): Promise<AgentToolResult<TaskToolDetails>> {
@@ -1295,7 +1310,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 			try {
 				return await this.#executeSync(
 					toolCallId,
-					spawnParamsFor(params, spawn.item, defaultAgent),
+					spawn.spawnParams,
 					signal,
 					onUpdate,
 					spawn.preAllocatedId,
@@ -1326,8 +1341,6 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 
 		const payloads = await this.#runSyncSpawns({
 			toolCallId,
-			params,
-			defaultAgent,
 			signal,
 			spawns,
 			onItemProgress: onUpdate
@@ -1361,13 +1374,11 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 	 */
 	async #runSyncSpawns(args: {
 		toolCallId: string;
-		params: TaskParams;
-		defaultAgent: string;
 		spawns: SyncSpawnRef[];
 		signal?: AbortSignal;
 		onItemProgress?: (index: number, progress: AgentProgress) => void;
 	}): Promise<(AgentToolResult<TaskToolDetails> | undefined)[]> {
-		const { toolCallId, params, defaultAgent, spawns, signal, onItemProgress } = args;
+		const { toolCallId, spawns, signal, onItemProgress } = args;
 		const semaphore = this.#getSpawnSemaphore();
 		const { results } = await mapWithConcurrencyLimitAllSettled(
 			spawns,
@@ -1392,7 +1403,7 @@ export class TaskTool implements AgentTool<TaskToolSchemaInstance, TaskToolDetai
 						: undefined;
 					return await this.#executeSync(
 						toolCallId,
-						spawnParamsFor(params, spawn.item, defaultAgent),
+						spawn.spawnParams,
 						workerSignal,
 						itemOnUpdate,
 						spawn.preAllocatedId,

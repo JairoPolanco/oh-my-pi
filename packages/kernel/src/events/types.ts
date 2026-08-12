@@ -168,8 +168,13 @@ export interface TaskSpawned {
 	batch: boolean;
 	/** Char length of the shared context the parent supplied (0 for single). */
 	contextBytes: number;
-	/** Whether the orchestrator-knowledge handoff block rode along. */
-	handoffAppended: boolean;
+	/**
+	 * Byte size of the orchestrator-knowledge handoff block appended to the
+	 * spawn params dispatch actually consumed (round-15 fix). 0 = no handoff
+	 * reached the child — the earlier boolean only proved a block was built,
+	 * not delivered.
+	 */
+	handoffBytes: number;
 }
 
 /** A skill was proposed for promotion. */

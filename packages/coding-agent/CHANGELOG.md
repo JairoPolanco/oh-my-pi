@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Context handoff DELIVERY (round-15 probe 019ff7e7): the orchestrator-knowledge block was composed, flagged, and telemetried — but never reached any child. Every dispatch path (`#registerSpawnJob` async, `#executeSync` single, `#executeSyncFanout`/`#runSyncSpawns` batch) rebuilt spawn params via `spawnParamsFor(params, ...)` from the ORIGINALS, discarding the augmented block. Spawn refs now carry the augmented `spawnParams` and all dispatch paths use it — verified by a regression test asserting the child's task text contains the handoff. `task.spawned` now records `handoffBytes` (byte size of the delivered block) instead of a boolean, and `delegation.stats` reports `avgHandoffBytes` + `handoffCoverage` counting `handoffBytes > 0` — the boolean said "a block was built", the size says "a child received it".
+
 ### Added
 
 - Orchestrator → subagent context handoff (round-15): subagents spawn with ZERO prior context and re-derive the parent's exploration — measured 130-190K fresh input per child re-reading the kernel surface the parent already mapped. The task tool now appends a condensed "orchestrator knowledge" block to every spawn: the parent's recent read/grep/glob results (capped, 8 spans × 400 chars), the git delta (8 recent commit subjects), and task-relevant memory facts (queried from the parent's mnemopi bank — children alias the parent's state with `hasRecalledForFirstTurn: true`, so they never run a live recall themselves). Built ONCE per call, so a fan-out's siblings share the same block (cross-child dedup). The task.md prompt now instructs the orchestrator to distill findings INTO `context` before spawning. A `task.spawned` event records each spawn's composition + handoff reach; `kernel({ op: "delegation.stats" })` aggregates it (spawn count, batch vs single, context size, handoffCoverage).

@@ -516,9 +516,9 @@ describe("kernel bridge memory + actors + capabilities", () => {
 			count: 3,
 			batch: true,
 			contextBytes: 2000,
-			handoffAppended: true,
+			handoffBytes: 1435,
 		});
-		host.events.append({ kind: "task.spawned", count: 1, batch: false, contextBytes: 0, handoffAppended: false });
+		host.events.append({ kind: "task.spawned", count: 1, batch: false, contextBytes: 0, handoffBytes: 0 });
 
 		const stats = (await call("delegation.stats", {})) as {
 			calls: number;
@@ -526,6 +526,7 @@ describe("kernel bridge memory + actors + capabilities", () => {
 			batches: number;
 			singleSpawns: number;
 			avgContextBytes: number;
+			avgHandoffBytes: number;
 			handoffCoverage: number | null;
 		};
 		expect(stats.calls).toBe(2);
@@ -533,6 +534,9 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(stats.batches).toBe(1);
 		expect(stats.singleSpawns).toBe(1);
 		expect(stats.avgContextBytes).toBe(1000);
+		// Handoff measured in DELIVERED bytes (round-15 fix): the batch's
+		// block rode along, the single's did not.
+		expect(stats.avgHandoffBytes).toBe(Math.round(1435 / 2));
 		expect(stats.handoffCoverage).toBe(0.5);
 	});
 

@@ -689,7 +689,7 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 		name: "delegation.stats",
 		returns: "per-spawn delegation telemetry",
 		description:
-			"READ-ONLY delegation telemetry from the session event log (round-15): every `task` tool call records its args (batch vs single, item count, context char length). Aggregates spawn count, batch composition, and the context handoff's reach — so the cost of cold-start subagents is measurable instead of assumed. `contextBytes` = the shared context the parent supplied; `handoffAppended` = whether the orchestrator knowledge block rode along (auto-added by the task tool).",
+			"READ-ONLY delegation telemetry from the session event log (round-15): every `task` tool call records its args (batch vs single, item count, context char length, and the handoff block's byte size). Aggregates spawn count, batch composition, and the context handoff's reach — so the cost of cold-start subagents is measurable instead of assumed. `handoffCoverage` counts spawns with `handoffBytes > 0` — actual DELIVERY to the child's dispatch params, not merely that a block was built.",
 		args: {},
 	},
 	"contract.verify": {
@@ -1496,19 +1496,21 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 				count: number;
 				batch: boolean;
 				contextBytes: number;
-				handoffAppended: boolean;
+				handoffBytes: number;
 			};
 		}>;
 		let totalSpawns = 0;
 		let batches = 0;
 		let withHandoff = 0;
 		let totalContextBytes = 0;
+		let totalHandoffBytes = 0;
 		for (const env of spawned) {
 			const p = env.payload;
 			totalSpawns += p.count;
 			batches += p.batch ? 1 : 0;
-			withHandoff += p.handoffAppended ? 1 : 0;
+			withHandoff += p.handoffBytes > 0 ? 1 : 0;
 			totalContextBytes += p.contextBytes;
+			totalHandoffBytes += p.handoffBytes;
 		}
 		return {
 			calls: spawned.length,
@@ -1516,9 +1518,12 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 			batches,
 			singleSpawns: spawned.length - batches,
 			avgContextBytes: spawned.length > 0 ? Math.round(totalContextBytes / spawned.length) : 0,
+			avgHandoffBytes: spawned.length > 0 ? Math.round(totalHandoffBytes / spawned.length) : 0,
 			// Share of spawn calls that carried the orchestrator-knowledge
 			// handoff block (round-15): 1.0 = every child booted with the
-			// parent's exploration; 0 = all cold-start.
+			// parent's exploration; 0 = all cold-start. `handoffBytes > 0`
+			// measures DELIVERY — the earlier boolean only proved a block was
+			// built (probe 019ff7e7: flagged true, never reached the child).
 			handoffCoverage: spawned.length > 0 ? withHandoff / spawned.length : null,
 		};
 	},
