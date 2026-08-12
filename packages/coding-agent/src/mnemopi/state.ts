@@ -432,6 +432,10 @@ export class MnemopiSessionState {
 					});
 					targetSucceeded = true;
 					for (const result of results) {
+						// Stamp the source bank (round-6): the merged result
+						// loses bank identity, but recall's scope echo needs
+						// it to label facts honestly instead of guessing.
+						(result as RecallResult & { bank?: string }).bank = target.bank;
 						mergeRecallResult(merged, byId, byContent, result);
 					}
 				}
@@ -460,6 +464,34 @@ export class MnemopiSessionState {
 
 	recallResultsScoped(query: string): Promise<RecallResult[]> {
 		return this.collectScopedRecallResults(query);
+	}
+
+	/**
+	 * Scope-aware write (round-6 verdict): the bridge's live path silently
+	 * dropped `scope` — schema advertised scope:"global", the event recorded
+	 * it, but storage wrote to the project bank and recall({scope:"global"})
+	 * could never see it. route the write to the scope's bank: global → the
+	 * global/fallback bank (when configured), anything else → the retain
+	 * bank. Returns the stored id, or undefined when the scope's bank is
+	 * unavailable (global without a global bank).
+	 */
+	rememberScopedTo(
+		memory: MnemopiRememberInput,
+		options: MnemopiRememberOptions,
+		scope: string | undefined,
+	): string | undefined {
+		try {
+			if (scope === "global" && this.globalMemory) {
+				return this.globalMemory.remember(memory, options);
+			}
+			return this.scoped.retain.memory.remember(memory, options);
+		} catch (error) {
+			logger.warn("Mnemopi: scoped retain failed", {
+				bank: scope === "global" ? this.scoped.global?.bank : this.scoped.retain.bank,
+				error: String(error),
+			});
+			return undefined;
+		}
 	}
 
 	formatScopedRecallContext(

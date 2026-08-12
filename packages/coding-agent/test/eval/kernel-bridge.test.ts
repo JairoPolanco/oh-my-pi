@@ -675,6 +675,10 @@ describe("kernel bridge memory + actors + capabilities", () => {
 					rememberScoped(memory: { content: string }) {
 						return `mn-live-${memory.content.length}`;
 					},
+					rememberScopedTo(memory: { content: string }, _options: unknown, scope?: string) {
+						void scope;
+						return `mn-live-${memory.content.length}`;
+					},
 					async recallResultsScoped() {
 						return [];
 					},
@@ -710,6 +714,11 @@ describe("kernel bridge memory + actors + capabilities", () => {
 			getMnemopiSessionState: () =>
 				({
 					rememberScoped(memory: { content: string; importance: number }) {
+						const id = `mn-${remembered.size}`;
+						remembered.set(id, memory);
+						return id;
+					},
+					rememberScopedTo(memory: { content: string; importance: number }, _options: unknown) {
 						const id = `mn-${remembered.size}`;
 						remembered.set(id, memory);
 						return id;
@@ -770,6 +779,11 @@ describe("kernel bridge memory + actors + capabilities", () => {
 						remembered.set(id, { ...memory, score: 1 });
 						return id;
 					},
+					rememberScopedTo(memory: { content: string; importance: number }, _options: unknown) {
+						const id = `mn-${remembered.size}`;
+						remembered.set(id, { ...memory, score: 1 });
+						return id;
+					},
 					async recallScoped(query?: string, scope?: string) {
 						void scope;
 						return [...remembered.entries()].map(([id, memory]) => ({
@@ -793,12 +807,43 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		}[];
 		expect(relevant).toHaveLength(1);
 		expect(relevant[0].confidence).toBe(0.9);
-		// Scope is echoed honestly instead of the silent hardcoded "project".
-		expect(relevant[0].scope).toBe("project");
+		// Round-6 honest echo: unscoped recall returns the fact's bank when
+		// the backend reports it, else omits scope — never a fabricated
+		// "project" (a global-bank fact mislabeled project was the lie).
+		expect("scope" in relevant[0]).toBe(false);
 		const scoped = (await call("memory.recall", { query: "relevant", scope: "global" }, session)) as {
 			scope: string;
 		}[];
 		expect(scoped[0].scope).toBe("global");
+	});
+
+	test("memory.propose scope routes to the scope's bank (round-6 verdict)", async () => {
+		// Schema advertised scope:"global", the event recorded it, but the
+		// live write dropped it — recall({scope:"global"}) could never see a
+		// fact proposed as global. The write now routes through
+		// rememberScopedTo; the fake tracks which scope was requested.
+		const writes: string[] = [];
+		const session = makeSession({
+			getMnemopiSessionState: () =>
+				({
+					rememberScopedTo(_memory: { content: string }, _options: unknown, scope?: string) {
+						writes.push(scope ?? "undefined");
+						return `mn-${writes.length}`;
+					},
+				}) as never,
+		});
+
+		const globalProposed = (await call(
+			"memory.propose",
+			{ fact: "global truth", confidence: 0.9, scope: "global" },
+			session,
+		)) as { scope: string };
+		expect(globalProposed.scope).toBe("global");
+		const projectProposed = (await call("memory.propose", { fact: "project fact" }, session)) as {
+			scope: string;
+		};
+		expect(projectProposed.scope).toBe("project");
+		expect(writes).toEqual(["global", "project"]);
 	});
 
 	test("artifacts.read falls back to the session artifact manager", async () => {

@@ -152,20 +152,24 @@ function memoryOwner(session: ToolSession): Map<string, "kernel" | "mnemopi"> {
  * RLM `memory.*` and OMP's own recall/learn/retain share one fact store.
  */
 function sessionLiveMemory(session: ToolSession): {
-	remember(content: string, importance: number): string | undefined;
+	remember(content: string, importance: number, scope?: string): string | undefined;
 	recall(query: string): Promise<{ id: string; content: string; timestamp: string | null }[]>;
 	recallScoped(
 		query: string,
 		scope?: string,
-	): Promise<{ id: string; content: string; timestamp: string | null; score?: number }[]>;
+	): Promise<{ id: string; content: string; timestamp: string | null; score?: number; bank?: string }[]>;
 } | null {
 	const state = session.getMnemopiSessionState?.();
 	if (!state) return null;
 	return {
-		remember(content, importance) {
-			return state.rememberScoped(
+		remember(content, importance, scope) {
+			// G3 (round-6 verdict): the scope arg used to be dropped on the
+			// live write path — schema advertised it, the event recorded it,
+			// storage ignored it. Route to the scope's bank.
+			return state.rememberScopedTo(
 				{ content, importance },
 				{ scope: "bank", source: "coding-agent-kernel-bridge", memoryType: "fact" },
+				scope,
 			);
 		},
 		async recall(query) {
@@ -182,6 +186,7 @@ function sessionLiveMemory(session: ToolSession): {
 				content: item.content,
 				timestamp: item.timestamp ?? null,
 				score: item.score,
+				bank: typeof item.bank === "string" ? item.bank : undefined,
 			}));
 		},
 	};
@@ -1003,7 +1008,11 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 		// split-brain). Falls back to the kernel in-memory backend.
 		const live = sessionLiveMemory(options.session);
 		if (live) {
-			const id = live.remember(fact, typeof args.confidence === "number" ? args.confidence : 0.8);
+			// Round-6 verdict: scope was silently dropped on this write —
+			// the event recorded it, storage ignored it, and recall by that
+			// scope could never see it. Thread it to the bank-routing write.
+			const requestedScope = args.scope === "user" || args.scope === "global" ? args.scope : "project";
+			const id = live.remember(fact, typeof args.confidence === "number" ? args.confidence : 0.8, requestedScope);
 			if (id) {
 				memoryOwner(options.session).set(id, "mnemopi");
 				host.events.append(
@@ -1011,11 +1020,11 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 						kind: "memory.proposed",
 						factId: id,
 						text: fact,
-						scope: args.scope === "user" || args.scope === "global" ? args.scope : "project",
+						scope: requestedScope,
 					},
 					{ sessionId: options.session.getSessionId?.() ?? "default" },
 				);
-				return { id, state: "committed", backend: "mnemopi" };
+				return { id, state: "committed", backend: "mnemopi", scope: requestedScope };
 			}
 		}
 		const proposed = await host.memory.propose({
@@ -1084,25 +1093,27 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 			// score now passes through (confidence = normalized score), a
 			// floor drops noise, and scope is honored via the state's scoped
 			// recall targets (project vs global banks).
-			const rawResults = await live.recallScoped(
-				typeof args.query === "string" ? args.query : "",
-				typeof args.scope === "string" ? args.scope : undefined,
-			);
+			const requestedScope = typeof args.scope === "string" ? args.scope : undefined;
+			const rawResults = await live.recallScoped(typeof args.query === "string" ? args.query : "", requestedScope);
 			const floor = typeof args.minScore === "number" ? args.minScore : 0.05;
 			return rawResults
 				.filter(item => (item.score ?? 1) >= floor)
-				.map(item => ({
-					id: item.id,
-					// Memory hygiene (paste-17 #1): episodes are stored with the
-					// retention framing (the resume cursor needs it) but every
-					// READ surface strips it — bridge recall included — so the
-					// model never sees [role: user] / [user:end] noise.
-					fact: stripRetentionProtocolMarkers(item.content) || item.content,
-					confidence: item.score ?? 1,
-					scope: args.scope ?? "project",
-					observedAt: item.timestamp ? Date.parse(item.timestamp) : Date.now(),
-					state: "committed",
-				}));
+				.map(item => {
+					// Round-6 cosmetic fix: echo the REQUESTED scope only —
+					// stamping "project" on an unscoped recall mislabeled
+					// global-bank facts. An unscoped recall reports the
+					// fact's bank when the backend carries it, else omits
+					// the field entirely (undefined keys are lies too).
+					const scope = requestedScope ?? item.bank;
+					return {
+						id: item.id,
+						fact: stripRetentionProtocolMarkers(item.content) || item.content,
+						confidence: item.score ?? 1,
+						...(scope === undefined ? {} : { scope }),
+						observedAt: item.timestamp ? Date.parse(item.timestamp) : Date.now(),
+						state: "committed",
+					};
+				});
 		}
 		const results = await host.memory.recall({
 			// Round-4 audit (paste-18 P1): the fallback path previously
