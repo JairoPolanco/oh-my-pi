@@ -254,7 +254,7 @@ describe("round-14 verdict transport against a real daemon", () => {
 		}
 	}, 45_000);
 
-	it("a promote verdict applies the daemon head via the same client (round-14 c3)", async () => {
+	it("a promote verdict is RECORDED but never auto-applies the head (round-14 overengineering revert)", async () => {
 		using tempDir = TempDir.createSync("@omp-metaharness-verdict-promote-");
 		const projectDir = path.join(tempDir.path(), "project");
 		const runtimeDir = path.join(tempDir.path(), "runtime");
@@ -329,8 +329,9 @@ describe("round-14 verdict transport against a real daemon", () => {
 			expect(propose.ok).toBe(true);
 			const version = propose.result!.version;
 
-			// Record a PROMOTE verdict via the client — round-14 c3
-			// auto-applies it on the daemon (head advances).
+			// Record a PROMOTE verdict via the client. Deliberate decision:
+			// verdicts are recorded, NOT auto-applied — promotion is an
+			// operator action, not a benchmark-completion side effect.
 			const recorded = await recordVerdictViaGateway({
 				projectDir,
 				version,
@@ -343,8 +344,9 @@ describe("round-14 verdict transport against a real daemon", () => {
 
 			const ledger = new HarnessVersionLedger(path.join(runtimeDir, "harness.db"));
 			cleanups.push(() => ledger.close());
-			expect(ledger.head).toBe(version);
+			// The verdict landed; the head did NOT advance (no auto-promote).
 			expect(ledger.get(version)?.evaluation?.decision).toBe("promote");
+			expect(ledger.head).toBe(0);
 		} finally {
 			await client.request({ op: "stop", name: "omp.kernel.gateway", timeoutMs: 5_000 }).catch(() => {});
 			await client.request({ op: "shutdown" }).catch(() => {});

@@ -37,16 +37,10 @@ export interface ArtifactRecord extends ArtifactRef {
 	bytes: number;
 	createdAt: number;
 	algorithm: HashAlgorithm;
-	/** Writing principal (round-14 C2): attribution for contract evidence —
-	 *  who put this artifact, so a forged evidence id is traceable to its
-	 *  author instead of anonymous. Content-addressing is unchanged; this is
-	 *  provenance metadata, not identity. */
-	author?: string;
 }
 
 export interface ArtifactMetadata {
 	kind?: string;
-	author?: string;
 }
 
 /**
@@ -99,9 +93,7 @@ export class ArtifactStore {
 
 	/**
 	 * Store bytes; returns the (possibly pre-existing) artifact record.
-	 * Deduplicates by content hash — the FIRST writer's attribution is
-	 * preserved on a hash collision (round-14 C2: author is provenance of
-	 * who minted the bytes, not who re-read them).
+	 * Deduplicates by content hash.
 	 */
 	async put(content: Uint8Array, metadata: ArtifactMetadata = {}): Promise<ArtifactRecord> {
 		const id = hashContent(content);
@@ -117,7 +109,6 @@ export class ArtifactStore {
 				bytes: existing.size,
 				createdAt: existing.mtimeMs,
 				algorithm: "blake2b256",
-				author: metadata.author,
 			};
 			this.#cache.set(id, record);
 			return record;
@@ -131,7 +122,6 @@ export class ArtifactStore {
 			bytes: content.byteLength,
 			createdAt: Date.now(),
 			algorithm: "blake2b256",
-			author: metadata.author,
 		};
 		this.#cache.set(id, record);
 		return record;

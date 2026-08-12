@@ -134,7 +134,9 @@ const recorded = (await gatewayRpc("harness.recordEvaluation", {
 	reason: evaluation.verdict.reason,
 })) as { version: number; decision: string };
 console.log(`verdict recorded in harness ledger: ${recorded.decision} (v${recorded.version})`);
-// A promote verdict is applied immediately on the daemon (round-14 c3).
+// This is a DELIBERATE operator-run promotion (SKILL_NAME + evidence), not
+// the metaharness auto-apply: the ledger head advances as the record of the
+// operator's decision, alongside the live skill move below.
 if (evaluation.verdict.promote) {
 	await gatewayRpc("harness.promote", { version: proposed.version });
 	console.log(`harness version ${proposed.version} promoted`);

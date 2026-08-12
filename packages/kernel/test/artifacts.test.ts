@@ -38,17 +38,6 @@ describe("ArtifactStore", () => {
 		expect(await store.describe(second.id)).not.toBeNull();
 	});
 
-	test("put records the author; a dedup collision keeps the FIRST writer's attribution (round-14 C2)", async () => {
-		const first = await store.putText("shared", { author: "Main" });
-		const second = await store.putText("shared", { author: "Scout" });
-
-		expect(first.author).toBe("Main");
-		// Dedup: the second put returns the same record — the original
-		// writer's attribution survives, so evidence provenance stays honest.
-		expect(second.id).toBe(first.id);
-		expect(second.author).toBe("Main");
-	});
-
 	test("read returns exact bytes and verifies integrity", async () => {
 		const record = await store.putText("roundtrip");
 		const bytes = await store.read(record.id);

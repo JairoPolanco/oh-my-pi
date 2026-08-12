@@ -6,10 +6,6 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- `ArtifactRecord.author` (round-14 C2): artifacts now record the writing principal (`ArtifactMetadata.author`, passed by the bridge from the acting actor). Contract evidence gains a provenance chain — a forged evidence id is traceable to its author instead of anonymous. Content-addressing is unchanged (the id stays the pure content hash); a dedup collision keeps the FIRST writer's attribution. The bridge's `artifacts.put` stamps `author: actor`.
-
-### Added
-
 - `HarnessVersionLedger.void(number, author)` (round-13 c2b): retract a junk/probe hypothesis version. Author-scoped — only the proposal's author can void it; the frozen baseline (H0) and the promoted head are never voidable (retract the head by promoting over it or rolling back). Voided versions drop out of `ledger.all` and can never be promoted, even with a recorded verdict. Housekeeping only: voiding never records an evaluation, keeping the trusted-verdict path evaluator-only. Durable via a new `voided` column with in-place migration for pre-existing ledger files.
 
 - `harness.void` kernel bridge op (round-13 c2b): `kernel({ op: "harness.void", version })` retracts a junk proposal through the SAME `harness.propose` capability that created it — never the evaluator-only `harness.evaluate`, so voiding can never be (mis)used to record a verdict. Closes the S4 ledger-pollution gap: the 9 probe versions that polluted `harness.versions` with no removal path can now be cleaned up by their authors.

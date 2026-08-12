@@ -113,21 +113,11 @@ export async function recordVerdictViaGateway(opts: {
 		version: recorded.version,
 		decision: recorded.decision,
 	});
-	// Round-14 c3: a recorded PROMOTE verdict is applied immediately on the
-	// daemon — before this, harness.promote had zero production callers and a
-	// passed benchmark activated nothing. Recording is the evaluator's word;
-	// applying is the ledger's job. Reject verdicts are left recorded-only
-	// (nothing to activate).
-	if (opts.decision === "promote") {
-		const promoted = (await gatewayCall(gateway, "harness.promote", {
-			version: opts.version,
-		})) as { version?: number } | null;
-		if (promoted) {
-			logger.info("benchmark verdict promoted in harness ledger", { version: promoted.version });
-		} else {
-			logger.warn("benchmark verdict recorded but promote call failed", { version: opts.version });
-		}
-	}
+	// NOTE: verdicts are RECORDED only — no auto-promote. Promotion is a
+	// deliberate operator action (the daemon's harness.promote RPC), not a
+	// side effect of a benchmark completing: auto-applying would advance a
+	// ledger head nothing reads yet, and a run finishing is the evaluator's
+	// word, not the activation decision.
 	return { version: recorded.version, decision: opts.decision };
 }
 

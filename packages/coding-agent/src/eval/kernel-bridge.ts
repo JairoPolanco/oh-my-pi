@@ -841,10 +841,6 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 		if (typeof text !== "string") throw new Error("__kernel__.artifacts.put requires string 'text'");
 		const record = await host.artifacts.putText(text, {
 			kind: typeof args.kind === "string" ? args.kind : undefined,
-			// Round-14 C2: attribution for contract evidence — the artifact
-			// records WHO put it, so a forged evidence id is traceable to its
-			// author instead of anonymous.
-			author: actor,
 		});
 		// Mirror into the session's artifact manager (one artifact system,
 		// §19, audit #10): the session alias is a hardlink to THIS canonical
