@@ -383,6 +383,29 @@ export class MnemopiSessionState {
 	}
 
 	async collectScopedRecallResults(query: string): Promise<RecallResult[]> {
+		return this.#collectRecallResults(query, undefined);
+	}
+
+	/**
+	 * Recall constrained to ONE scope (round-5 G2): the bridge's live path
+	 * silently dropped `scope` — scope:"global" returned project facts with
+	 * no signal. When a scope is named, recall only the targets whose bank
+	 * matches that scope's bank (global → the global/fallback bank; anything
+	 * else → the retain/project bank). No scope = merged recall across all
+	 * targets (unchanged).
+	 */
+	async recallScoped(query: string, scope?: string): Promise<RecallResult[]> {
+		if (scope !== "global" && scope !== "project" && scope !== "user") {
+			return this.#collectRecallResults(query, undefined);
+		}
+		const scopeBank =
+			scope === "global"
+				? (this.scoped.global?.bank ?? this.config.globalBank ?? "default")
+				: this.scoped.retain.bank;
+		return this.#collectRecallResults(query, scopeBank);
+	}
+
+	async #collectRecallResults(query: string, onlyBank: string | undefined): Promise<RecallResult[]> {
 		const merged: RecallResult[] = [];
 		const byId = new Map<string, number>();
 		const byContent = new Map<string, number>();
@@ -394,6 +417,10 @@ export class MnemopiSessionState {
 			this.scoped.global?.bank,
 		);
 		for (const target of this.scoped.recall) {
+			// Scope constraint (round-5 G2): when a scope's bank is named,
+			// skip targets outside it — a scope:"global" recall must not
+			// return project facts.
+			if (onlyBank !== undefined && target.bank !== onlyBank) continue;
 			const queries =
 				target.bank === this.scoped.global?.bank && sharedFallbackQuery ? [query, sharedFallbackQuery] : [query];
 			let targetSucceeded = false;

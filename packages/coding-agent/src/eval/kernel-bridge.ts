@@ -154,6 +154,10 @@ function memoryOwner(session: ToolSession): Map<string, "kernel" | "mnemopi"> {
 function sessionLiveMemory(session: ToolSession): {
 	remember(content: string, importance: number): string | undefined;
 	recall(query: string): Promise<{ id: string; content: string; timestamp: string | null }[]>;
+	recallScoped(
+		query: string,
+		scope?: string,
+	): Promise<{ id: string; content: string; timestamp: string | null; score?: number }[]>;
 } | null {
 	const state = session.getMnemopiSessionState?.();
 	if (!state) return null;
@@ -167,6 +171,18 @@ function sessionLiveMemory(session: ToolSession): {
 		async recall(query) {
 			const results = await state.recallResultsScoped(query);
 			return results.map(item => ({ id: item.id, content: item.content, timestamp: item.timestamp ?? null }));
+		},
+		async recallScoped(query, scope) {
+			// G2 (round-5 verdict): scope was silently dropped on the live
+			// path — scope:"global" returned project facts with no signal.
+			// The state now constrains recall to the scope's bank.
+			const results = await state.recallScoped(query, scope);
+			return results.map(item => ({
+				id: item.id,
+				content: item.content,
+				timestamp: item.timestamp ?? null,
+				score: item.score,
+			}));
 		},
 	};
 }
@@ -559,7 +575,17 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 		returns: "semantic fact[]",
 		args: {
 			query: { kind: "string", required: false, description: "Search query" },
-			scope: { kind: "string", required: false, description: "project|session|global" },
+			scope: {
+				kind: "string",
+				required: false,
+				description: "project|session|global (global recalls only the global bank)",
+			},
+			minScore: {
+				kind: "number",
+				required: false,
+				description:
+					"Relevance floor (default 0.05); hits below it are dropped, confidence carries the backend score",
+			},
 		},
 	},
 	"memory.reject": {
@@ -1051,19 +1077,32 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 		// same facts as OMP's own recall/learn (§19).
 		const live = sessionLiveMemory(options.session);
 		if (live) {
-			const results = await live.recall(typeof args.query === "string" ? args.query : "");
-			return results.map(item => ({
-				id: item.id,
-				// Memory hygiene (paste-17 #1): episodes are stored with the
-				// retention framing (the resume cursor needs it) but every
-				// READ surface strips it — bridge recall included — so the
-				// model never sees [role: user] / [user:end] noise.
-				fact: stripRetentionProtocolMarkers(item.content) || item.content,
-				confidence: 1,
-				scope: "project",
-				observedAt: item.timestamp ? Date.parse(item.timestamp) : Date.now(),
-				state: "committed",
-			}));
+			// G1/G2 (round-5 verdict): the live path used to stamp confidence: 1
+			// and ignore scope — an out-of-domain query returned confident-
+			// looking irrelevant facts with no way to discount them, and
+			// scope:"global" silently returned project facts. The mnemopi
+			// score now passes through (confidence = normalized score), a
+			// floor drops noise, and scope is honored via the state's scoped
+			// recall targets (project vs global banks).
+			const rawResults = await live.recallScoped(
+				typeof args.query === "string" ? args.query : "",
+				typeof args.scope === "string" ? args.scope : undefined,
+			);
+			const floor = typeof args.minScore === "number" ? args.minScore : 0.05;
+			return rawResults
+				.filter(item => (item.score ?? 1) >= floor)
+				.map(item => ({
+					id: item.id,
+					// Memory hygiene (paste-17 #1): episodes are stored with the
+					// retention framing (the resume cursor needs it) but every
+					// READ surface strips it — bridge recall included — so the
+					// model never sees [role: user] / [user:end] noise.
+					fact: stripRetentionProtocolMarkers(item.content) || item.content,
+					confidence: item.score ?? 1,
+					scope: args.scope ?? "project",
+					observedAt: item.timestamp ? Date.parse(item.timestamp) : Date.now(),
+					state: "committed",
+				}));
 		}
 		const results = await host.memory.recall({
 			// Round-4 audit (paste-18 P1): the fallback path previously
@@ -1118,6 +1157,19 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 			if (kind === "command" && !Array.isArray((check as { command?: unknown }).command)) {
 				throw new Error(
 					'__kernel__.contract.create: command check requires a string[] \'command\' (e.g. ["bun", "test", ...])',
+				);
+			}
+			// Path-shaped kinds (round-5 G3): `{kind:"pattern"}` with no path
+			// slipped through create and verify then reported the misleading
+			// "path escapes workspace: undefined" — the path isn't escaping,
+			// it's ABSENT, and the agent hunted in the wrong direction. Fail
+			// at create with the actual problem.
+			if (
+				(kind === "pattern" || kind === "fileExists" || kind === "fileAbsent" || kind === "json") &&
+				typeof (check as { path?: unknown }).path !== "string"
+			) {
+				throw new Error(
+					`__kernel__.contract.create: ${kind} check requires a string 'path' (got ${JSON.stringify((check as { path?: unknown }).path)})`,
 				);
 			}
 		}

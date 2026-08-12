@@ -282,6 +282,16 @@ describe("kernel bridge memory + actors + capabilities", () => {
 			checks: [{ kind: "fileExists", path: path.join(sessionDir, "anything") }],
 		})) as { id: string; checks: number };
 		expect(ok.checks).toBe(1);
+		// Path-shaped kinds without a path are rejected at create (round-5 G3):
+		// verify previously reported the misleading "path escapes workspace:
+		// undefined" — the path is ABSENT, not escaping, and the agent hunted
+		// in the wrong direction for a full verify cycle.
+		await expect(
+			call("contract.create", { id: "nopath", objective: "x", checks: [{ kind: "pattern", pattern: "x" }] }),
+		).rejects.toThrow(/pattern check requires a string 'path'/);
+		await expect(
+			call("contract.create", { id: "nopath2", objective: "x", checks: [{ kind: "json", selector: "a.b" }] }),
+		).rejects.toThrow(/json check requires a string 'path'/);
 	});
 
 	test("bridge.ops lists the kernel surface and bridge.schema describes op args (dogfooding finding #2)", async () => {
@@ -713,6 +723,17 @@ describe("kernel bridge memory + actors + capabilities", () => {
 							score: 1,
 						}));
 					},
+					// G2 (round-5): scope-aware recall routes to the state's
+					// bank-scoped implementation.
+					async recallScoped(query?: string) {
+						return [...remembered.entries()].map(([id, memory]) => ({
+							id,
+							content: memory.content,
+							source: "kernel-bridge-test",
+							timestamp: new Date().toISOString(),
+							score: 1,
+						}));
+					},
 				}) as never,
 		});
 
@@ -732,6 +753,52 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		}[];
 		expect(recalled).toHaveLength(1);
 		expect(recalled[0].fact).toBe("shared fact");
+	});
+
+	test("memory.recall live path passes the score through and honors scope (round-5 G1/G2)", async () => {
+		// G1: the live path used to stamp confidence: 1 regardless of the
+		// backend's relevance score — an out-of-domain query returned
+		// confident-looking noise with no way to discount it. The score now
+		// passes through as confidence, and a floor drops low-relevance hits.
+		const remembered = new Map<string, { content: string; importance: number; score: number }>();
+		remembered.set("mn-0", { content: "the project uses bun for tooling", importance: 0.9, score: 0.9 });
+		const session = makeSession({
+			getMnemopiSessionState: () =>
+				({
+					rememberScoped(memory: { content: string; importance: number }) {
+						const id = `mn-${remembered.size}`;
+						remembered.set(id, { ...memory, score: 1 });
+						return id;
+					},
+					async recallScoped(query?: string, scope?: string) {
+						void scope;
+						return [...remembered.entries()].map(([id, memory]) => ({
+							id,
+							content: memory.content,
+							source: "kernel-bridge-test",
+							timestamp: new Date().toISOString(),
+							score: query === "noise" ? 0.01 : 0.9,
+						}));
+					},
+				}) as never,
+		});
+
+		const noise = (await call("memory.recall", { query: "noise" }, session)) as { confidence: number }[];
+		// Floor 0.05 drops the 0.01 hit.
+		expect(noise).toHaveLength(0);
+
+		const relevant = (await call("memory.recall", { query: "relevant" }, session)) as {
+			confidence: number;
+			scope: string;
+		}[];
+		expect(relevant).toHaveLength(1);
+		expect(relevant[0].confidence).toBe(0.9);
+		// Scope is echoed honestly instead of the silent hardcoded "project".
+		expect(relevant[0].scope).toBe("project");
+		const scoped = (await call("memory.recall", { query: "relevant", scope: "global" }, session)) as {
+			scope: string;
+		}[];
+		expect(scoped[0].scope).toBe("global");
 	});
 
 	test("artifacts.read falls back to the session artifact manager", async () => {
