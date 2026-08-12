@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { STAGE_TASK_COUNTS } from "@oh-my-pi/pi-kernel";
 import { evaluateExperimentPromotion, recordExperimentVerdict } from "../src/optimize";
 import { type LaunchRecord, RunStore } from "../src/store";
+import * as verdictGateway from "../src/verdict-gateway";
 
 const testDir = `${import.meta.dir}/tmp-optimize`;
 const jobsDir = path.join(testDir, "jobs");
@@ -239,5 +240,50 @@ describe("evaluateExperimentPromotion", () => {
 		});
 		expect(captured?.decision).toBe("reject");
 		expect(captured?.reason).toContain("reject: no variant passes");
+	});
+
+	test("maybeRecordExperimentVerdict records when complete, gated, and ≥2 arms (round-13 close-out)", async () => {
+		// A complete experiment launched with a harnessVersion, enough trials
+		// for the full sequential design: the verdict trigger must evaluate
+		// and route through the gateway client.
+		const full = STAGE_TASK_COUNTS.full;
+		const heldout = STAGE_TASK_COUNTS.heldout;
+		await seedArm(
+			store,
+			{ ...baselineLaunch("opt10-baseline", 1), config: { harnessVersion: 7 } },
+			tasks("taskA", full + heldout, 1),
+		);
+		await seedArm(
+			store,
+			{ ...variantLaunch("opt10-variant", 2), config: { harnessVersion: 7 } },
+			tasks("taskA", full + heldout, 0),
+		);
+
+		const spy = spyOn(verdictGateway, "recordVerdictViaGateway");
+		spy.mockResolvedValue({ version: 7, decision: "reject" });
+
+		// The trigger returns the gateway promise — await it directly, no
+		// wall-clock guess.
+		await verdictGateway.maybeRecordExperimentVerdict({ store, jobName: "opt10-variant", projectDir: jobsDir });
+		expect(spy).toHaveBeenCalledTimes(1);
+		const call = spy.mock.calls[0]![0] as { version: number; decision: string; reason: string };
+		expect(call.version).toBe(7);
+		expect(call.decision).toBe("reject");
+		// The variant fails everything → the generic reject reason is recorded.
+		expect(call.reason).toContain("reject");
+		spy.mockRestore();
+	});
+
+	test("maybeRecordExperimentVerdict skips runs without a harnessVersion (round-13 close-out)", async () => {
+		await seedArm(store, baselineLaunch("opt11-baseline", 1), [{ name: "taskA__r0", reward: 1 }]);
+		await seedArm(store, variantLaunch("opt11-variant", 2), [{ name: "taskA__r0", reward: 1 }]);
+
+		const spy = spyOn(verdictGateway, "recordVerdictViaGateway");
+		spy.mockResolvedValue({ version: 1, decision: "reject" });
+
+		await verdictGateway.maybeRecordExperimentVerdict({ store, jobName: "opt11-variant", projectDir: jobsDir });
+		// No harnessVersion on the runs → the trigger never records.
+		expect(spy).not.toHaveBeenCalled();
+		spy.mockRestore();
 	});
 });

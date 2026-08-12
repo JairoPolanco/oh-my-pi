@@ -28,6 +28,7 @@ import { BENCHMARK_DEFINITIONS } from "./benchmarks";
 import { buildExperiments, experimentDetail, experimentOf } from "./experiments";
 import { harborRunnerArgs, type LaunchRequest } from "./launch-args";
 import { type LaunchRecord, type RunRole, type RunRow, RunStore } from "./store";
+import { maybeRecordExperimentVerdict } from "./verdict-gateway";
 
 /** PUT /api/experiments/:id body — goal and per-run role/note/label metadata. */
 export interface ExperimentMetaUpdate {
@@ -505,12 +506,33 @@ export class ManagerServer {
 			// Final sync AFTER the terminal state: the ticker only revisits
 			// running rows, so the last-2s trial results would otherwise be lost.
 			this.#store.syncRun(jobName);
+			// Round-13 close-out: completed experiments with a harnessVersion
+			// record their trusted verdict into the kernel gateway ledger.
+			this.#recordExperimentVerdictIfReady(jobName);
 			this.#children.delete(jobName);
 			this.#tick();
 		});
 		this.#store.registerLaunch({ ...record, pid: proc.pid });
 		this.#tick();
 		return proc.pid;
+	}
+
+	/**
+	 * Round-13 close-out: when a completed run's experiment has ≥2 complete
+	 * arms AND the run was launched with `harnessVersion`, evaluate the
+	 * paired comparison and record the trusted verdict into the project
+	 * harness ledger via the kernel gateway. Best-effort — a missing gateway
+	 * skips recording; run evidence on disk is unaffected. This is the
+	 * bridge that turns benchmark runs into the evaluator for
+	 * `harness.promote` (before: the gateway-operator path had zero callers
+	 * and the ledger stayed a proposal graveyard).
+	 */
+	#recordExperimentVerdictIfReady(jobName: string): void {
+		void maybeRecordExperimentVerdict({
+			store: this.#store,
+			jobName,
+			projectDir: this.jobsDir,
+		});
 	}
 
 	/** Liveness check that survives manager restarts: managed child, or a running row with a live pid. */

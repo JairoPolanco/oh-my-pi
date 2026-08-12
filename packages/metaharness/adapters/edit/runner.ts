@@ -35,7 +35,18 @@ import {
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..", "..", "..");
 const RUNS_DIR = path.join(REPO_ROOT, "runs");
+// Round-13 c1: the module previously mkdir'd TMP at import time, so merely
+// importing the runner (e.g. `--list`, `--check-fixtures`, or a failed
+// argument parse) left an empty `runs/rb-*` dir behind — 5 accumulated in
+// the audit's workspace with no run in them. Create it lazily on first use
+// (the log file / subtmp paths), so no import ever touches the filesystem.
 const TMP = path.join(RUNS_DIR, `rb-${Math.random().toString(36).slice(2, 10)}`);
+let tmpReady = false;
+function ensureTmp(): void {
+	if (tmpReady) return;
+	fs.mkdirSync(TMP, { recursive: true });
+	tmpReady = true;
+}
 const CLI_PATH = Bun.fileURLToPath(import.meta.resolve("@oh-my-pi/pi-coding-agent/cli"));
 
 function formatLogPath(logFile: string): string {
@@ -77,10 +88,9 @@ interface BenchmarkClient {
 	dispose(): Promise<void>;
 }
 
-fs.mkdirSync(TMP, { recursive: true });
-
 let n = 0;
 function subtmp(pre: string): string {
+	ensureTmp();
 	const dir = path.join(TMP, `${pre}-${n++}`);
 	fs.mkdirSync(dir);
 	return dir;
@@ -1090,6 +1100,7 @@ async function runSingleTask(
 	};
 	const hashlineSubtypes: Record<string, number> = {};
 
+	ensureTmp();
 	const logFile = path.join(TMP, `run-${task.id}-${runIndex}.jsonl`);
 	const logEvent = async (event: unknown) => {
 		await fs.promises.appendFile(logFile, `${JSON.stringify(event)}\n`);

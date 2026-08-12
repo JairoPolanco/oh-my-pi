@@ -38,6 +38,13 @@ export interface LaunchRequest {
 	note?: string;
 	/** Experiment goal; upserted for the run's experiment (job-name prefix). */
 	goal?: string;
+	/**
+	 * Harness ledger version this experiment evaluates (round-13 close-out).
+	 * When set, the server records the experiment's trusted verdict for this
+	 * version into the project's kernel gateway ledger on completion —
+	 * benchmark runs become the evaluator for `harness.promote`.
+	 */
+	harnessVersion?: number;
 	/** Use prebuilt dist/omp-linux-* binaries instead of the default source mount. */
 	prebuiltBinaries?: boolean;
 	/** Extra raw runner args, appended verbatim. */

@@ -548,4 +548,76 @@ describe("resolveArmLaunch", () => {
 		expect(() => resolveArmLaunch(store, "exp", { arm: "base", model: "m/y" })).toThrow(/already exists/);
 		expect(() => resolveArmLaunch(store, "ghost", { arm: "x", model: "m/y" })).toThrow(/no runs to inherit/);
 	});
+
+	it("syncs an edit run from the CLI's result.json into the durable store (round-13 close-out)", () => {
+		// A direct `bench:edit --jobs-dir` run writes `<jobDir>/result.json`
+		// in the CLI's shape; the store's readEditSnapshot must parse it and
+		// the run becomes queryable evidence (task success measured).
+		const jobsDir = makeJobsDir();
+		const store = new RunStore(jobsDir);
+		cleanups.push(() => store.close());
+		const jobName = "edit-arm";
+		const jobDir = path.join(jobsDir, jobName);
+		fs.mkdirSync(jobDir, { recursive: true });
+		fs.writeFileSync(
+			path.join(jobDir, "result.json"),
+			JSON.stringify({
+				tasks: [
+					{
+						id: "taskA",
+						name: "Task A",
+						runs: [
+							{
+								runIndex: 0,
+								success: true,
+								duration: 5000,
+								tokens: { input: 1000, output: 500, reasoning: 100 },
+							},
+							{
+								runIndex: 1,
+								success: false,
+								error: "edit failed",
+								duration: 3000,
+								tokens: { input: 800, output: 400, reasoning: 80 },
+							},
+						],
+					},
+				],
+				summary: {
+					totalRuns: 2,
+					successfulRuns: 1,
+					taskSuccessRate: 1,
+					editSuccessRate: 0.5,
+					totalTokens: { input: 1800, output: 900 },
+				},
+			}),
+		);
+
+		store.registerLaunch({
+			benchmark: "edit",
+			jobName,
+			dataset: "typescript-edit",
+			agent: "omp",
+			models: ["anthropic/claude"],
+			config: { harnessVersion: 3 },
+			pid: process.pid,
+		});
+		store.syncRun(jobName);
+		store.markExit(jobName, 0);
+
+		const row = store.getRun(jobName);
+		expect(row).not.toBeNull();
+		expect(row?.benchmark).toBe("edit");
+		expect(row?.status).toBe("complete");
+		expect(row?.score).toBe(1); // taskSuccessRate
+		expect(row?.metrics.task_success_rate).toBe(1);
+		expect(row?.nTotal).toBe(2);
+		expect(row?.pass).toBe(1); // one successful run trace
+		expect(row?.fail).toBe(1); // one failed run trace
+		expect(row?.config.harnessVersion).toBe(3);
+		const traces = store.listTraces(jobName);
+		expect(traces).toHaveLength(2);
+		expect(traces[0]!.status).toBe("pass");
+		expect(traces[1]!.status).toBe("error"); // run carried an error string
+	});
 });

@@ -19,11 +19,50 @@ import { loadTasksFromDir, validateFixturesFromDir } from "@oh-my-pi/typescript-
 import { LiveProgress } from "./live-progress";
 import { generateJsonReport, generateReport } from "./report";
 import { type BenchmarkConfig, type BenchmarkResult, buildBenchmarkResult, runBenchmark } from "./runner";
+import { RunStore } from "../../src/store";
+import { maybeRecordExperimentVerdict } from "../../src/verdict-gateway";
 
 const EDIT_PACKAGE = path.resolve(import.meta.dir, "..", "..", "..", "typescript-edit-benchmark");
 const RUNS_DIR = path.resolve(import.meta.dir, "..", "..", "..", "..", "runs");
 
 type ReportFormat = "markdown" | "json";
+
+/** Round-13 close-out: register a direct edit run in the metaharness store. */
+async function registerRunDurably(opts: {
+	jobsDir: string;
+	outputPath: string;
+	config: BenchmarkConfig;
+	harnessVersion?: number;
+}): Promise<void> {
+	const { jobsDir, outputPath, config, harnessVersion } = opts;
+	const jobDir = path.dirname(outputPath);
+	const jobName = path.basename(jobDir);
+	// The run's job dir must sit INSIDE the jobs dir (the server launches
+	// edit with `--output <jobsDir>/<jobName>/result.json`); a report written
+	// directly under runs/ is not a store job.
+	if (!jobName || jobName === "." || !path.resolve(jobDir).startsWith(path.resolve(jobsDir) + path.sep)) return;
+	const store = new RunStore(jobsDir);
+	try {
+		store.registerLaunch({
+			benchmark: "edit",
+			jobName,
+			dataset: "typescript-edit",
+			agent: "omp",
+			models: [config.model],
+			config: { harnessVersion },
+			pid: process.pid,
+		});
+		// The store reads `<jobDir>/result.json` — the file this CLI just wrote.
+		store.syncRun(jobName);
+		store.markExit(jobName, 0);
+		log(`  Run registered in store: ${jobName}`);
+		if (harnessVersion !== undefined) {
+			void maybeRecordExperimentVerdict({ store, jobName, projectDir: jobsDir });
+		}
+	} finally {
+		store.close();
+	}
+}
 
 function log(line = ""): void {
 	process.stderr.write(`${line}\n`);
@@ -193,6 +232,8 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
 			"check-fixtures": { type: "boolean", default: false },
 			quiet: { type: "boolean", default: false },
 			list: { type: "boolean", default: false },
+			"jobs-dir": { type: "string" },
+			"harness-version": { type: "string" },
 			help: { type: "boolean", default: false },
 		},
 		strict: true,
@@ -330,6 +371,24 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
 		queueReportWrite(result);
 		await writes;
 		unregisterCleanup();
+
+		// Round-13 close-out: direct `bench:edit` runs register durably in the
+		// metaharness store (the server-launched path registers via
+		// ManagerServer). `--jobs-dir` opts into the store; without it the
+		// CLI stays a plain report writer. Registration + verdict recording
+		// must never break the report boundary — wrap both in try/catch.
+		if (values["jobs-dir"]) {
+			try {
+				await registerRunDurably({
+					jobsDir: values["jobs-dir"],
+					outputPath,
+					config,
+					harnessVersion: values["harness-version"] ? Number(values["harness-version"]) : undefined,
+				});
+			} catch (error) {
+				log(`  (run store registration skipped: ${error instanceof Error ? error.message : String(error)})`);
+			}
+		}
 
 		log();
 		log("Benchmark complete!");
