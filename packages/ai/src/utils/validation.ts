@@ -1657,6 +1657,46 @@ function splitSpilledValue(text: string): SpillSplit | null {
 }
 
 /**
+ * Unwrap a nested tool-call envelope: `{ arguments: "<json string>" }`.
+ *
+ * Some models emit the whole tool-call payload wrapped in a single
+ * `arguments` key whose value is a JSON string (the shape of a serialized
+ * tool call, not a call's args). Without this pass the envelope object fails
+ * schema validation (the payload keys live inside the string), the lenient
+ * forward passes the raw envelope through, and downstream tools see no
+ * recognized parameters — e.g. the task tool reporting "Missing `tasks`"
+ * for a fully-formed batch payload.
+ *
+ * Only fires when the wrapper value is a string that parses to a plain
+ * record, so tools whose own schema genuinely contains an `arguments`
+ * property are unaffected.
+ */
+function unwrapArgumentsEnvelope(value: unknown): { value: unknown; changed: boolean } {
+	if (!isPlainRecord(value)) return { value, changed: false };
+	const keys = Object.keys(value);
+	if (keys.length === 0 || !keys.every(key => key === "arguments" || key === "i")) {
+		return { value, changed: false };
+	}
+	const envelope = value.arguments;
+	if (typeof envelope !== "string" || envelope.trim() === "") return { value, changed: false };
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(envelope);
+	} catch {
+		return { value, changed: false };
+	}
+	if (!isPlainRecord(parsed) || Object.keys(parsed).length === 0) return { value, changed: false };
+	// Keep sibling keys (e.g. an intent `i`), but drop the consumed envelope
+	// wrapper so strict schemas with `additionalProperties: false` never see
+	// a stray `arguments` key.
+	const unwrapped = preserveUnknownRootFields(value, parsed);
+	if (isPlainRecord(unwrapped)) {
+		delete unwrapped.arguments;
+	}
+	return { value: unwrapped, changed: true };
+}
+
+/**
  * Repairs native tool-call arguments contaminated by in-band
  * `<arg_key>`/`<arg_value>` syntax. Some providers parse owned tool-call
  * formats server-side; when the model mistypes or omits an `</arg_value>`
@@ -1753,6 +1793,18 @@ export function validateToolArguments(tool: Tool, toolCall: ToolCall): ToolCall[
 	// placeholders for "no value" even when validation would otherwise pass.
 	let normalizedArgs: unknown = originalArgs;
 	let changed = false;
+
+	// Unwrap a nested tool-call envelope (`{ arguments: "<json string>" }`)
+	// before any schema pass. Some models emit the full payload as a
+	// serialized tool call; left wrapped, the schema sees one unrecognized
+	// key and every downstream repair runs against an envelope with no
+	// payload (the task tool then reports "Missing `tasks`" for a valid
+	// batch). Runs first so later passes see the real payload.
+	const envelopeUnwrap = unwrapArgumentsEnvelope(normalizedArgs);
+	if (envelopeUnwrap.changed) {
+		normalizedArgs = envelopeUnwrap.value;
+		changed = true;
+	}
 
 	// Unwrap accidentally double-JSON-encoded object keys before any schema
 	// pass. LLMs sometimes emit `{ "\"op\"": "done" }`, so the property name

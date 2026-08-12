@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed tool-call arguments wrapped in a nested `{ arguments: "<json string>" }` envelope being dropped before validation, which surfaced as spurious "Missing `tasks`" failures on valid batch task spawns.
+
 ## [17.2.12] - 2026-08-08
 
 ### Fixed

@@ -1967,3 +1967,83 @@ describe("In-band arg spill healing", () => {
 		expect(result).toEqual({ content });
 	});
 });
+
+describe("Nested tool-call envelope unwrap", () => {
+	const batchTool: Tool = {
+		name: "task",
+		description: "",
+		parameters: type({
+			context: "string",
+			tasks: type({ name: "string", task: "string" }).array(),
+			"+": "delete",
+		}),
+	};
+
+	it("unwraps a single-key arguments envelope into the real payload", () => {
+		const envelope = JSON.stringify({
+			context: "shared context",
+			tasks: [{ name: "A", task: "audit" }],
+		});
+		const result = validateToolArguments(batchTool, {
+			type: "toolCall",
+			id: "call-env-1",
+			name: "task",
+			arguments: { arguments: envelope },
+		}) as { context: string; tasks: Array<{ name: string; task: string }> };
+
+		expect(result.context).toBe("shared context");
+		expect(result.tasks).toHaveLength(1);
+		expect(result.tasks[0]).toEqual({ name: "A", task: "audit" });
+	});
+
+	it("preserves sibling keys (intent `i`) while dropping the envelope", () => {
+		const envelope = JSON.stringify({ context: "ctx", tasks: [{ name: "B", task: "probe" }] });
+		const result = validateToolArguments(batchTool, {
+			type: "toolCall",
+			id: "call-env-2",
+			name: "task",
+			arguments: { i: "Run the audit", arguments: envelope },
+		}) as { context: string; tasks: Array<{ name: string; task: string }> };
+
+		expect(result.context).toBe("ctx");
+		expect(result.tasks).toHaveLength(1);
+		expect(result.tasks[0]).toEqual({ name: "B", task: "probe" });
+	});
+
+	it("leaves non-envelope args untouched", () => {
+		const result = validateToolArguments(batchTool, {
+			type: "toolCall",
+			id: "call-env-3",
+			name: "task",
+			arguments: { context: "plain", tasks: [{ name: "C", task: "direct" }] },
+		}) as { context: string };
+		expect(result.context).toBe("plain");
+	});
+
+	it("leaves an unparsable arguments string untouched", () => {
+		// Unparsable → envelope survives → schema rejects it → validation throws.
+		// The validator must not silently fabricate a payload; the lenient
+		// forward (raw args) is the caller's contract in agent-loop.
+		expect(() =>
+			validateToolArguments(batchTool, {
+				type: "toolCall",
+				id: "call-env-4",
+				name: "task",
+				arguments: { arguments: "{not json" },
+			}),
+		).toThrow(/Validation failed for tool "task"/);
+	});
+
+	it("does not unwrap a scalar payload into a fabricated record", () => {
+		// Envelope string parses to a non-record (e.g. a bare number) — no
+		// unwrap, normal validation failure.
+		expect(() =>
+			validateToolArguments(batchTool, {
+				type: "toolCall",
+				id: "call-env-5",
+				name: "task",
+				arguments: { arguments: "42" },
+			}),
+		).toThrow(/Validation failed for tool "task"/);
+	});
+});
