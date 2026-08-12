@@ -95,4 +95,29 @@ describe("buildContextHandoff", () => {
 		// child's whole context.
 		expect(block!.length).toBeLessThan(6000);
 	});
+
+	test("carries multi-line result content, not just the first line (round-15 probe)", async () => {
+		vi.spyOn(git.log, "subjects").mockResolvedValue([]);
+		// A structural read whose value is beyond the first line — the old
+		// split("\n")[0] collapsed it to "/**", so the child re-read
+		// everything. The block must carry the body.
+		const structuralRead =
+			'/**\n * Broker effect mapping.\n * case "browser": splits exec from network (round-13 P1).\n * canonicalProcessResource(cwd, root) at line 160.\n */';
+		const branch = [
+			{
+				type: "message",
+				message: {
+					role: "toolResult",
+					toolName: "read",
+					isError: false,
+					content: [{ type: "text", text: structuralRead }],
+				},
+			},
+		];
+		const session = await makeSession(branch);
+		const block = await buildContextHandoff(session, "audit broker");
+		expect(block).not.toBeNull();
+		expect(block).toContain('case "browser": splits exec from network');
+		expect(block).toContain("canonicalProcessResource(cwd, root)");
+	});
 });

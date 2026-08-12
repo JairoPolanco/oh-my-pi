@@ -1508,9 +1508,14 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 			const p = env.payload;
 			totalSpawns += p.count;
 			batches += p.batch ? 1 : 0;
-			withHandoff += p.handoffBytes > 0 ? 1 : 0;
+			// Round-15 probe: pre-fix events carry no handoffBytes field —
+			// `undefined` summed into NaN and serialized as null. Coerce so
+			// old events contribute 0 (they genuinely delivered nothing) and
+			// the average stays a number.
+			const bytes = p.handoffBytes ?? 0;
+			withHandoff += bytes > 0 ? 1 : 0;
 			totalContextBytes += p.contextBytes;
-			totalHandoffBytes += p.handoffBytes;
+			totalHandoffBytes += bytes;
 		}
 		return {
 			calls: spawned.length,

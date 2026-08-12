@@ -546,6 +546,22 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(stats.handoffCoverage).toBeNull();
 	});
 
+	test("delegation.stats tolerates pre-fix events without handoffBytes (no NaN average — round-15 probe)", async () => {
+		const host = await kernelHostFor(makeSession());
+		// Pre-fix shape: no handoffBytes field. Must count as 0 delivered
+		// bytes, never undefined→NaN in the average.
+		host.events.append({ kind: "task.spawned", count: 1, batch: true, contextBytes: 100 });
+		host.events.append({ kind: "task.spawned", count: 1, batch: false, contextBytes: 0, handoffBytes: 500 });
+
+		const stats = (await call("delegation.stats", {})) as {
+			avgHandoffBytes: number;
+			handoffCoverage: number | null;
+		};
+		expect(Number.isNaN(stats.avgHandoffBytes)).toBe(false);
+		expect(stats.avgHandoffBytes).toBe(250); // (0 + 500) / 2
+		expect(stats.handoffCoverage).toBe(0.5);
+	});
+
 	test("perf.profile ranks tools by latency with output bytes (harness profiler)", async () => {
 		// The profiler aggregates tool.completed events (which the trajectory
 		// tap emits with latencyMs + outputBytes) into per-tool percentiles,

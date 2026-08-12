@@ -126,15 +126,22 @@ export async function buildContextHandoff(session: ToolSession, assignment?: str
 
 	const results = recentDiscoveryResults(session);
 	if (results.length > 0) {
+		// Round-15 probe: the summary was rendered as `split("\n")[0]` — a
+		// first-line-only fingerprint. A 3,435-char structural read of
+		// broker.ts collapsed to `/**`, so the child correctly re-read
+		// everything (the block "promised known content" it never carried).
+		// Emit the full capped slice (multi-line) — the content the parent
+		// actually saw, not a line.
 		const lines = results.map(result => {
-			const firstLine = result.summary.split("\n")[0]?.trim() ?? "";
-			return `- [${result.tool}] ${firstLine}${result.summary.length > MAX_RESULT_CHARS ? "…" : ""}`;
+			const body = result.summary.trim();
+			const truncated = result.summary.length > MAX_RESULT_CHARS ? "…" : "";
+			return `- [${result.tool}] ${body}${truncated}`;
 		});
 		parts.push(
 			`## Orchestrator knowledge (already explored — do NOT re-read these)\n\n` +
 				`The parent session already read/grepped these and learned the following. ` +
 				`Treat the file content as known unless you need detail a summary cannot carry:\n` +
-				lines.join("\n"),
+				lines.join("\n\n"),
 		);
 	}
 

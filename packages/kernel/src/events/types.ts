@@ -172,9 +172,11 @@ export interface TaskSpawned {
 	 * Byte size of the orchestrator-knowledge handoff block appended to the
 	 * spawn params dispatch actually consumed (round-15 fix). 0 = no handoff
 	 * reached the child — the earlier boolean only proved a block was built,
-	 * not delivered.
+	 * not delivered. ABSENT on pre-fix events (the field did not exist);
+	 * consumers must treat absence as 0 delivered bytes (round-15 probe:
+	 * undefined summed into a NaN average).
 	 */
-	handoffBytes: number;
+	handoffBytes?: number;
 }
 
 /** A skill was proposed for promotion. */
