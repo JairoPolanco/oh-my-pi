@@ -207,6 +207,24 @@ export class TurnRecovery {
 		return this.#retryAttempt;
 	}
 
+	/**
+	 * Seed the retry counter from durable attempt records on restore (durable
+	 * effect sandwich slice 1). A crash mid-retry-saga must not reset the budget:
+	 * the highest durable attempt number becomes the running count, so the cap
+	 * (`retry.maxRetries`) applies identically pre/post-crash. Attempt records
+	 * are numbered `recovery.attempt + 1` at provision, so durable number N
+	 * implies N-1 retries had already failed; seed N-1 so the next provision
+	 * reuses the crashed attempt's number and the exhaustion check
+	 * (`#retryAttempt > maxRetries`) applies identically. Only seeds when the
+	 * restored value is HIGHER — a fresh session never raises the counter.
+	 */
+	seedDurableAttemptCount(maxDurableAttempt: number): void {
+		const seeded = Math.max(0, maxDurableAttempt - 1);
+		if (seeded > this.#retryAttempt) {
+			this.#retryAttempt = seeded;
+		}
+	}
+
 	/** Promise settled when the active retry saga finishes. */
 	get retryPromise(): Promise<void> | undefined {
 		return this.#retryPromise;

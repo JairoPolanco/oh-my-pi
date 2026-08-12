@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Durable attempt/usage accounting (durable effect sandwich slice 1, exec-plan completed 2026-08-11): a pre-provisioned `kernel_attempt` record (in_flight, with response entry id + durable attempt number) is written BEFORE every provider request; the usage record appends at settlement under the same pre-provisioned response id. On restore, reconciliation folds usage records whose response message is absent (crash between usage-append and message-persist — billing never lost), classifies settled-by-message (message-attached usage covers it, no double-bill) vs interrupted (no invented usage), and seeds the retry counter so a crash mid-retry-saga does not reset the budget. `appendMessage` accepts an optional pre-provisioned entry id. Pinned by 10 regression tests (pure reconciliation, crash-window restore, live pre-provision+settle wiring). Cost-neutral measured (harmony probe B arm within noise).
+
 ### Fixed
 
 - Mnemopi autoRecall re-arms on a miss (dogfooding finding): `beforeAgentStartPrompt`/`maybeRecallOnAgentStart` latched `hasRecalledForFirstTurn = true` after the FIRST turn regardless of whether anything matched — autoRecall was a first-turn lottery, and a session whose opening prompt didn't match memory NEVER recalled again (verified: zero `<memories>` blocks in any live session even though the fact store matched later prompts). Recall now stays armed until it actually injects; only a successful injection latches. Pinned by 3 regression tests.

@@ -278,6 +278,11 @@ class SessionEntryIndex {
 		return { ...this.#usage };
 	}
 
+	/** Fold usage reconstructed at restore (durable-attempt reconciliation). */
+	foldUsage(usage: Usage): void {
+		addUsage(this.#usage, usage);
+	}
+
 	pathTo(id: string | null | undefined = this.#leaf): SessionEntry[] {
 		const branch: SessionEntry[] = [];
 		const seen = new Set<string>();
@@ -1852,6 +1857,17 @@ export class SessionManager {
 	}
 
 	/**
+	 * Fold usage reconstructed at restore into the running totals. Used by the
+	 * durable-attempt reconciliation: usage records whose response message is
+	 * absent (crash between usage-append and message-persist) fold here — a
+	 * present message already folds its own usage via {@link entryUsage}, so
+	 * reconcile never double-counts.
+	 */
+	foldReconciledUsage(usage: Usage): void {
+		this.#index.foldUsage(usage);
+	}
+
+	/**
 	 * Open a new per-turn budget window: snapshot the cumulative output baseline,
 	 * reset the eval-subagent counter, and set the (optional) ceiling.
 	 */
@@ -2049,8 +2065,10 @@ export class SessionManager {
 			| BashExecutionMessage
 			| PythonExecutionMessage
 			| FileMentionMessage,
+		options?: { entryId?: string },
 	): string {
-		const entry: SessionMessageEntry = { type: "message", ...this.#freshEntryFields(), message };
+		const fields = options?.entryId ? { ...this.#freshEntryFields(), id: options.entryId } : this.#freshEntryFields();
+		const entry: SessionMessageEntry = { type: "message", ...fields, message };
 		this.#recordEntry(entry);
 		return entry.id;
 	}

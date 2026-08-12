@@ -268,6 +268,7 @@ import {
 	shouldPromptCodexAutoRedeem,
 } from "./codex-auto-reset";
 import { recordCredentialPin, seedCredentialPins } from "./credential-pin";
+import { DURABLE_ATTEMPT_CUSTOM_TYPE, type DurableAttemptRecord, reconcileDurableAttempts } from "./durable-attempts";
 import { EvalRunner, type EvalRunnerHost } from "./eval-runner";
 import {
 	collectPendingToolCalls,
@@ -576,6 +577,10 @@ export class AgentSession {
 	#usagePreflightReadyModel: Model | undefined;
 	#detachUsageBeforeQueueDequeue: (() => void) | undefined;
 	#detachUsageBeforeModelCall: (() => void) | undefined;
+	/** Detach for the durable-attempt pre-provision hook (durable effect sandwich slice 1). */
+	#detachDurableAttemptBeforeModelCall: (() => void) | undefined;
+	/** In-flight durable attempt awaiting its response's settlement (see durable-attempts.ts). */
+	#pendingDurableAttempt: DurableAttemptRecord | undefined;
 
 	#transformContext: (messages: AgentMessage[], signal?: AbortSignal) => AgentMessage[] | Promise<AgentMessage[]>;
 	#onPayload: SimpleStreamOptions["onPayload"] | undefined;
@@ -1070,6 +1075,21 @@ export class AgentSession {
 			withBashBranchTransition: operation => this.#bash.withBranchTransition(operation),
 		};
 		this.#recovery = new TurnRecovery(recoveryHost, { initialRetryFallback: config.initialRetryFallback });
+		// Durable effect sandwich slice 1: reconcile pre-provisioned attempt
+		// records left by a crashed process. Folds usage records whose response
+		// message is absent (crash between usage-append and message-persist) and
+		// seeds the retry counter so a mid-saga crash does not reset the budget.
+		// Best-effort: reconciliation failure must never block session start.
+		try {
+			const branch = this.sessionManager.getBranch();
+			const reconciliation = reconcileDurableAttempts(branch);
+			for (const usage of reconciliation.usageToFold) {
+				this.sessionManager.foldReconciledUsage(usage);
+			}
+			this.#recovery.seedDurableAttemptCount(reconciliation.maxAttemptNumber);
+		} catch (error) {
+			logger.warn("durable attempt reconciliation failed (best-effort)", { error: String(error) });
+		}
 		this.#detachUsageBeforeQueueDequeue = this.agent.addBeforeQueuedMessageDequeueHook(async signal => {
 			if (
 				!this.settings.get("retry.usageAwareFallback") ||
@@ -1094,6 +1114,9 @@ export class AgentSession {
 				signal?.throwIfAborted();
 				throw new DOMException("Usage preflight cancelled", "AbortError");
 			}
+		});
+		this.#detachDurableAttemptBeforeModelCall = this.agent.addBeforeModelCallHook(() => {
+			this.#preProvisionDurableAttempt();
 		});
 		const statsHost: SessionStatsTrackerHost = {
 			session: this,
@@ -2247,6 +2270,36 @@ export class AgentSession {
 		return false;
 	}
 
+	/**
+	 * Pre-provision a durable attempt record before the provider request fires
+	 * (durable effect sandwich slice 1). The in_flight record names the
+	 * response entry id + usage record id settlement will use, so a crash
+	 * mid-request leaves a recoverable trail: restore reconciles in_flight
+	 * attempts against durable messages/usage records (see
+	 * {@link reconcileDurableAttempts}). Best-effort — a persistence failure
+	 * must never block the model call.
+	 */
+	#preProvisionDurableAttempt(): void {
+		try {
+			const model = this.model;
+			if (!model || this.#pendingDurableAttempt !== undefined) return;
+			const attempt: DurableAttemptRecord = {
+				kind: "attempt",
+				attemptId: crypto.randomUUID().slice(-8),
+				responseEntryId: crypto.randomUUID().slice(-8),
+				provider: model.provider,
+				model: model.id,
+				startedAt: Date.now(),
+				attemptNumber: this.#recovery.attempt + 1,
+				status: "in_flight",
+			};
+			this.sessionManager.appendCustomEntry(DURABLE_ATTEMPT_CUSTOM_TYPE, attempt);
+			this.#pendingDurableAttempt = attempt;
+		} catch (error) {
+			logger.warn("durable attempt pre-provision failed (best-effort)", { error: String(error) });
+		}
+	}
+
 	#appendSessionMessage(
 		message:
 			| Message
@@ -2258,9 +2311,38 @@ export class AgentSession {
 	): string {
 		const cache = this.#persistedMessageKeys;
 		const wasFresh = cache !== undefined && cache.anchor === this.#persistedMessageKeysAnchor();
-		const entryId = this.sessionManager.appendMessage(message);
+		// Durable effect sandwich slice 1: the pre-provisioned attempt's response
+		// entry id is used when THIS message is the response — so restore can
+		// correlate the durable message to its attempt (and fold its usage if the
+		// usage record never landed). Cleared after consumption; a non-response
+		// message leaves the pending attempt untouched for the real response.
+		const pending = this.#pendingDurableAttempt;
+		const entryId = this.sessionManager.appendMessage(
+			message,
+			message.role === "assistant" && pending ? { entryId: pending.responseEntryId } : undefined,
+		);
 		if (message.role === "assistant") {
 			(message as PersistedAssistantMessage)[kPersistedSessionEntryId] = entryId;
+		}
+		if (message.role === "assistant" && pending) {
+			// The response settled: record its usage durably (the usage record is
+			// the recovery authority when the message's own usage is later pruned
+			// or the message entry is absent after a crash). Only fold it on
+			// reload when the response entry is missing — see reconcileDurableAttempts.
+			const usage = (message as AssistantMessage).usage;
+			if (usage) {
+				try {
+					this.sessionManager.appendCustomEntry(DURABLE_ATTEMPT_CUSTOM_TYPE, {
+						kind: "usage",
+						attemptId: pending.attemptId,
+						responseEntryId: entryId,
+						usage,
+					});
+				} catch (error) {
+					logger.warn("durable usage record append failed (best-effort)", { error: String(error) });
+				}
+			}
+			this.#pendingDurableAttempt = undefined;
 		}
 		const key = sessionMessagePersistenceKey(message);
 		if (wasFresh && cache && key) {
@@ -2570,6 +2652,13 @@ export class AgentSession {
 
 			if (event.message.role === "assistant") {
 				const assistantMsg = event.message as AssistantMessage;
+				// Durable effect sandwich slice 1: the assistant block is the
+				// DEFINITIVE settlement point — even when the persist path skipped
+				// the message (classifier refusal, empty error turn), the pending
+				// attempt must release so the NEXT model call (e.g. a retry) gets
+				// its own attempt record. The append path already consumed + cleared
+				// when the message persisted; this is the no-op fallback.
+				this.#pendingDurableAttempt = undefined;
 				// Fold this turn's timing into per-model perf aggregates (drives the
 				// /models TPS/TTFT display). Errored turns measure nothing; aborted
 				// turns with reported usage are still valid throughput samples.
