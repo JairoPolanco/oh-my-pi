@@ -2,7 +2,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { KernelHost } from "@oh-my-pi/pi-kernel";
-import { authorizeToolEffect, kernelHostFor, resetKernelHosts } from "../../src/eval/kernel-bridge";
+import {
+	authorizeToolEffect,
+	kernelEffectGateEnabled,
+	kernelHostFor,
+	resetKernelHosts,
+} from "../../src/eval/kernel-bridge";
 import type { ToolSession } from "../../src/tools";
 
 const testDir = `${import.meta.dir}/tmp-effect-gate`;
@@ -223,5 +228,22 @@ describe("authorizeToolEffect (EffectBroker gate)", () => {
 			args: { path: path.join(testDir, "src/foo.ts") },
 		});
 		expect(noRoot.blocked).toBe(true);
+	});
+});
+
+describe("kernelEffectGateEnabled (single gate definition)", () => {
+	test('true only when OMP_KERNEL_EFFECT_GATE is exactly "1"', () => {
+		const had = Bun.env.OMP_KERNEL_EFFECT_GATE;
+		try {
+			delete Bun.env.OMP_KERNEL_EFFECT_GATE;
+			expect(kernelEffectGateEnabled()).toBe(false);
+			Bun.env.OMP_KERNEL_EFFECT_GATE = "0";
+			expect(kernelEffectGateEnabled()).toBe(false);
+			Bun.env.OMP_KERNEL_EFFECT_GATE = "1";
+			expect(kernelEffectGateEnabled()).toBe(true);
+		} finally {
+			if (had === undefined) delete Bun.env.OMP_KERNEL_EFFECT_GATE;
+			else Bun.env.OMP_KERNEL_EFFECT_GATE = had;
+		}
 	});
 });

@@ -171,6 +171,7 @@ describe("durable effect sandwich — crash window (integration)", () => {
 			toolCallId: "tool-write-1",
 			toolName: "write",
 			replay: "never",
+			authorized: true,
 			resultEntryId: "tool-result-1",
 			startedAt: Date.now(),
 			status: "in_flight",

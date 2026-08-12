@@ -149,6 +149,9 @@ describe("durable effect sandwich — pre-provision + settle wiring", () => {
 		expect(toolRecords).toHaveLength(1);
 		expect(toolRecords[0]!.toolName).toBe("read");
 		expect(toolRecords[0]!.replay).toBe("safe");
+		// The write site is post-approval — the record declares its own
+		// authorization instead of relying on write ordering.
+		expect(toolRecords[0]!.authorized).toBe(true);
 
 		// The result message settled under the pre-provisioned result id — the
 		// tool is classified settled (never rerunnable/interrupted).
@@ -200,6 +203,7 @@ function crashedToolRecord(over: Partial<DurableToolRecord> = {}): DurableToolRe
 		toolCallId: "call-1",
 		toolName: "read",
 		replay: "safe",
+		authorized: true,
 		resultEntryId: "res-1",
 		startedAt: Date.now(),
 		status: "in_flight",
@@ -301,6 +305,38 @@ describe("durable effect sandwich — restore re-issue of rerunnable tools", () 
 			expect(executeCount.count).toBe(0);
 		} finally {
 			await second.dispose();
+		}
+	});
+
+	it("never re-issues a replay:safe tool whose record is NOT authorized", async () => {
+		// The durable record is authoritative: authorized:false means the call
+		// never passed the gate — restore must not auto-run it (settled as
+		// outcome-unknown under the provisioned id, like a gate-denied call).
+		authStorage = await AuthStorage.create(path.join(tempDir, "auth.db"));
+		const manager = SessionManager.inMemory();
+		manager.appendMessage(crashAssistantToolCall("call-unauth", "read", { path: "secret.txt" }));
+		manager.appendCustomEntry(
+			DURABLE_ATTEMPT_CUSTOM_TYPE,
+			crashedToolRecord({ toolCallId: "call-unauth", authorized: false }),
+		);
+
+		const executeCount = { count: 0 };
+		session = new AgentSession({
+			agent: makeTestAgent([spyReadTool(executeCount, { value: undefined })]),
+			sessionManager: manager,
+			settings: Settings.isolated(),
+			modelRegistry: new ModelRegistry(authStorage!),
+		});
+		try {
+			await session.waitForIdle();
+			expect(executeCount.count).toBe(0);
+			const branch = manager.getBranch();
+			const reconciliation = reconcileToolEffects(branch);
+			expect(reconciliation.settled).toHaveLength(1);
+			expect(reconciliation.rerunnable).toHaveLength(0);
+			expect(reconciliation.interrupted).toHaveLength(0);
+		} finally {
+			await session.dispose();
 		}
 	});
 

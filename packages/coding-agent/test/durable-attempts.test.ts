@@ -194,6 +194,7 @@ function tool(over: Partial<DurableToolRecord> = {}): DurableToolRecord {
 		toolCallId: "call-1",
 		toolName: "write",
 		replay: "never",
+		authorized: true,
 		resultEntryId: "res-1",
 		startedAt: 1000,
 		status: "in_flight",
@@ -238,6 +239,36 @@ describe("reconcileToolEffects (durable effect sandwich slice 2)", () => {
 
 		expect(result.rerunnable).toHaveLength(1);
 		expect(result.interrupted).toHaveLength(0);
+	});
+
+	test("replay:safe but NOT authorized is interrupted, never rerunnable (authorization gate)", () => {
+		// The record's authorization is explicit, not inferred from write
+		// ordering: a started tool that never passed the gate/approval must
+		// never be auto-re-run, even though it is replay-safe.
+		const entries: SessionEntry[] = [toolEntry(tool({ replay: "safe", toolName: "read", authorized: false }))];
+		const result = reconcileToolEffects(entries);
+
+		expect(result.interrupted).toHaveLength(1);
+		expect(result.rerunnable).toHaveLength(0);
+	});
+
+	test("legacy records without the authorized field are interrupted, never rerunnable (fail-closed)", () => {
+		// Records written before the field existed have `authorized` undefined
+		// at runtime — reconcile must treat them like unapproved, not assume
+		// approval.
+		const legacy = {
+			kind: "tool",
+			toolCallId: "call-legacy",
+			toolName: "read",
+			replay: "safe",
+			resultEntryId: "res-legacy",
+			startedAt: 1000,
+			status: "in_flight",
+		} as unknown as DurableToolRecord;
+		const result = reconcileToolEffects([toolEntry(legacy)]);
+
+		expect(result.interrupted).toHaveLength(1);
+		expect(result.rerunnable).toHaveLength(0);
 	});
 
 	test("settled tool (result message present) is never rerunnable or interrupted", () => {

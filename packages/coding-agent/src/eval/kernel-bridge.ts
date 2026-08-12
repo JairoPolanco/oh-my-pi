@@ -356,6 +356,14 @@ function bridgeActor(session: ToolSession): string {
  * that was only granted `process.exec` cannot mutate task/memory/actor state
  * without the corresponding typed capability — the capability OS holds for
  * the bridge exactly as it holds for normal tool dispatch.
+ *
+ * The bridge is the ALWAYS-ON security floor: it deliberately never consults
+ * {@link kernelEffectGateEnabled} (`OMP_KERNEL_EFFECT_GATE`). That env switch
+ * only adds EffectBroker interposition to TOOL effects — a gate-off session
+ * must not gain unauthenticated `__kernel__` access (uniform-gate dogfooding
+ * finding: the tool path read the env var in two places while the bridge read
+ * it nowhere — one session, two authorization stories; the single definition
+ * now lives in {@link kernelEffectGateEnabled}).
  */
 function requireCapability(
 	host: KernelHost,
@@ -368,6 +376,21 @@ function requireCapability(
 	if (!decision.allow) {
 		throw new Error(`__kernel__ capability denied: ${actor} lacks ${id}:${resource} (${decision.reason})`);
 	}
+}
+
+/**
+ * Single definition of the kernel effect-gate switch (`OMP_KERNEL_EFFECT_GATE=1`).
+ * Consulted by the TOOL path only (`#beforeToolCall`, restore re-issue) to
+ * decide whether every tool effect additionally traverses the kernel
+ * EffectBroker before OMP's own approval machinery. The eval `__kernel__`
+ * bridge DELIBERATELY never consults this — {@link requireCapability} is the
+ * always-on security floor, so a gate-off session cannot gain unauthenticated
+ * bridge access. One definition here keeps the two surfaces from drifting
+ * (dogfooding finding: the tool path read the env var in two places while the
+ * bridge read it nowhere — same session, two authorization stories).
+ */
+export function kernelEffectGateEnabled(): boolean {
+	return Bun.env.OMP_KERNEL_EFFECT_GATE === "1";
 }
 
 /**

@@ -1368,6 +1368,27 @@ describe("memory_edit.execute (Mnemopi backend)", () => {
 		expect(recalled.map(memory => memory.content)).toContain("editor accent color is green");
 	});
 
+	it("refuses an update whose content looks like a truncated recall preview", async () => {
+		const settings = Settings.isolated({ "memory.backend": "mnemopi" });
+		registerMnemopiState();
+		const id = await retainAndRecallId(settings, "editor accent color is blue", "accent color");
+
+		// A recall preview ends in U+2026 (…) when clipped; update replaces
+		// content WHOLESALE, so writing the preview back would delete the
+		// unseen tail. The tool must refuse with an actionable error.
+		await expect(
+			MemoryEditTool.createIf(makeSession(settings))!.execute("call-memory-edit-truncated", {
+				op: "update",
+				id,
+				content: "editor accent color is blu…",
+			}),
+		).rejects.toThrow(/truncated recall preview|read the full memory/);
+
+		// The stored row is untouched — the refusal happens before the edit.
+		const recalled = await registeredMnemopiState!.recallResultsScoped("accent color");
+		expect(recalled.map(memory => memory.content)).toContain("editor accent color is blue");
+	});
+
 	it("forgets a working memory by recall id", async () => {
 		const settings = Settings.isolated({ "memory.backend": "mnemopi" });
 		registerMnemopiState();

@@ -451,6 +451,29 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		await expect(call("artifacts.put", { text: "x" }, evalOnly)).rejects.toThrow(/lacks artifact\.write/);
 	});
 
+	test("bridge stays capability-gated when OMP_KERNEL_EFFECT_GATE is unset (uniform-gate floor)", async () => {
+		// The env gate only adds broker interposition to TOOL effects; the
+		// __kernel__ bridge must never become unauthenticated when the gate is
+		// off (dogfooding: kernel-bridge.ts had zero env touchpoints while the
+		// tool path read the var in two places — one session, two
+		// authorization stories). Pins the always-on floor: gate unset → a
+		// principal with eval-only capabilities still cannot mutate state.
+		const had = Bun.env.OMP_KERNEL_EFFECT_GATE;
+		try {
+			delete Bun.env.OMP_KERNEL_EFFECT_GATE;
+			const host = await kernelHostFor(makeSession());
+			host.capabilities.setParent("EvalOnly", "Main");
+			host.capabilities.grant("EvalOnly", { id: "process.exec", scope: "repo/**", effect: "execute" });
+			const evalOnly = makeSession({ getAgentId: () => "EvalOnly" });
+			await expect(call("tasks.create", { id: "t1", objective: "x" }, evalOnly)).rejects.toThrow(
+				/lacks task\.write/,
+			);
+		} finally {
+			if (had === undefined) delete Bun.env.OMP_KERNEL_EFFECT_GATE;
+			else Bun.env.OMP_KERNEL_EFFECT_GATE = had;
+		}
+	});
+
 	test("harness.hypothesis commits a version and refuses constitutional components", async () => {
 		const committed = (await call("harness.hypothesis", {
 			component: "routing-policy",

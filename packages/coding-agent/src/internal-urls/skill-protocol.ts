@@ -111,7 +111,20 @@ export class SkillProtocolHandler implements ProtocolHandler {
 			throw new Error(`skill:// URL must resolve to a file or directory: ${url.href}`);
 		}
 
-		const content = await Bun.file(targetPath).text();
+		let content: string;
+		try {
+			content = await Bun.file(targetPath).text();
+		} catch (error) {
+			// Distinct from the unknown/file-not-found errors above: the skill
+			// IS registered, but its SKILL.md cannot be read here — gate-denied
+			// or out-of-workspace (e.g. the managed-skills active dir under
+			// ~/.omp). The agent gets a reason and the live copy path instead
+			// of a raw denial.
+			const reason = isEnoent(error)
+				? "its file vanished between discovery and read"
+				: "it is not readable (gate-denied or outside the workspace)";
+			throw new Error(`skill ${skillName} exists but ${reason}; live copy at ${targetPath}`);
+		}
 		return {
 			url: url.href,
 			content,

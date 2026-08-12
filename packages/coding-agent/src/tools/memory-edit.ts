@@ -39,6 +39,14 @@ export class MemoryEditTool implements AgentTool<typeof memoryEditSchema> {
 		if (params.op === "update" && params.content === undefined && params.importance === undefined) {
 			throw new Error("memory_edit update requires content or importance.");
 		}
+		if (params.op === "update" && params.content !== undefined && params.content.endsWith("…")) {
+			// Recall clips long rows to a preview ending in U+2026 (…); update
+			// replaces content WHOLESALE, so writing the preview back would
+			// silently delete the unseen tail. Require the full row first.
+			throw new Error(
+				"memory_edit update content ends with '…' — looks like a truncated recall preview. Read the full memory with `read memory://<id>`, merge, then retry with the complete content.",
+			);
+		}
 
 		const importance = params.importance === undefined ? undefined : Math.max(0, Math.min(1, params.importance));
 		const result = state.editScopedMemory(params.op, params.id, {

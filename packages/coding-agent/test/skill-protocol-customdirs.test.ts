@@ -162,4 +162,28 @@ describe("skill:// resolution honors skills.customDirectories (#7190)", () => {
 		expect(resource.sourcePath).toBe(path.join(customSkill, "SKILL.md"));
 		expect(resource.content).toContain("from custom");
 	});
+
+	it("reports a distinct unreadable-skill error naming the live copy (gate-denied surface)", async () => {
+		// Discovery succeeds (the file was readable), then the file becomes
+		// unreadable — the resolver must not surface a raw denial: the skill
+		// exists, and the agent is told why and where the live copy is.
+		if (process.getuid?.() === 0) return; // permission bits don't bind root (CI safety)
+		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pi-unreadable-skill-"));
+		tempDirs.push(tempDir);
+		const skillDir = path.join(tempDir, "locked-skill");
+		await fs.mkdir(skillDir, { recursive: true });
+		await Bun.write(path.join(skillDir, "SKILL.md"), makeSkillMd("locked-skill", tempDir));
+
+		const { skills } = await loadSkills({
+			...ALL_DEFAULT_SOURCES_DISABLED,
+			customDirectories: [tempDir],
+		});
+		setActiveSkills(skills);
+		await fs.chmod(path.join(skillDir, "SKILL.md"), 0o000);
+
+		const handler = new SkillProtocolHandler();
+		await expect(handler.resolve(parseInternalUrl("skill://locked-skill"))).rejects.toThrow(
+			/exists but not readable|live copy at/,
+		);
+	});
 });

@@ -2350,6 +2350,10 @@ export class AgentSession {
 				toolCallId: ctx.toolCall.id,
 				toolName: ctx.tool.name,
 				replay: ctx.tool.replay === "safe" ? "safe" : "never",
+				// Written only after the gate/approval/extension paths pass in
+				// #beforeToolCall — authorization is explicit on the record,
+				// not inferred from write ordering (uniform-gate hardening).
+				authorized: true,
 				resultEntryId,
 				startedAt: Date.now(),
 				status: "in_flight",
@@ -2417,10 +2421,12 @@ export class AgentSession {
 	 * from its durable assistant toolCall, and the result persists under the
 	 * record's pre-provisioned result entry id — so a later restore classifies
 	 * it settled and never re-runs it (never twice). The kernel effect gate is
-	 * RE-AUTHORIZED per call: the durable record predates the gate check in
-	 * `#beforeToolCall`, so it does not prove the call was approved — a
-	 * gate-denied (or since-removed) tool is settled as outcome-unknown
-	 * instead of executing at restore, which would bypass the denial.
+	 * RE-AUTHORIZED per call (defense-in-depth): the durable record is
+	 * written only AFTER `#beforeToolCall`'s gate/approval paths pass and
+	 * carries `authorized: true`, but capabilities can change between crash
+	 * and restore — a gate-denied (or since-removed) tool is settled as
+	 * outcome-unknown instead of executing at restore, which would bypass the
+	 * denial.
 	 *
 	 * Best-effort per record: failures leave the record unsettled (the next
 	 * restore retries it) and never block session start. When re-issue work
@@ -2495,17 +2501,21 @@ export class AgentSession {
 	}
 
 	/**
-	 * Re-run the kernel effect gate for a restore re-issue. The durable
-	 * `kernel_tool` record is written BEFORE `#beforeToolCall`'s gate check,
-	 * so its existence does not prove the original call was approved — a
-	 * gate-denied call would otherwise be executed at restore, bypassing the
-	 * denial. Fail-closed: an authorization failure denies, never passes.
-	 * No-op (allowed) when the gate is off.
+	 * Re-run the kernel effect gate for a restore re-issue. On main the
+	 * durable `kernel_tool` record is written only AFTER `#beforeToolCall`'s
+	 * gate/approval/extension paths pass, so a record implies the original
+	 * call was approved — but capabilities can change between crash and
+	 * restore, and a live re-run traverses the gate anyway. Re-authorization
+	 * here is defense-in-depth, never a bypass: a gate-denied (or since
+	 * removed / no-longer-safe) tool settles as outcome-unknown instead of
+	 * executing at restore. Fail-closed: an authorization failure denies,
+	 * never passes. No-op (allowed) when the gate is off (single definition:
+	 * `kernelEffectGateEnabled`).
 	 */
 	async #kernelGateAuthorization(record: DurableToolRecord): Promise<{ blocked: boolean; reason?: string }> {
-		if (Bun.env.OMP_KERNEL_EFFECT_GATE !== "1") return { blocked: false };
+		const { kernelEffectGateEnabled, authorizeToolEffect, kernelHostFor } = await import("../eval/kernel-bridge");
+		if (!kernelEffectGateEnabled()) return { blocked: false };
 		try {
-			const { authorizeToolEffect, kernelHostFor } = await import("../eval/kernel-bridge");
 			const host = await kernelHostFor(this.#kernelSessionAdapter());
 			const gate = await authorizeToolEffect({
 				host,
@@ -3639,8 +3649,8 @@ export class AgentSession {
 		// at the TOP of this hook, so a DENIED call still produced a durable
 		// record and restore could not tell "denied" from "crashed mid-run".
 		// Now a durable record always means "approved and about to execute".
-		if (Bun.env.OMP_KERNEL_EFFECT_GATE === "1") {
-			const { authorizeToolEffect, kernelHostFor } = await import("../eval/kernel-bridge");
+		const { kernelEffectGateEnabled, authorizeToolEffect, kernelHostFor } = await import("../eval/kernel-bridge");
+		if (kernelEffectGateEnabled()) {
 			try {
 				// The kernel host resolves from the session file/cwd; the
 				// broker needs the tool name + args passed directly below.

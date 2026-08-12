@@ -163,6 +163,15 @@ export interface DurableToolRecord {
 	toolName: string;
 	/** Crash-replay policy resolved from the tool's `replay` declaration; absent = "never". */
 	replay: "safe" | "never";
+	/**
+	 * True when the call passed the kernel gate and OMP approval before the
+	 * record was written (the write site is post-approval — see
+	 * `#preProvisionToolEffect` in agent-session.ts). Reconcile treats
+	 * absent/false as never-approved: such records are NEVER rerunnable, only
+	 * interrupted (fail-closed — a wrong "never" loses a recoverable result,
+	 * a wrong "safe" re-runs an unapproved effect).
+	 */
+	authorized: boolean;
 	/** Pre-provisioned entry id the toolResult message will use. */
 	resultEntryId: string;
 	startedAt: number;
@@ -206,7 +215,7 @@ export function reconcileToolEffects(entries: readonly SessionEntry[]): ToolEffe
 	for (const tool of tools) {
 		if (ids.has(tool.resultEntryId)) {
 			settled.push(tool);
-		} else if (tool.replay === "safe") {
+		} else if (tool.authorized === true && tool.replay === "safe") {
 			rerunnable.push(tool);
 		} else {
 			interrupted.push(tool);
