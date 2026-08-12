@@ -713,6 +713,15 @@ export async function runKernelBridge(args: KernelBridgeArgs, options: KernelBri
 						`__kernel__.contract.create: unknown check kind ${JSON.stringify(kind)} (expected one of ${[...CHECK_KINDS].join(", ")})`,
 					);
 				}
+				// Command checks must carry an array command (dogfooding finding):
+				// a string slipped through kind-only validation and crashed the
+				// verifier host at `command.join(" ")` (host.ts:144) instead of
+				// refusing cleanly. Reject the malformed shape here.
+				if (kind === "command" && !Array.isArray((check as { command?: unknown }).command)) {
+					throw new Error(
+						'__kernel__.contract.create: command check requires a string[] \'command\' (e.g. ["bun", "test", ...])',
+					);
+				}
 			}
 			const contractRecord: CompletionContract = {
 				id,

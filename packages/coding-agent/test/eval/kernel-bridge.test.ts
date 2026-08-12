@@ -218,6 +218,23 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		await expect(call("contract.create", { id: "bad2", objective: "x", checks: [{ kind: "nope" }] })).rejects.toThrow(
 			/unknown check kind/,
 		);
+		// A command check with a STRING command (not string[]) previously passed
+		// kind-only validation and crashed the verifier host at
+		// `command.join(" ")` (host.ts:144) — the same dogfooding bug class.
+		await expect(
+			call("contract.create", {
+				id: "bad3",
+				objective: "x",
+				checks: [{ kind: "command", command: "bun test" }],
+			}),
+		).rejects.toThrow(/command check requires a string\[\]/);
+		// A command check with an ARRAY command still creates.
+		const cmd = (await call("contract.create", {
+			id: "okcmd",
+			objective: "x",
+			checks: [{ kind: "command", command: ["bun", "test"] }],
+		})) as { id: string; checks: number };
+		expect(cmd.checks).toBe(1);
 		// A valid check still creates.
 		const ok = (await call("contract.create", {
 			id: "ok",

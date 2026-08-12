@@ -1062,6 +1062,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		let details: ReadToolDetails = {};
 		let sourcePath: string | undefined;
 		let columnTruncated = 0;
+		/** Display line numbers ellipsis-truncated by the column cap (dogfooding: the model must know WHICH lines to re-read :raw before editing). */
+		let truncatedLineNumbers: number[] | undefined;
 		let truncationInfo:
 			| { result: TruncationResult; options: { direction: "head"; startLine?: number; totalFileLines?: number } }
 			| undefined;
@@ -1302,6 +1304,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 								if (!cloned) cloned = collectedLines.slice();
 								cloned[i] = text;
 								columnTruncated = maxColumns;
+								if (truncatedLineNumbers === undefined) truncatedLineNumbers = [];
+								truncatedLineNumbers.push(startLineDisplay + i);
 							}
 						}
 						if (cloned) displayLines = cloned;
@@ -1533,7 +1537,12 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			resultBuilder.truncation(truncationInfo.result, truncationInfo.options);
 		}
 		if (columnTruncated > 0) {
-			resultBuilder.limits({ columnMax: columnTruncated });
+			resultBuilder.limits({
+				columnMax: columnTruncated,
+				...(truncatedLineNumbers && truncatedLineNumbers.length > 0
+					? { columnTruncatedLines: truncatedLineNumbers }
+					: {}),
+			});
 		}
 		return resultBuilder.done();
 	}

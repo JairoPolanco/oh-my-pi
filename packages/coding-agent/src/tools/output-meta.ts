@@ -69,7 +69,14 @@ export interface LimitsMeta {
 	matchLimit?: { reached: number; suggestion: number };
 	resultLimit?: { reached: number; suggestion: number };
 	headLimit?: { reached: number; suggestion: number };
-	columnTruncated?: { maxColumn: number };
+	/**
+	 * Per-line column cap applied to the read display. `lines` carries the
+	 * DISPLAY line numbers that were ellipsis-truncated (dogfooding finding:
+	 * the model saw "Some lines truncated" but not WHICH — so a paste-back
+	 * edit of a truncated line failed with an 85% match and needed a re-read).
+	 * The notice names them and points at `:raw` for verbatim bytes.
+	 */
+	columnTruncated?: { maxColumn: number; lines?: number[] };
 }
 
 /**
@@ -311,7 +318,13 @@ export class OutputMetaBuilder {
 	}
 
 	/** Add limit notices in one call. */
-	limits(limits: { matchLimit?: number; resultLimit?: number; headLimit?: number; columnMax?: number }): this {
+	limits(limits: {
+		matchLimit?: number;
+		resultLimit?: number;
+		headLimit?: number;
+		columnMax?: number;
+		columnTruncatedLines?: number[];
+	}): this {
 		if (limits.matchLimit !== undefined) {
 			this.matchLimit(limits.matchLimit);
 		}
@@ -322,7 +335,7 @@ export class OutputMetaBuilder {
 			this.headLimit(limits.headLimit);
 		}
 		if (limits.columnMax !== undefined) {
-			this.columnTruncated(limits.columnMax);
+			this.columnTruncated(limits.columnMax, limits.columnTruncatedLines);
 		}
 		return this;
 	}
@@ -342,9 +355,12 @@ export class OutputMetaBuilder {
 	}
 
 	/** Add column truncation notice. No-op if maxColumn <= 0. */
-	columnTruncated(maxColumn: number): this {
+	columnTruncated(maxColumn: number, lines?: number[]): this {
 		if (maxColumn <= 0) return this;
-		this.#meta.limits = { ...this.#meta.limits, columnTruncated: { maxColumn } };
+		this.#meta.limits = {
+			...this.#meta.limits,
+			columnTruncated: lines && lines.length > 0 ? { maxColumn, lines } : { maxColumn },
+		};
 		return this;
 	}
 
@@ -526,7 +542,16 @@ export function formatOutputNotice(meta: OutputMeta | undefined): string {
 		parts.push(`${l.reached} results limit reached. Use limit=${l.suggestion} for more`);
 	}
 	if (meta.limits?.columnTruncated) {
-		parts.push(`Some lines truncated to ${meta.limits.columnTruncated.maxColumn} chars`);
+		const { maxColumn, lines } = meta.limits.columnTruncated;
+		if (lines && lines.length > 0) {
+			const shown =
+				lines.length <= 8 ? lines.join(", ") : `${lines[0]}-${lines[lines.length - 1]} (${lines.length} lines)`;
+			parts.push(
+				`Line${lines.length === 1 ? "" : "s"} ${shown} truncated to ${maxColumn} chars — re-read with :raw (or that line) for the full text before editing it`,
+			);
+		} else {
+			parts.push(`Some lines truncated to ${maxColumn} chars`);
+		}
 	}
 
 	// Diagnostics

@@ -20,6 +20,7 @@ import { canonicalSnapshotKey, getFileSnapshotStore } from "@oh-my-pi/pi-coding-
 import { HashlineFilesystem } from "@oh-my-pi/pi-coding-agent/edit/hashline/filesystem";
 import { writethroughNoop } from "@oh-my-pi/pi-coding-agent/lsp";
 import type { ToolSession } from "@oh-my-pi/pi-coding-agent/tools";
+import { wrapToolWithMetaNotice } from "@oh-my-pi/pi-coding-agent/tools/output-meta";
 import type { ReadToolDetails } from "@oh-my-pi/pi-coding-agent/tools/read";
 import { ReadTool } from "@oh-my-pi/pi-coding-agent/tools/read";
 import { removeWithRetries } from "@oh-my-pi/pi-utils";
@@ -181,5 +182,29 @@ describe("read tool column truncation vs hashline snapshot", () => {
 
 		const after = await fs.readFile(filePath, "utf8");
 		expect(after).toBe(`intro\n${longLine}\nepilogue\n`);
+	});
+
+	it("notice names the truncated line numbers and points at :raw (dogfooding finding)", async () => {
+		// The model reads a file with a long line, sees it ellipsis-truncated,
+		// and must know WHICH line to re-read raw before a paste-back edit —
+		// otherwise the edit fails with an 85% match (the changelog friction).
+		const filePath = path.join(tmpDir, "notices.txt");
+		const longLine = "y".repeat(LONG_LINE_LEN);
+		await fs.writeFile(filePath, `line one\n${longLine}\nline three\n`);
+
+		const session = createSession(tmpDir);
+		// Production wraps read with wrapToolWithMetaNotice (tools/index.ts:733),
+		// which bakes the notice into the LLM-facing content.
+		const tool = wrapToolWithMetaNotice(new ReadTool(session));
+		const result = await tool.execute("call-1", { path: filePath });
+		const text = textOutput(result);
+
+		// The notice names the truncated display line (2) and the :raw escape hatch.
+		expect(text).toContain("Line 2 truncated to 64 chars");
+		expect(text).toContain(":raw");
+		expect(text).toContain("before editing it");
+
+		// The truncated line itself still carries the ellipsis marker.
+		expect(text).toContain("…");
 	});
 });
