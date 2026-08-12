@@ -192,6 +192,13 @@ export interface ContextEvicted {
 	spans: EvictedSpan[];
 	budget: number;
 	usedTokens: number;
+	/**
+	 * Which surface reported the eviction (round-3): "probe" = the agent
+	 * called `kernel.ctx.materialize` with a hard budget; "governor" = the
+	 * provider-context governor compressed the session's real provider
+	 * history. Absent on pre-round-3 events.
+	 */
+	source?: "probe" | "governor";
 }
 
 /** Union of all harness events (blueprint §6). */

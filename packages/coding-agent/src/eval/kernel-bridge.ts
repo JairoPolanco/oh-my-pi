@@ -43,6 +43,7 @@ import {
 import { actorStatusFromRef, encodeAgentMessage, makeAgentMessage } from "../actors/kernel-actors";
 import { stripRetentionProtocolMarkers } from "../hindsight/content";
 import { IrcBus } from "../irc/bus";
+import { kernelStoreScopeFor, normalizeKernelMemoryScope } from "../mnemopi/scope-routing";
 import { AgentLifecycleManager } from "../registry/agent-lifecycle";
 import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
 import type { ToolSession } from "../tools";
@@ -571,7 +572,7 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 				kind: "string",
 				required: false,
 				description:
-					"project (default) | session | global. global requires a configured global bank (mnemopi.scoping=per-project-tagged); without one the call FAILS CLOSED rather than writing to the wrong store",
+					"project (default) | session | user | global. Scope routing is ONE shared table (mnemopi/scope-routing.ts): project/session/user write and recall the project bank; global writes/recalls the global bank and FAILS CLOSED when no global bank is configured (mnemopi.scoping=per-project-tagged)",
 			},
 		},
 	},
@@ -588,7 +589,8 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 			scope: {
 				kind: "string",
 				required: false,
-				description: "project|session|global (global recalls only the global bank)",
+				description:
+					"project|session|user|global (omitted = merge all banks; project/session/user constrain to the project bank; global constrains to the global bank). Single routing table: mnemopi/scope-routing.ts",
 			},
 			minScore: {
 				kind: "number",
@@ -1016,7 +1018,11 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 			// Round-6 verdict: scope was silently dropped on this write —
 			// the event recorded it, storage ignored it, and recall by that
 			// scope could never see it. Thread it to the bank-routing write.
-			const requestedScope = args.scope === "user" || args.scope === "global" ? args.scope : "project";
+			// Normalization comes from the SHARED routing table
+			// (mnemopi/scope-routing.ts) so propose, recall, the state, and
+			// the schema can never drift apart (rounds 5-8 each found a
+			// half-closed seam; the table closes the class).
+			const requestedScope = normalizeKernelMemoryScope(args.scope);
 			const id = live.remember(fact, typeof args.confidence === "number" ? args.confidence : 0.8, requestedScope);
 			if (id) {
 				memoryOwner(options.session).set(id, "mnemopi");
@@ -1025,7 +1031,8 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 						kind: "memory.proposed",
 						factId: id,
 						text: fact,
-						scope: requestedScope,
+						// Event schema uses the kernel scope vocabulary.
+						scope: kernelStoreScopeFor(requestedScope),
 					},
 					{ sessionId: options.session.getSessionId?.() ?? "default" },
 				);
@@ -1035,7 +1042,8 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 		const proposed = await host.memory.propose({
 			fact,
 			confidence: typeof args.confidence === "number" ? args.confidence : 0.8,
-			scope: args.scope === "user" || args.scope === "global" ? args.scope : "project",
+			// Kernel store has no session bank — map via the shared table.
+			scope: kernelStoreScopeFor(args.scope),
 			evidence: [],
 			observedAt: Date.now(),
 			expires: typeof args.expires === "number" ? args.expires : null,
@@ -1124,9 +1132,10 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 			// Round-4 audit (paste-18 P1): the fallback path previously
 			// dropped the query — recall({query:"does-not-exist"}) returned
 			// every committed fact. The query now reaches the backend's
-			// token-overlap filter.
+			// token-overlap filter. Scope normalization derives from the
+			// shared routing table (single source of truth, round-8).
 			query: typeof args.query === "string" ? args.query : undefined,
-			scope: args.scope === "user" || args.scope === "global" ? args.scope : undefined,
+			scope: kernelStoreScopeFor(args.scope),
 			similarity: typeof args.similarity === "number" ? args.similarity : undefined,
 		});
 		return results.map(fact => ({

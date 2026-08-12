@@ -18,6 +18,7 @@ import { extractMessages } from "../hindsight/transcript";
 import type { AgentSession, AgentSessionEvent } from "../session/agent-session";
 import type { MnemopiBackendConfig, MnemopiScoping } from "./config";
 import { mnemopiEmbedClient } from "./embed-client";
+import { recallBankFor, writeBankFor } from "./scope-routing";
 
 // The mnemopi package pulls the embeddings stack; keep it off the CLI startup
 // module graph by loading it lazily at the async boundaries that need it.
@@ -387,22 +388,22 @@ export class MnemopiSessionState {
 	}
 
 	/**
-	 * Recall constrained to ONE scope (round-5 G2): the bridge's live path
-	 * silently dropped `scope` — scope:"global" returned project facts with
-	 * no signal. When a scope is named, recall only the targets whose bank
-	 * matches that scope's bank (global → the global/fallback bank; anything
-	 * else → the retain/project bank). No scope = merged recall across all
-	 * targets (unchanged).
+	 * Recall constrained to ONE scope (round-5 G2, round-8 re-probe): the
+	 * bridge's live path used to silently drop scope — scope:"global"
+	 * returned project facts, and scope:"session" recalled the merged set
+	 * (leaking global facts). The routing is defined in ONE place
+	 * (KERNEL_MEMORY_SCOPE_ROUTING, scope-routing.ts): a named scope
+	 * constrains its bank, an omitted scope merges all banks. The bridge
+	 * and the schema derive from the same table, so the write/read/echo
+	 * surfaces can never drift apart again.
 	 */
 	async recallScoped(query: string, scope?: string): Promise<RecallResult[]> {
-		if (scope !== "global" && scope !== "project" && scope !== "user") {
-			return this.#collectRecallResults(query, undefined);
+		const recall = recallBankFor(scope);
+		if (recall === "merge") return this.#collectRecallResults(query, undefined);
+		if (recall === "global") {
+			return this.#collectRecallResults(query, this.scoped.global?.bank ?? this.config.globalBank ?? "default");
 		}
-		const scopeBank =
-			scope === "global"
-				? (this.scoped.global?.bank ?? this.config.globalBank ?? "default")
-				: this.scoped.retain.bank;
-		return this.#collectRecallResults(query, scopeBank);
+		return this.#collectRecallResults(query, this.scoped.retain.bank);
 	}
 
 	async #collectRecallResults(query: string, onlyBank: string | undefined): Promise<RecallResult[]> {
@@ -485,12 +486,14 @@ export class MnemopiSessionState {
 		// scope:"global" fact into the PROJECT bank — the exact silent-drop
 		// class the round-6 verdict flagged. A requested global write
 		// without a global bank is an ERROR surfaced to the caller, not a
-		// downgrade (checked OUTSIDE the catch so it propagates).
-		if (scope === "global" && !this.globalMemory) {
+		// downgrade (checked OUTSIDE the catch so it propagates). The
+		// write-bank rule comes from the shared routing table so it can
+		// never diverge from the bridge's normalization again.
+		if (writeBankFor(scope) === "global" && !this.globalMemory) {
 			throw new Error(`no global memory bank configured (scope:"global" requested but globalBank is unset)`);
 		}
 		try {
-			if (scope === "global") {
+			if (writeBankFor(scope) === "global") {
 				return this.globalMemory!.remember(memory, options);
 			}
 			return this.scoped.retain.memory.remember(memory, options);

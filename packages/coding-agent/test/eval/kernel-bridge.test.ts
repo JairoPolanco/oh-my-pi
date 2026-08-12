@@ -734,7 +734,7 @@ describe("kernel bridge memory + actors + capabilities", () => {
 					},
 					// G2 (round-5): scope-aware recall routes to the state's
 					// bank-scoped implementation.
-					async recallScoped(query?: string) {
+					async recallScoped() {
 						return [...remembered.entries()].map(([id, memory]) => ({
 							id,
 							content: memory.content,
