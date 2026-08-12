@@ -15,6 +15,12 @@ This repo carries a constitutional kernel (`packages/kernel/`) that governs effe
 - **Durable kernel state via the eval bridge** (`__kernel__`, available inside the eval tool's JS/Python runtime): content-addressed `artifacts`, SQLite `tasks` (durable work graph with leases), `events` (canonical session log), staged `memory` facts, `contracts` (completion contracts with V1–V4 verification), `routing` registry, `harness` version ledger (propose/promote — promote applies only TRUSTED verdicts), and `gateway` status. Every bridge call is capability-gated like a tool. Use `artifacts`/`tasks`/`contracts` for anything that must survive compaction or a later turn — do not rely on long context alone.
 - **Verification**: completion contracts (`__kernel__.contract.create`/`verify`) give you evidence-first, deterministic checks (file exists / pattern / json / command with the SAME capability gate as bash). Use them for deliverables with checkable outcomes; level ≥3 mandates an independent reviewer.
 
+Audits, evaluations, and recursive-improvement rounds run ON the harness, not beside it (see `harness-audit-notice.md`, mounted in the system prompt when the gates are on):
+
+1. **Contract-pin every finding.** Any claim a later round must not re-discover becomes a completion contract with command checks (`contract.create` with `checks`; `contract.verify` re-runs them). A verdict round that found a real issue ships the contract so the fix is verifiable and the finding survives session end.
+2. **Fan out independent evidence threads.** Decompose an audit into independent slices (git arc, benchmark evidence, ledger state, surface drift, hygiene) and spawn one `task` item per slice in a SINGLE batch call with a shared `context`. Never serialize independent reads.
+3. **Sweep the bridge surface before trusting it.** `kernel({ op: "bridge.ops" })` enumerates the live dispatch surface; `kernel({ op: "bridge.schema", name })` returns exact arg shapes. Never audit "what the docs promise" without checking "what the bridge actually serves" — a surface that advertises control but cannot complete its purpose is a finding.
+
 Rule of thumb: **short-lived working context lives in the conversation; anything load-bearing (evidence, task state, findings you'll need after eviction) goes into the kernel's durable surfaces.**
 
 ### Package Structure

@@ -71,7 +71,7 @@ import { initializeWithSettings } from "./discovery";
 import { withOmpExtensionRootScope } from "./discovery/omp-extension-roots";
 import { disposeAllJuliaKernelSessions, disposeJuliaKernelSessionsByOwner } from "./eval/jl/executor";
 import { disposeVmContextsByOwner } from "./eval/js/context-manager";
-import { type KernelSessionAdapter, kernelHostFor } from "./eval/kernel-bridge";
+import { type KernelSessionAdapter, kernelEffectGateEnabled, kernelHostFor } from "./eval/kernel-bridge";
 import { disposeAllKernelSessions, disposeKernelSessionsByOwner } from "./eval/py/executor";
 import { disposeAllRubyKernelSessions, disposeRubyKernelSessionsByOwner } from "./eval/rb/executor";
 import { defaultEvalSessionId } from "./eval/session-id";
@@ -120,6 +120,7 @@ import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } fr
 import { createSessionMemoryRuntimeContext, resolveMemoryBackend } from "./memory-backend";
 import { MEMORY_BACKEND_TOOL_NAMES } from "./memory-backend/tool-names";
 import type { MnemopiSessionState } from "./mnemopi/state";
+import harnessAuditNoticeTemplate from "./prompts/system/harness-audit-notice.md" with { type: "text" };
 import mcpXdevGuidanceTemplate from "./prompts/system/mcp-xdev-guidance.md" with { type: "text" };
 import lateDiagnosticTemplate from "./prompts/tools/lsp-late-diagnostic.md" with { type: "text" };
 import { AgentLifecycleManager } from "./registry/agent-lifecycle";
@@ -2850,6 +2851,15 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			const appendParts: string[] = [];
 			if (memoryInstructions) appendParts.push(memoryInstructions);
 			if (autoLearnInstructions) appendParts.push(autoLearnInstructions);
+			// Harness-native audit protocol: only when the constitutional kernel
+			// effect gate is armed (omjai launcher). Plain `omp` never sets the
+			// env var, so stock sessions pay no prompt weight and get no
+			// harness-specific behavior mandates. Restricted subagents skip it
+			// too — the guidance targets the main session's audit loop, not
+			// bounded child tool surfaces.
+			if (!restrictToolNames && kernelEffectGateEnabled()) {
+				appendParts.push(harnessAuditNoticeTemplate);
+			}
 			const projection = projectMountedMCPXdevGuidance(
 				collectMountedMCPToolRoutes(toolSession.xdev ? listXdevTools(toolSession.xdev) : []),
 			);
