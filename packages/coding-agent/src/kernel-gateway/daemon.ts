@@ -61,6 +61,50 @@ async function daemonServesHarnessMethods(endpoint: { hostname: string; port: nu
 	}
 }
 
+/**
+ * One authenticated harness-scoped RPC call to the project kernel gateway
+ * (round-14 prompt-2: shared by the skill executor and the auto-executor
+ * lifecycle, both of which must consult the daemon ledger). Bearer token
+ * upgrades the caller to the harness operator; anonymous would be denied.
+ * Returns the result, or null when the gateway is unreachable or the call
+ * failed (callers degrade gracefully — never crash the sweep).
+ */
+export async function gatewayRpc(opts: {
+	projectDir: string;
+	method: string;
+	args: Record<string, unknown>;
+	runtimeDir?: string;
+	signal?: AbortSignal;
+}): Promise<unknown | null> {
+	let endpoint: KernelGatewayEndpoint | null = null;
+	try {
+		const runtimeDir = opts.runtimeDir ?? (await daemonRuntimeDirFor(opts.projectDir));
+		endpoint = await ensureKernelGateway({
+			projectDir: opts.projectDir,
+			signal: opts.signal,
+			runtimeDir,
+		});
+		if (!endpoint) return null;
+		const token = await readOrCreateToken(runtimeDir);
+		const response = await fetch(endpoint.httpUrl, {
+			method: "POST",
+			headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+			body: JSON.stringify({ method: opts.method, args: opts.args }),
+		});
+		if (!response.ok) return null;
+		const body = (await response.json()) as { ok: boolean; result?: unknown };
+		return body.ok ? (body.result ?? null) : null;
+	} catch {
+		return null;
+	} finally {
+		// Release the broker presence lease (round-14 prompt-2: the executor
+		// never exited because ensureKernelGateway held its broker client
+		// open). One-shot RPC callers must not keep the lease; the daemon
+		// survives a 5s idle grace and restarts on next use.
+		endpoint?.dispose?.();
+	}
+}
+
 /** Live kernel gateway endpoint for one project scope. */
 export interface KernelGatewayEndpoint {
 	hostname: string;
@@ -71,6 +115,14 @@ export interface KernelGatewayEndpoint {
 	wsUrl: string;
 	daemonName: string;
 	projectDir: string;
+	/**
+	 * Release the broker presence lease (round-14 prompt-2: the executor
+	 * never exited — ensureKernelGateway holds its broker client open as the
+	 * daemon's keep-alive, so a one-shot script that called it hung until
+	 * timeout). The daemon survives a 5s idle grace after the last client
+	 * closes, so one-shot RPC callers should dispose after use.
+	 */
+	dispose?: () => void;
 }
 
 /**
@@ -111,7 +163,9 @@ export async function ensureKernelGateway(opts: {
 				await stopQuietly(client, KERNEL_GATEWAY_DAEMON_NAME, "Kernel gateway", opts.signal);
 				continue;
 			}
-			if (endpoint) return makeEndpoint(opts.projectDir, client.projectDir, endpoint);
+			if (endpoint) {
+				return makeEndpoint(opts.projectDir, client.projectDir, endpoint, () => client.close());
+			}
 			// Live record but no ready banner (wedged or never bound): replace it.
 			await stopQuietly(client, KERNEL_GATEWAY_DAEMON_NAME, "Kernel gateway", opts.signal);
 			continue;
@@ -157,7 +211,9 @@ export async function ensureKernelGateway(opts: {
 				READY_TIMEOUT_MS,
 			);
 			const endpoint = settled ? kernelGatewayEndpointOf(settled.readyMatch) : null;
-			if (endpoint) return makeEndpoint(opts.projectDir, client.projectDir, endpoint);
+			if (endpoint) {
+				return makeEndpoint(opts.projectDir, client.projectDir, endpoint, () => client.close());
+			}
 			await stopQuietly(client, KERNEL_GATEWAY_DAEMON_NAME, "Kernel gateway", opts.signal);
 		} catch (error) {
 			opts.signal?.throwIfAborted();
@@ -175,6 +231,7 @@ function makeEndpoint(
 	_requestedProjectDir: string,
 	brokerProjectDir: string,
 	ep: { hostname: string; port: number },
+	dispose?: () => void,
 ): KernelGatewayEndpoint {
 	const base = `http://${ep.hostname}:${ep.port}`;
 	return {
@@ -184,6 +241,7 @@ function makeEndpoint(
 		wsUrl: `ws://${ep.hostname}:${ep.port}/ws`,
 		daemonName: KERNEL_GATEWAY_DAEMON_NAME,
 		projectDir: brokerProjectDir,
+		dispose,
 	};
 }
 

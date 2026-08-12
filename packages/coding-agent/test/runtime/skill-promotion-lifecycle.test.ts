@@ -7,6 +7,7 @@ import { parseInternalUrl } from "@oh-my-pi/pi-coding-agent/internal-urls/parse"
 import { SkillProtocolHandler } from "@oh-my-pi/pi-coding-agent/internal-urls/skill-protocol";
 import { KernelHost } from "@oh-my-pi/pi-kernel";
 import { getAgentDir, setAgentDir } from "@oh-my-pi/pi-utils/dirs";
+import * as daemonModule from "../../src/kernel-gateway/daemon";
 import { SkillPromotionLifecycle } from "../../src/runtime/skill-promotion-lifecycle";
 import type { CreateAgentSessionResult } from "../../src/sdk";
 import * as sdkModule from "../../src/sdk";
@@ -185,6 +186,61 @@ describe("SkillPromotionLifecycle", () => {
 		// No promote verdict was recorded.
 		const promoted = host.versions.all.find(v => v.evaluation?.decision === "promote");
 		expect(promoted).toBeUndefined();
+	});
+
+	test("staged skill with a daemon-ledger reject verdict is NOT promoted even when replay + heldout pass (round-14 prompt-2)", async () => {
+		// The rigorous executor recorded a reject for this skill on the DAEMON
+		// ledger; the weaker interactive bar must not override it 3 minutes
+		// later. Mock the daemon RPC to return a versions list with a reject
+		// for the staged skill.
+		await stageSkill("rejected-skill", "# Rejected\n\nBody.");
+		vi.spyOn(sdkModule, "createAgentSession").mockResolvedValue({
+			session: fakeReplaySession("I used rejected-skill and it worked, completing the task successfully."),
+			modelFallbackMessage: undefined,
+		} as unknown as CreateAgentSessionResult);
+		const daemonSpy = vi.spyOn(daemonModule, "gatewayRpc").mockResolvedValue([
+			{
+				number: 3,
+				parent: 0,
+				hypothesis: {
+					change: { id: "managed-skills staging/rejected-skill" },
+					hypothesis: 'promoting staged skill "rejected-skill" improves task success',
+				},
+				evaluation: { decision: "reject", reason: "reject: skill fails paired gate" },
+			},
+		] as never);
+		Bun.env.OMP_KERNEL_GATEWAY_PROJECT_DIR = testDir;
+
+		const session = makeSession([{ role: "user", content: [{ type: "text", text: "Do the rejected task." }] }]);
+		const fake = session as unknown as FakeSession;
+		const lifecycle = new SkillPromotionLifecycle({ session, host });
+		lifecycle.attach();
+
+		for (let t = 0; t < 3; t++) fake.emit({ type: "turn_end" });
+
+		// Poll until the daemon check fires (the sweep is async — SOURCE.txt
+		// is written before the probes complete, so poll the observable the
+		// fix produces, not the intermediate file).
+		let checked = false;
+		for (let i = 0; i < 40; i++) {
+			if (daemonSpy.mock.calls.length > 0) {
+				checked = true;
+				break;
+			}
+			await Bun.sleep(100);
+		}
+		expect(checked).toBe(true);
+
+		// The daemon reject won: the skill STAYS staged, no promote recorded.
+		const stagedPath = path.join(getManagedSkillStagingDir(), "rejected-skill", "SKILL.md");
+		const stillStaged = await fs
+			.readFile(stagedPath, "utf8")
+			.then(() => true)
+			.catch(() => false);
+		expect(stillStaged).toBe(true);
+		const promoted = host.versions.all.find(v => v.evaluation?.decision === "promote");
+		expect(promoted).toBeUndefined();
+		delete Bun.env.OMP_KERNEL_GATEWAY_PROJECT_DIR;
 	});
 
 	test("subagent-kind sessions never sweep (main-only cadence — no concurrent promotion race)", async () => {

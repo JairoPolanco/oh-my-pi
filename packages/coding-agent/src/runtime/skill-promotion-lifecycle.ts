@@ -43,6 +43,7 @@ import {
 	stagedSkillSourceFile,
 } from "../autolearn/managed-skills";
 import { Settings, type Settings as SettingsType } from "../config/settings";
+import { gatewayRpc } from "../kernel-gateway/daemon";
 import type { AgentSession, AgentSessionEvent } from "../session/agent-session";
 
 /** Sweep cadence: at most one staged skill evaluated per N turn ends. */
@@ -143,6 +144,20 @@ export class SkillPromotionLifecycle {
 		});
 
 		if (promoted) {
+			// Round-14 prompt-2 finding: the interactive bar is WEAKER than
+			// the rigorous executor's sandbox→replay→heldout gate. A skill
+			// the rigorous executor REJECTED must not be promoted by this
+			// weaker bar 3 minutes later — consult the daemon ledger's last
+			// verdict for this skill first (the executor records there via
+			// the trusted-operator RPC). A daemon reject wins; a missing
+			// gateway is a no-op (degrade gracefully, never crash the sweep).
+			const daemonRejected = await this.#daemonLedgerRejectedSkill(name);
+			if (daemonRejected) {
+				logger.info("skill promotion skipped: rigorous executor rejected this skill on the daemon ledger", {
+					skill: name,
+				});
+				return;
+			}
 			try {
 				const result = await promoteManagedSkill(name);
 				// Record the trusted verdict in the harness ledger.
@@ -169,6 +184,48 @@ export class SkillPromotionLifecycle {
 			} catch (error) {
 				logger.warn("skill promotion failed (best-effort)", { skill: name, error: String(error) });
 			}
+		}
+	}
+
+	/**
+	 * Round-14 prompt-2: does the DAEMON ledger hold a reject verdict for
+	 * this skill? The rigorous executor records there (trusted-operator
+	 * RPC); the auto-executor must not override a rigorous reject with the
+	 * weaker interactive bar. Best-effort: a missing gateway (no broker /
+	 * daemon) returns false — the sweep proceeds, which is the pre-existing
+	 * behavior for gate-off environments.
+	 */
+	async #daemonLedgerRejectedSkill(name: string): Promise<boolean> {
+		const projectDir = Bun.env.OMP_KERNEL_GATEWAY_PROJECT_DIR;
+		if (!projectDir) return false;
+		try {
+			const versions = (await gatewayRpc({
+				projectDir,
+				method: "harness.versions",
+				args: {},
+			})) as Array<{
+				hypothesis: { change?: { id?: string }; hypothesis?: string } | null;
+				evaluation: { decision?: string } | null;
+			}> | null;
+			if (!Array.isArray(versions)) return false;
+			// Find the LATEST version whose hypothesis references this skill.
+			for (let index = versions.length - 1; index >= 0; index--) {
+				const version = versions[index]!;
+				const hypothesis = version.hypothesis;
+				if (!hypothesis) continue;
+				const changeId = hypothesis.change?.id ?? "";
+				const text = hypothesis.hypothesis ?? "";
+				if (changeId.includes(name) || text.includes(`"${name}"`)) {
+					return version.evaluation?.decision === "reject";
+				}
+			}
+			return false;
+		} catch (error) {
+			logger.warn("daemon ledger check failed (skill promotion proceeds)", {
+				skill: name,
+				error: String(error),
+			});
+			return false;
 		}
 	}
 

@@ -29,9 +29,7 @@ import {
 	promoteManagedSkill,
 	sanitizeSkillName,
 } from "@oh-my-pi/pi-coding-agent/autolearn/managed-skills";
-import { ensureKernelGateway } from "@oh-my-pi/pi-coding-agent/kernel-gateway/daemon";
-import { readOrCreateToken } from "@oh-my-pi/pi-coding-agent/launch/client";
-import { daemonRuntimeDir } from "@oh-my-pi/pi-coding-agent/launch/paths";
+import { gatewayRpc as gatewayRpcShared } from "@oh-my-pi/pi-coding-agent/kernel-gateway/daemon";
 import { evaluateSkillPromotion, type SkillPromotionEvidence } from "@oh-my-pi/pi-kernel";
 import { parseFrontmatter } from "@oh-my-pi/pi-utils";
 
@@ -107,18 +105,10 @@ console.log(`  ${evaluation.verdict.reason}`);
 // the executor IS the trusted evaluator, and the verdict lands where
 // harness.promote can apply it.
 async function gatewayRpc(method: string, args: Record<string, unknown>): Promise<unknown> {
-	const endpoint = await ensureKernelGateway({ projectDir: REPO });
-	if (!endpoint) throw new Error("kernel gateway unavailable — cannot record the verdict");
-	const token = await readOrCreateToken(daemonRuntimeDir(REPO));
-	const response = await fetch(endpoint.httpUrl, {
-		method: "POST",
-		headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-		body: JSON.stringify({ method, args }),
-	});
-	if (!response.ok) throw new Error(`gateway RPC ${method} failed: HTTP ${response.status}`);
-	const body = (await response.json()) as { ok: boolean; result?: unknown; error?: string };
-	if (!body.ok) throw new Error(`gateway RPC ${method} denied: ${body.error ?? "unknown"}`);
-	return body.result;
+	const result = await gatewayRpcShared({ projectDir: REPO, method, args });
+	if (result === null)
+		throw new Error(`kernel gateway RPC ${method} failed or unavailable — cannot record the verdict`);
+	return result;
 }
 
 const proposed = (await gatewayRpc("harness.hypothesis", {

@@ -136,7 +136,20 @@ export async function runKernelGatewayWorker(): Promise<void> {
 	gateway.registerMethod({
 		name: "harness.versions",
 		scope: "harness",
-		execute: async () => ledger.all.map(v => ({ number: v.number, parent: v.parent, evaluation: v.evaluation })),
+		// Full records (round-14 prompt-2 finding): the stripped
+		// {number, parent, evaluation} shape hid WHICH skill a verdict
+		// belonged to — the auto-executor lifecycle could not match a daemon
+		// reject to a staged skill, so it promoted what the rigorous
+		// executor had rejected. Mirror the session bridge's round-11 S4
+		// shape: hypothesis included.
+		execute: async () =>
+			ledger.all.map(v => ({
+				number: v.number,
+				parent: v.parent,
+				hypothesis: v.hypothesis,
+				evaluation: v.evaluation,
+				rollbackTarget: v.rollbackTarget,
+			})),
 	});
 	gateway.registerMethod({
 		name: "harness.promote",
