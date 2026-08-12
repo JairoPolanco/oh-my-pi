@@ -531,7 +531,12 @@ export class ManagerServer {
 		void maybeRecordExperimentVerdict({
 			store: this.#store,
 			jobName,
-			projectDir: this.jobsDir,
+			// The kernel gateway daemon is scoped to the REPO ROOT — the same
+			// scope sessions attach to via OMP_KERNEL_GATEWAY_PROJECT_DIR.
+			// Round-14 c8: passing jobsDir (runs/harbor) targeted a DIFFERENT
+			// daemon/ledger/token than the one sessions read, so verdicts
+			// landed where nobody looked.
+			projectDir: REPO_ROOT,
 		});
 	}
 

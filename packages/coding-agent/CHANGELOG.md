@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Kernel gateway daemon stale-adoption (round-14 c4): `ensureKernelGateway` adopted a live daemon with no capability check — a daemon started before the round-13 verdict methods landed (22h in the audit's case) answered no `harness.*` methods and the metaharness dropped every verdict indefinitely. The adoption path now probes the daemon's method roster via anonymous `gateway.status` and replaces it when the harness verdict surface is missing.
+- Skill promotion executor recording (round-14 c5): the rigorous `evaluateSkillPromotion` gate recorded its verdict via the session bridge's `harness.recordEvaluation`, which requires the `harness.evaluate` capability NO principal holds — bootstrapping Main with only propose/promote/read was denied at runtime, so the gate could never record. The executor now records through the daemon's trusted-operator RPC (bearer token → harness scope), the working route, and applies a promote verdict immediately.
+
 ### Added
 
 - Kernel gateway daemon exposes the trusted-verdict ledger cross-process (round-13 close-out): the daemon now owns a project-scoped `HarnessVersionLedger` (runtime dir) and registers `harness.hypothesis` (propose), `harness.recordEvaluation`, `harness.versions`, and `harness.promote` as HTTP RPC methods. Callers presenting the project's broker token are upgraded to the harness-scoped operator; anonymous callers stay default-deny. Before this, the gateway-operator path (host.ts) had ZERO callers — the metaharness had no method to reach, so benchmark evidence never became `harness.promote` verdicts.

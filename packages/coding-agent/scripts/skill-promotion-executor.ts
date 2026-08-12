@@ -29,10 +29,11 @@ import {
 	promoteManagedSkill,
 	sanitizeSkillName,
 } from "@oh-my-pi/pi-coding-agent/autolearn/managed-skills";
+import { ensureKernelGateway } from "@oh-my-pi/pi-coding-agent/kernel-gateway/daemon";
+import { readOrCreateToken } from "@oh-my-pi/pi-coding-agent/launch/client";
+import { daemonRuntimeDir } from "@oh-my-pi/pi-coding-agent/launch/paths";
 import { evaluateSkillPromotion, type SkillPromotionEvidence } from "@oh-my-pi/pi-kernel";
 import { parseFrontmatter } from "@oh-my-pi/pi-utils";
-import { kernelHostFor, runKernelBridge } from "../src/eval/kernel-bridge";
-import type { ToolSession } from "../src/tools";
 
 const REPO = "/Users/jairopolanco/Projects/oh-my-pi";
 
@@ -83,14 +84,6 @@ async function buildEvidence(): Promise<SkillPromotionEvidence> {
 	return { skill: name, paired, heldOut };
 }
 
-/** Bridge adapter: the verdict is recorded as the bootstrapped Main. */
-const session = {
-	cwd: REPO,
-	getSessionId: () => `skill-promote-${name}`,
-	getKernelSessionId: () => `skill-promote-${name}`,
-	getAgentId: () => "Main",
-} as unknown as ToolSession;
-
 const staged = await readStagedSkill();
 if (!staged) {
 	console.error(`Skill "${name}" is not staged (no staging/${name}/SKILL.md). Nothing to evaluate.`);
@@ -105,41 +98,47 @@ console.log(
 );
 console.log(`  ${evaluation.verdict.reason}`);
 
-// Record the TRUSTED verdict into the harness ledger (the same authoritative
-// path as the Context VM promotion — the candidate cannot self-certify).
-// The ledger requires a proposed version to attach the verdict to.
-const host = await kernelHostFor(session);
-host.capabilities.bootstrap("Main", [
-	{ id: "harness.propose", scope: "harness", effect: "write" },
-	{ id: "harness.promote", scope: "harness", effect: "execute" },
-	{ id: "harness.read", scope: "harness", effect: "read" },
-]);
-const proposed = (await runKernelBridge(
-	{
-		op: "harness.hypothesis",
-		component: "skill",
-		observation: `staged skill "${name}" awaits sandbox→replay→heldout evaluation`,
-		hypothesis: `promoting staged skill "${name}" improves task success on its target slice without regressing held-out generalization`,
-		prediction: [
-			{ metric: "target-success", expectedDelta: 1.0, tolerance: 0.0 },
-			{ metric: "heldout-success", expectedDelta: 0.0, tolerance: 0.5 },
-		],
-		change: { kind: "patch", spec: `managed-skills staging/${name}` },
-		author: "skill-evaluator",
-	},
-	{ session },
-)) as { version: number };
+// Record the TRUSTED verdict into the harness ledger via the kernel gateway
+// daemon RPC (round-14 c5 fix). The session bridge's harness.recordEvaluation
+// requires the harness.evaluate capability, which NO principal holds — the
+// old path bootstrapped Main with only propose/promote/read and was denied
+// at runtime, so the rigorous gate could never record. The daemon's
+// trusted-operator path (bearer token → harness scope) is the working route:
+// the executor IS the trusted evaluator, and the verdict lands where
+// harness.promote can apply it.
+async function gatewayRpc(method: string, args: Record<string, unknown>): Promise<unknown> {
+	const endpoint = await ensureKernelGateway({ projectDir: REPO });
+	if (!endpoint) throw new Error("kernel gateway unavailable — cannot record the verdict");
+	const token = await readOrCreateToken(daemonRuntimeDir(REPO));
+	const response = await fetch(endpoint.httpUrl, {
+		method: "POST",
+		headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+		body: JSON.stringify({ method, args }),
+	});
+	if (!response.ok) throw new Error(`gateway RPC ${method} failed: HTTP ${response.status}`);
+	const body = (await response.json()) as { ok: boolean; result?: unknown; error?: string };
+	if (!body.ok) throw new Error(`gateway RPC ${method} denied: ${body.error ?? "unknown"}`);
+	return body.result;
+}
+
+const proposed = (await gatewayRpc("harness.hypothesis", {
+	component: "skill",
+	observation: `staged skill "${name}" awaits sandbox→replay→heldout evaluation`,
+	hypothesis: `promoting staged skill "${name}" improves task success on its target slice without regressing held-out generalization`,
+	change: `managed-skills staging/${name}`,
+})) as { version: number };
 console.log(`proposed harness version ${proposed.version} for skill "${name}"`);
-const recorded = (await runKernelBridge(
-	{
-		op: "harness.recordEvaluation",
-		version: proposed.version,
-		decision: evaluation.verdict.promote ? "promote" : "reject",
-		reason: evaluation.verdict.reason,
-	},
-	{ session },
-)) as { version: number; decision: string };
+const recorded = (await gatewayRpc("harness.recordEvaluation", {
+	version: proposed.version,
+	decision: evaluation.verdict.promote ? "promote" : "reject",
+	reason: evaluation.verdict.reason,
+})) as { version: number; decision: string };
 console.log(`verdict recorded in harness ledger: ${recorded.decision} (v${recorded.version})`);
+// A promote verdict is applied immediately on the daemon (round-14 c3).
+if (evaluation.verdict.promote) {
+	await gatewayRpc("harness.promote", { version: proposed.version });
+	console.log(`harness version ${proposed.version} promoted`);
+}
 
 // Promote ONLY on measured improvement — the evidence gate's teeth.
 let promotedPath: string | null = null;
@@ -174,4 +173,3 @@ await Bun.write(
 	)}\n`,
 );
 console.log("record -> research_logs/skill_promotion_001.jsonl");
-await host.close?.().catch(() => {});

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { TempDir } from "@oh-my-pi/pi-utils";
@@ -291,6 +291,68 @@ describe("kernel gateway daemon under the broker", () => {
 			// A reject verdict never promotes.
 			const promoted = await rpc("harness.promote", { version }, token);
 			expect(promoted.ok).toBe(false);
+		} finally {
+			await client.request({ op: "stop", name: KERNEL_GATEWAY_DAEMON_NAME, timeoutMs: 5_000 }).catch(() => {});
+			await client.request({ op: "shutdown" }).catch(() => {});
+			client.close();
+			await broker;
+		}
+	}, 45_000);
+
+	test("ensureKernelGateway replaces a stale daemon whose roster lacks the harness methods (round-14 c4)", async () => {
+		using tempDir = TempDir.createSync("@omp-kernel-gateway-stale-");
+		const projectDir = path.join(tempDir.path(), "project");
+		const runtimeDir = path.join(tempDir.path(), "runtime");
+		await fs.mkdir(projectDir);
+
+		const client = await createDaemonBrokerClient(projectDir, { runtimeDir, idleGraceMs: 5_000 });
+		const previousProjectDir = process.env[DAEMON_PROJECT_DIR_ENV];
+		const previousRuntimeDir = process.env[DAEMON_RUNTIME_DIR_ENV];
+		const previousGrace = process.env[DAEMON_IDLE_GRACE_ENV];
+		process.env[DAEMON_PROJECT_DIR_ENV] = projectDir;
+		process.env[DAEMON_RUNTIME_DIR_ENV] = runtimeDir;
+		process.env[DAEMON_IDLE_GRACE_ENV] = "5000";
+		const broker = startDaemonBrokerFromEnvironment();
+		restoreEnv(DAEMON_PROJECT_DIR_ENV, previousProjectDir);
+		restoreEnv(DAEMON_RUNTIME_DIR_ENV, previousRuntimeDir);
+		restoreEnv(DAEMON_IDLE_GRACE_ENV, previousGrace);
+
+		try {
+			const { ensureKernelGateway } = await import("../../src/kernel-gateway/daemon");
+			// First ensure spawns a HEALTHY daemon (current build serves the
+			// harness methods) → adopted, endpoint returned.
+			const healthy = await ensureKernelGateway({ projectDir, runtimeDir });
+			expect(healthy).not.toBeNull();
+
+			// Simulate a STALE daemon: mock the anonymous roster probe
+			// (gateway.status) to report methods WITHOUT the harness surface.
+			// ensureKernelGateway must stop + restart instead of adopting it.
+			const realFetch = globalThis.fetch;
+			let staleProbes = 0;
+			const fetchMock = (async (input: string | URL | Request, init?: RequestInit) => {
+				const url = String(input);
+				const body = typeof init?.body === "string" ? JSON.parse(init.body) : {};
+				if (url.endsWith("/rpc") && body.method === "gateway.status") {
+					staleProbes++;
+					return new Response(
+						JSON.stringify({
+							ok: true,
+							result: { methods: ["gateway.status", "runtime.register"], runtimes: [] },
+						}),
+						{ status: 200, headers: { "content-type": "application/json" } },
+					);
+				}
+				return realFetch(input, init);
+			}) as typeof fetch;
+			spyOn(globalThis, "fetch").mockImplementation(fetchMock);
+			try {
+				const replaced = await ensureKernelGateway({ projectDir, runtimeDir });
+				expect(replaced).not.toBeNull();
+				// The stale roster was probed at least once before replacement.
+				expect(staleProbes).toBeGreaterThan(0);
+			} finally {
+				spyOn(globalThis, "fetch").mockRestore();
+			}
 		} finally {
 			await client.request({ op: "stop", name: KERNEL_GATEWAY_DAEMON_NAME, timeoutMs: 5_000 }).catch(() => {});
 			await client.request({ op: "shutdown" }).catch(() => {});

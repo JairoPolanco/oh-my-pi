@@ -32,6 +32,35 @@ const READY_TIMEOUT_MS = 30_000;
 /** describe→start rounds; bounds cross-process start races and wedged-gateway replacement. */
 const ENSURE_ATTEMPTS = 3;
 
+/** Verdict methods the harness loop needs on the daemon (round-14 c4). */
+const HARNESS_GATEWAY_METHODS = [
+	"harness.hypothesis",
+	"harness.recordEvaluation",
+	"harness.versions",
+	"harness.promote",
+] as const;
+
+/**
+ * Probe a live daemon's method roster for the harness verdict surface.
+ * `gateway.status` is scope-less (answers anonymously); a pre-round-13
+ * daemon lacks the harness.* methods and must be replaced, not adopted.
+ */
+async function daemonServesHarnessMethods(endpoint: { hostname: string; port: number }): Promise<boolean> {
+	try {
+		const response = await fetch(`http://${endpoint.hostname}:${endpoint.port}/rpc`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ method: "gateway.status", args: {} }),
+		});
+		if (!response.ok) return false;
+		const body = (await response.json()) as { ok: boolean; result?: { methods: string[] } };
+		if (!body.ok || !body.result?.methods) return false;
+		return HARNESS_GATEWAY_METHODS.every(method => body.result!.methods.includes(method));
+	} catch {
+		return false;
+	}
+}
+
 /** Live kernel gateway endpoint for one project scope. */
 export interface KernelGatewayEndpoint {
 	hostname: string;
@@ -69,6 +98,19 @@ export async function ensureKernelGateway(opts: {
 					? existing
 					: await waitReady(client, KERNEL_GATEWAY_DAEMON_NAME, "Kernel gateway", opts.signal, READY_TIMEOUT_MS);
 			const endpoint = settled ? kernelGatewayEndpointOf(settled.readyMatch) : null;
+			// Round-14 c4: a live daemon may predate the current build (e.g.
+			// the round-13 verdict methods landed after a daemon that had
+			// already been running for 22h). Adopting it silently leaves the
+			// metaharness talking to a daemon that answers no harness.*
+			// methods — verdicts drop forever. Probe the adopted daemon's
+			// method roster; replace it when the verdict surface is missing.
+			if (endpoint && !(await daemonServesHarnessMethods(endpoint))) {
+				logger.warn("kernel gateway daemon is stale (no harness verdict methods); replacing", {
+					projectDir: opts.projectDir,
+				});
+				await stopQuietly(client, KERNEL_GATEWAY_DAEMON_NAME, "Kernel gateway", opts.signal);
+				continue;
+			}
 			if (endpoint) return makeEndpoint(opts.projectDir, client.projectDir, endpoint);
 			// Live record but no ready banner (wedged or never bound): replace it.
 			await stopQuietly(client, KERNEL_GATEWAY_DAEMON_NAME, "Kernel gateway", opts.signal);

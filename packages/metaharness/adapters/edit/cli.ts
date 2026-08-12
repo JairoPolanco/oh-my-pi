@@ -24,6 +24,10 @@ import { maybeRecordExperimentVerdict } from "../../src/verdict-gateway";
 
 const EDIT_PACKAGE = path.resolve(import.meta.dir, "..", "..", "..", "typescript-edit-benchmark");
 const RUNS_DIR = path.resolve(import.meta.dir, "..", "..", "..", "..", "runs");
+// The kernel gateway daemon is scoped to the REPO ROOT (sessions attach via
+// OMP_KERNEL_GATEWAY_PROJECT_DIR); round-14 c8 — a jobsDir-scoped target hit
+// a different daemon/ledger than the one sessions read.
+const REPO_ROOT = path.resolve(import.meta.dir, "..", "..", "..", "..");
 
 type ReportFormat = "markdown" | "json";
 
@@ -57,7 +61,7 @@ async function registerRunDurably(opts: {
 		store.markExit(jobName, 0);
 		log(`  Run registered in store: ${jobName}`);
 		if (harnessVersion !== undefined) {
-			void maybeRecordExperimentVerdict({ store, jobName, projectDir: jobsDir });
+			void maybeRecordExperimentVerdict({ store, jobName, projectDir: REPO_ROOT });
 		}
 	} finally {
 		store.close();
