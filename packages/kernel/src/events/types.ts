@@ -103,6 +103,8 @@ export interface ToolCompleted {
 	/** Content-addressed outputs produced by the tool. */
 	artifacts?: ArtifactRef[];
 	latencyMs?: number;
+	/** Estimated output text bytes (profiler signal: 4 chars ≈ 1 token ≈ per-turn cache cost). */
+	outputBytes?: number;
 }
 
 /** An artifact was created. */

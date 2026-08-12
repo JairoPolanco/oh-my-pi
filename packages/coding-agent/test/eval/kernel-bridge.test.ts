@@ -450,6 +450,35 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(stats.models[0].outputTokens).toBe(1200);
 	});
 
+	test("perf.profile ranks tools by latency with output bytes (harness profiler)", async () => {
+		// The profiler aggregates tool.completed events (which the trajectory
+		// tap emits with latencyMs + outputBytes) into per-tool percentiles,
+		// ranked by total latency — so the highest-cost tools surface first.
+		const host = await kernelHostFor(makeSession());
+		host.events.append({ kind: "tool.completed", tool: "read", ok: true, latencyMs: 3000, outputBytes: 50000 });
+		host.events.append({ kind: "tool.completed", tool: "read", ok: true, latencyMs: 9000, outputBytes: 2000 });
+		host.events.append({ kind: "tool.completed", tool: "eval", ok: true, latencyMs: 15000, outputBytes: 100 });
+		host.events.append({ kind: "tool.completed", tool: "eval", ok: false, latencyMs: 56000, outputBytes: 0 });
+		host.events.append({ kind: "tool.completed", tool: "glob", ok: true, latencyMs: 25000, outputBytes: 800 });
+
+		const profile = (await call("perf.profile", {})) as {
+			tools: {
+				tool: string;
+				calls: number;
+				ok: number;
+				latencyMs: { p50: number; max: number; total: number };
+				outputBytes: { total: number };
+			}[];
+		};
+		// Ranked by total latency: eval (71s) > glob (25s) > read (12s).
+		expect(profile.tools.map(t => t.tool)).toEqual(["eval", "glob", "read"]);
+		const evalRow = profile.tools[0]!;
+		expect(evalRow.calls).toBe(2);
+		expect(evalRow.ok).toBe(1); // one failed call counted, not dropped
+		expect(evalRow.latencyMs.max).toBe(56000);
+		expect(profile.tools[2]!.outputBytes.total).toBe(52000); // read: 50k + 2k
+	});
+
 	test("policy.authorize enforces default-deny + granted capabilities", async () => {
 		// "Worker" has no grants (Main carries the full bootstrapped
 		// baseline) — default deny holds for the unprivileged principal.

@@ -39,14 +39,60 @@ export class KernelTrajectoryTap {
 	}
 
 	/**
+	 * toolCallId → start timestamp for latency profiling (harness profiler,
+	 * round-11): tool.completed events previously carried no latency — the
+	 * tap never populated the field, so bottlenecks were invisible.
+	 */
+	#toolStarts = new Map<string, number>();
+	/** toolCallId → output bytes produced (profiler signal: big outputs = cache + latency cost). */
+	#toolOutputBytes = new Map<string, number>();
+
+	/**
 	 * Attach the tap. Subscribe first, then the model hook; returns a single
 	 * detach that removes both.
 	 */
 	attach(): () => void {
 		if (this.#detachSubscribe) return () => this.detach();
 		this.#detachSubscribe = this.#session.agent.subscribe((event: OmpAgentEvent) => {
+			if (event.type === "tool_execution_start") {
+				this.#toolStarts.set((event as { toolCallId: string }).toolCallId, Date.now());
+			}
+			if (event.type === "tool_execution_end") {
+				// Profiler: estimate output bytes from the result text blocks
+				// (4 chars ≈ 1 token ≈ the per-turn cache cost). The start
+				// timestamp is consumed below in the translated inject.
+				const toolEvent = event as {
+					toolCallId: string;
+					result?: { content?: unknown };
+				};
+				let bytes = 0;
+				const content = toolEvent.result?.content;
+				if (Array.isArray(content)) {
+					for (const block of content) {
+						if (block && typeof block === "object" && (block as { type?: unknown }).type === "text") {
+							const text = (block as { text?: unknown }).text;
+							if (typeof text === "string") bytes += text.length;
+						}
+					}
+				}
+				if (bytes > 0) this.#toolOutputBytes.set(toolEvent.toolCallId, bytes);
+			}
 			const translated = translateAgentEvent(event);
 			if (translated) {
+				// Inject profiler fields into the completed event before append.
+				if (translated.kind === "tool.completed") {
+					const toolEvent = event as { toolCallId: string };
+					const start = this.#toolStarts.get(toolEvent.toolCallId);
+					if (start !== undefined) {
+						translated.latencyMs = Date.now() - start;
+						this.#toolStarts.delete(toolEvent.toolCallId);
+					}
+					const bytes = this.#toolOutputBytes.get(toolEvent.toolCallId);
+					if (bytes !== undefined) {
+						(translated as { outputBytes?: number }).outputBytes = bytes;
+						this.#toolOutputBytes.delete(toolEvent.toolCallId);
+					}
+				}
 				this.#append(translated);
 				return;
 			}

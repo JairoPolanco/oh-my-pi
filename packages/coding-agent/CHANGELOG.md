@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `kernel.perf.profile({ limit? })` — the harness profiler (round-11): per-tool call count, ok count, latency percentiles (p50/p90/p95/max/total) and output-bytes totals, ranked by total latency, from `tool.completed` events the trajectory tap records. Run it to find bottlenecks before optimizing — a tool with high p95 AND high outputBytes is both slow and cache-expensive. The tap now emits `latencyMs` + `outputBytes` on every `tool.completed` (was always unpopulated). First run on real sessions confirmed: `eval` (the kernel-bridge path, ~15s avg / 56s max) and `glob` (~25s avg) are the top latency tools.
+
 ### Removed
 
 - `routing.register` and `routing.record` removed from the kernel bridge (round-11 S1): dead surfaces — the routing registry was written by register and read only by the bridge's own advisory resolve (real model selection is ModelControls, catalog-based), and record duplicated what the trajectory tap appends to the event log automatically. `routing.stats` remains (real tap-fed telemetry, now documented read-only); `routing.resolve` remains as documented ADVISORY (rule-based recommendation, does not influence the live model).

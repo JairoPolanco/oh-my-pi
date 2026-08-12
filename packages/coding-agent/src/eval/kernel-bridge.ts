@@ -741,6 +741,15 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 		returns: "control-plane runtimes + methods",
 		args: {},
 	},
+	"perf.profile": {
+		name: "perf.profile",
+		returns: "per-tool latency + output profiles from the session event log (harness profiler)",
+		description:
+			"READ-ONLY profiler: per-tool call count, latency percentiles (p50/p90/p95/max), and output-bytes percentiles from tool.completed events the trajectory tap records. Use to find bottlenecks before optimizing — a tool with high p95 and high outputBytes is both slow AND cache-expensive.",
+		args: {
+			limit: { kind: "number", required: false, description: "Max tools to return, by total latency (default 20)" },
+		},
+	},
 };
 
 /** All bridge op names (for `bridge.ops()`). DERIVED from the dispatch
@@ -1410,6 +1419,59 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 				passRate: contractRuns > 0 ? contractPasses / contractRuns : 0,
 			},
 		};
+	},
+	"perf.profile": async (args, _options, host, actor) => {
+		// Harness profiler (round-11): per-tool latency + output profile from
+		// the event log. The trajectory tap records tool.completed with
+		// latencyMs + outputBytes; aggregate percentiles so an agent can find
+		// bottlenecks (slow p95 AND high output = the double cost: time + the
+		// per-turn fresh-cache tax the spill cap mitigates).
+		requireCapability(host, actor, "event.read", "read", "events");
+		const completed = host.events.query(e => e.payload.kind === "tool.completed");
+		const byTool = new Map<string, { latencies: number[]; bytes: number[]; ok: number; total: number }>();
+		for (const env of completed) {
+			const payload = env.payload as { tool: string; ok: boolean; latencyMs?: number; outputBytes?: number };
+			let entry = byTool.get(payload.tool);
+			if (!entry) {
+				entry = { latencies: [], bytes: [], ok: 0, total: 0 };
+				byTool.set(payload.tool, entry);
+			}
+			entry.total += 1;
+			if (payload.ok) entry.ok += 1;
+			if (typeof payload.latencyMs === "number") entry.latencies.push(payload.latencyMs);
+			if (typeof payload.outputBytes === "number") entry.bytes.push(payload.outputBytes);
+		}
+		const pct = (values: number[], p: number): number | undefined => {
+			if (values.length === 0) return undefined;
+			const sorted = [...values].sort((a, b) => a - b);
+			const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * p));
+			return sorted[idx];
+		};
+		const rows = [...byTool.entries()].map(([tool, entry]) => {
+			const totalMs = entry.latencies.reduce((a, b) => a + b, 0);
+			const totalBytes = entry.bytes.reduce((a, b) => a + b, 0);
+			return {
+				tool,
+				calls: entry.total,
+				ok: entry.ok,
+				latencyMs: {
+					p50: pct(entry.latencies, 0.5),
+					p90: pct(entry.latencies, 0.9),
+					p95: pct(entry.latencies, 0.95),
+					max: pct(entry.latencies, 1),
+					total: totalMs,
+				},
+				outputBytes: {
+					p50: pct(entry.bytes, 0.5),
+					max: pct(entry.bytes, 1),
+					total: totalBytes,
+				},
+			};
+		});
+		// Rank by total latency: the highest-cost tools surface first.
+		rows.sort((a, b) => b.latencyMs.total - a.latencyMs.total);
+		const limit = typeof args.limit === "number" && args.limit > 0 ? args.limit : 20;
+		return { tools: rows.slice(0, limit), sessionTotalMs: rows.reduce((a, r) => a + r.latencyMs.total, 0) };
 	},
 	"policy.authorize": async (args, options, host, _actor) => {
 		// Phase 10 (§53–55, §75): capability-based authorization, default deny.

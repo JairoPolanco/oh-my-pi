@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `ToolCompleted` events now carry `latencyMs` + `outputBytes` (harness profiler): the trajectory tap records per-call duration and estimated output size — 4 chars ≈ 1 token ≈ the per-turn fresh-cache cost — so bottlenecks are observable instead of invisible.
+
 ### Fixed
 
 - Contracts are now IMMUTABLE (round-11 C3): `contract.create` rejects a duplicate id instead of upserting — a passed contract could previously be silently redefined and re-verified. Duplicate ids surface a clear error at create.
