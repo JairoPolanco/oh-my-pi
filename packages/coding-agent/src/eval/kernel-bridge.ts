@@ -464,6 +464,13 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 	"ctx.materialize": {
 		name: "ctx.materialize",
 		returns: "ContextView (token-budgeted selection over candidates)",
+		// Round-11 S1: ADVISORY ONLY. Real context governance is automatic
+		// (ProviderContextGovernor on the provider path, OMP_KERNEL_CONTEXT_
+		// GOVERNANCE); this op returns what the materializer WOULD select for
+		// the given candidates but nothing consumes the view — it does NOT
+		// modify provider history. Use to preview/plan, not to control.
+		description:
+			"ADVISORY: returns what the Context VM would select for the given candidates. It does NOT change provider history — real governance is automatic under kernel.contextGovernance. Use for preview/planning only.",
 		args: {
 			tokenBudget: { kind: "number", required: false, description: "Optional token budget (default 32000)" },
 			objective: { kind: "string", required: false, description: "Selection objective" },
@@ -628,28 +635,15 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 			size: { kind: "number", required: false, description: "Optional resource size" },
 		},
 	},
-	"routing.record": {
-		name: "routing.record",
-		returns: "{ recorded }",
-		args: {
-			model: { kind: "string", required: true, description: "Model id" },
-			contextTokens: { kind: "number", required: false, description: "Request context tokens" },
-			outputTokens: { kind: "number", required: false, description: "Response output tokens" },
-			latencyMs: { kind: "number", required: false, description: "Response latency" },
-		},
-	},
-	"routing.register": {
-		name: "routing.register",
-		returns: "{ registered }",
-		args: {
-			role: { kind: "string", required: true, description: "Routing role" },
-			provider: { kind: "string", required: true, description: "Provider id" },
-			model: { kind: "string", required: true, description: "Model id" },
-		},
-	},
 	"routing.resolve": {
 		name: "routing.resolve",
 		returns: "routing decision",
+		// Round-11 S1: ADVISORY ONLY. The rule-based selection is a
+		// recommendation — real live model selection is ModelControls
+		// (catalog-based) and never reads this table. An agent must not
+		// treat the returned selection as the model that will run.
+		description:
+			"ADVISORY: returns the rule-based recommendation for a role. The live session's actual model is decided by ModelControls (catalog) — this op does not influence it. Use for planning effort/verification expectations, not to choose the running model.",
 		args: {
 			role: { kind: "string", required: true, description: "Routing role" },
 			taskComplexity: { kind: "number", required: false, description: "0-1 task complexity" },
@@ -662,6 +656,8 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 	"routing.stats": {
 		name: "routing.stats",
 		returns: "per-model stats + contract pass rate",
+		description:
+			"READ-ONLY telemetry from the session event log (the trajectory tap feeds model.request/model.response automatically — routing.record was removed as dead). Per-model call volume, tokens, latency, plus contract pass rate.",
 		args: {},
 	},
 	"contract.create": {
@@ -1367,17 +1363,6 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 		if (live) return host.models.resolveWith(live.provider, live.model, features);
 		return host.models.resolve(role as never, features);
 	},
-	"routing.register": async (args, _options, host, actor) => {
-		requireCapability(host, actor, "routing.write", "write", "routing");
-		const role = requireArg(args, "role");
-		const provider = requireArg(args, "provider");
-		const model = requireArg(args, "model");
-		if (typeof role !== "string" || typeof provider !== "string" || typeof model !== "string") {
-			throw new Error("__kernel__.routing.register requires string 'role', 'provider', 'model'");
-		}
-		host.models.register(role as never, provider, model);
-		return { registered: `${role} → ${provider}/${model}` };
-	},
 	"routing.stats": async (_args, _options, host, actor) => {
 		requireCapability(host, actor, "routing.read", "read", "routing");
 		// §46 statistics from the event log: per-model call volume, tokens,
@@ -1425,26 +1410,6 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 				passRate: contractRuns > 0 ? contractPasses / contractRuns : 0,
 			},
 		};
-	},
-	"routing.record": async (args, _options, host, actor) => {
-		// Feed routing statistics: log a model request + response pair.
-		// A uniform capability OS (paste-9): telemetry injection is a
-		// routing-write effect, gated like every other mutation.
-		requireCapability(host, actor, "routing.write", "write", "routing");
-		const model = requireArg(args, "model");
-		if (typeof model !== "string") throw new Error("__kernel__.routing.record requires string 'model'");
-		host.events.append({
-			kind: "model.request",
-			model,
-			contextTokens: typeof args.contextTokens === "number" ? args.contextTokens : 0,
-		});
-		host.events.append({
-			kind: "model.response",
-			model,
-			outputTokens: typeof args.outputTokens === "number" ? args.outputTokens : 0,
-			latencyMs: typeof args.latencyMs === "number" ? args.latencyMs : 0,
-		});
-		return { recorded: model };
 	},
 	"policy.authorize": async (args, options, host, _actor) => {
 		// Phase 10 (§53–55, §75): capability-based authorization, default deny.

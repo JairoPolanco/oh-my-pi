@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
+### Removed
+
+- `routing.register` and `routing.record` removed from the kernel bridge (round-11 S1): dead surfaces — the routing registry was written by register and read only by the bridge's own advisory resolve (real model selection is ModelControls, catalog-based), and record duplicated what the trajectory tap appends to the event log automatically. `routing.stats` remains (real tap-fed telemetry, now documented read-only); `routing.resolve` remains as documented ADVISORY (rule-based recommendation, does not influence the live model).
+
 ### Added
+
+- `ctx.materialize` documented ADVISORY (round-11 S1): returns what the Context VM would select but does not modify provider history — real governance is automatic under `kernel.contextGovernance`.
+- `todo` tool description now warns it is EPHEMERAL (round-11 S2): the list is conversation-local and lost on session end/compaction; load-bearing work belongs on `board`/`kernel.tasks.*` (one durable SQLite store).
 
 - Reviewer model independence enforced (round-11 C1): `contract.verify` refuses a `reviewerModel` equal to the session's own active model (a same-model review is self-certification), and the reviewer adapter fails a review that resolves to the session model — the reviewer agent's `@slow` chain previously PREPENDED the session default, silently self-certifying. The V3+ "independent review" is now actually independent by default.
 - Contract reviewer receives the resolved evidence content (round-11 C2): the reviewer previously got an empty evidence list (`renderReviewAssignment(contract, [])`) — no party other than the agent inspected what was attached. The bridge now passes each evidence artifact's content (4KB cap each).

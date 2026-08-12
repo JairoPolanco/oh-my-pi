@@ -206,13 +206,12 @@ describe("kernel prelude globals (JS worker)", () => {
 		const code = `
 			await kernel.contract.create({ id: "pc1", objective: "probe", checks: [] });
 			const report = await kernel.contract.verify({ id: "pc1" });
-			await kernel.routing.register({ role: "scout", provider: "openai", model: "gpt-5" });
-			const selection = await kernel.routing.resolve({ role: "scout", taskComplexity: 0.5, risk: 0.2 });
+			const stats = await kernel.routing.stats({});
 			const denied = await kernel.policy.authorize({ id: "fs.write", effect: "write", resource: "repo/x.ts", actor: "Unprivileged" });
 			const profile = await kernel.security.profile({});
 			return JSON.stringify({
 				verified: report.pass,
-				effort: selection.effort,
+				statsModels: Array.isArray(stats.models),
 				denied: denied.allow === false,
 				tier: profile.tier,
 			});
@@ -221,7 +220,7 @@ describe("kernel prelude globals (JS worker)", () => {
 		expect(result.exitCode).toBe(0);
 		const parsed = JSON.parse(result.output.trim());
 		expect(parsed.verified).toBe(true);
-		expect(parsed.effort).toBe("medium");
+		expect(parsed.statsModels).toBe(true);
 		expect(parsed.denied).toBe(true);
 		expect(parsed.tier).toBe("main-moderate");
 	});

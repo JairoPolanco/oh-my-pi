@@ -95,7 +95,9 @@ describe("kernel bridge", () => {
 		// The op inventory must cover every dispatch handler and the schema
 		// table must cover the inventory — the drift that hid 17 live ops.
 		const ops = (await call("bridge.ops")) as string[];
-		expect(ops.length).toBeGreaterThanOrEqual(36);
+		// 34 ops after round-11 S1 removed routing.register/record (dead
+		// surfaces — nothing read the registry, the tap feeds the event log).
+		expect(ops.length).toBeGreaterThanOrEqual(34);
 		for (const op of ops) {
 			const schema = (await call("bridge.schema", { name: op })) as { name: string };
 			expect(schema.name).toBe(op);
@@ -415,21 +417,30 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(real).toBeDefined();
 	});
 
-	test("routing.resolve returns a rule-based model selection", async () => {
-		await call("routing.register", { role: "main", provider: "anthropic", model: "claude-4" });
-		const selection = (await call("routing.resolve", {
-			role: "main",
-			taskComplexity: 0.9,
-			risk: 0.8,
-		})) as { model: string; effort: string; verificationLevel: number };
-		expect(selection.model).toBe("claude-4");
-		expect(selection.effort).toBe("max");
-		expect(selection.verificationLevel).toBe(3);
+	test("routing.register is REMOVED — a dead write to an unconsumed table (round-11 S1)", async () => {
+		// The kernel routing registry was written by routing.register and read
+		// by routing.resolve, but NOTHING in the live session path consults it
+		// (real model selection is ModelControls, catalog-based). A
+		// capability-gated write to a table nothing reads was a false-control
+		// surface; it and routing.record (the trajectory tap feeds the event
+		// log directly) are deleted.
+		await expect(
+			call("routing.register", { role: "main", provider: "anthropic", model: "claude-4" }),
+		).rejects.toThrow(/unknown kernel bridge op/);
+		await expect(call("routing.record", { model: "m1", contextTokens: 1000 })).rejects.toThrow(
+			/unknown kernel bridge op/,
+		);
 	});
 
-	test("routing.record + stats aggregate per-model usage from the event log", async () => {
-		await call("routing.record", { model: "m1", contextTokens: 1000, outputTokens: 500, latencyMs: 100 });
-		await call("routing.record", { model: "m1", contextTokens: 2000, outputTokens: 700, latencyMs: 150 });
+	test("routing.stats aggregates per-model usage from the event log (tap-fed)", async () => {
+		// routing.record is gone; the stats come from events the trajectory
+		// tap appends automatically. Seed the same events the tap would and
+		// verify aggregation.
+		const host = await kernelHostFor(makeSession());
+		host.events.append({ kind: "model.request", model: "m1", contextTokens: 1000 });
+		host.events.append({ kind: "model.response", model: "m1", outputTokens: 500, latencyMs: 100 });
+		host.events.append({ kind: "model.request", model: "m1", contextTokens: 2000 });
+		host.events.append({ kind: "model.response", model: "m1", outputTokens: 700, latencyMs: 150 });
 		const stats = (await call("routing.stats", {})) as {
 			models: { model: string; calls: number; inputTokens: number; outputTokens: number }[];
 		};
@@ -520,15 +531,13 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		await expect(call("contract.create", { id: "c1", objective: "x" }, evalOnly)).rejects.toThrow(
 			/lacks contract\.write/,
 		);
-		// routing.write absent → routing.register denied.
+		// routing.register/record are REMOVED (round-11 S1: dead surfaces —
+		// nothing read the registry, the trajectory tap feeds the event log).
+		// routing.stats remains a read (routing.read gate).
 		await expect(
 			call("routing.register", { role: "worker", provider: "anthropic", model: "claude" }, evalOnly),
-		).rejects.toThrow(/lacks routing\.write/);
-		// routing.record is telemetry injection — same routing.write gate
-		// (paste-9).
-		await expect(
-			call("routing.record", { model: "m1", contextTokens: 100, outputTokens: 10 }, evalOnly),
-		).rejects.toThrow(/lacks routing\.write/);
+		).rejects.toThrow(/unknown kernel bridge op/);
+		await expect(call("routing.stats", {}, evalOnly)).rejects.toThrow(/lacks routing\.read/);
 		// harness.hypothesis/promote/versions need their own capability ids
 		// (paste-9): proposing a harness change is a governed effect.
 		await expect(

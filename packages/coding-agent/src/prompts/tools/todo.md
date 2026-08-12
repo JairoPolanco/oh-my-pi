@@ -1,3 +1,5 @@
+**EPHEMERAL (round-11 S2): this list lives in the conversation and is lost when the session ends or compacts — it is NOT durable.** For work that must survive a crash, restart, or compaction, use `board` (hidden by default but available) or `kernel.tasks.*` — they share one durable SQLite store. Todo is for within-turn planning only; anything load-bearing goes on the board.
+
 **Tasks referenced by verbatim content string, NEVER an auto-generated ID — no "task-1"/"task-N" exists. Pass the content text in the `task` field.**
 
 On each completion the earliest still-open task (in phase order) auto-promotes to `in_progress`.
