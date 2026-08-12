@@ -745,7 +745,7 @@ export const BRIDGE_OP_SCHEMAS: Record<string, BridgeOpSchema> = {
 		name: "perf.profile",
 		returns: "per-tool latency + output profiles from the session event log (harness profiler)",
 		description:
-			"READ-ONLY profiler: per-tool call count, latency percentiles (p50/p90/p95/max), and output-bytes percentiles from tool.completed events the trajectory tap records. Use to find bottlenecks before optimizing — a tool with high p95 and high outputBytes is both slow AND cache-expensive.",
+			"READ-ONLY profiler: per-tool timed-call count (calls = events carrying latencyMs), raw event count (events = ALL tool.completed rows incl. pre-tap untimed), latency percentiles (p50/p90/p95/max/total), output-bytes totals. Ranked by total latency. A tool with high p95 AND high outputBytes is both slow AND cache-expensive. Untimed pre-tap events count in `events` but not in `calls`/latency stats (profiler-drive finding #3).",
 		args: {
 			limit: { kind: "number", required: false, description: "Max tools to return, by total latency (default 20)" },
 		},
@@ -1428,15 +1428,20 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 		// per-turn fresh-cache tax the spill cap mitigates).
 		requireCapability(host, actor, "event.read", "read", "events");
 		const completed = host.events.query(e => e.payload.kind === "tool.completed");
-		const byTool = new Map<string, { latencies: number[]; bytes: number[]; ok: number; total: number }>();
+		const byTool = new Map<string, { latencies: number[]; bytes: number[]; ok: number; events: number }>();
 		for (const env of completed) {
 			const payload = env.payload as { tool: string; ok: boolean; latencyMs?: number; outputBytes?: number };
 			let entry = byTool.get(payload.tool);
 			if (!entry) {
-				entry = { latencies: [], bytes: [], ok: 0, total: 0 };
+				entry = { latencies: [], bytes: [], ok: 0, events: 0 };
 				byTool.set(payload.tool, entry);
 			}
-			entry.total += 1;
+			// `events` = ALL tool.completed rows in the log (profiler-drive
+			// finding #3: rows emitted BEFORE the tap recorded latencyMs
+			// carry no timing; mixing them into `calls` made total look
+			// absurdly low — 586 calls / 20ms total). `calls` is the number
+			// WITH timing: the population the percentiles actually cover.
+			entry.events += 1;
 			if (payload.ok) entry.ok += 1;
 			if (typeof payload.latencyMs === "number") entry.latencies.push(payload.latencyMs);
 			if (typeof payload.outputBytes === "number") entry.bytes.push(payload.outputBytes);
@@ -1452,7 +1457,8 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 			const totalBytes = entry.bytes.reduce((a, b) => a + b, 0);
 			return {
 				tool,
-				calls: entry.total,
+				calls: entry.latencies.length,
+				events: entry.events,
 				ok: entry.ok,
 				latencyMs: {
 					p50: pct(entry.latencies, 0.5),
@@ -1471,6 +1477,9 @@ const BRIDGE_HANDLERS: Record<string, BridgeHandler> = {
 		// Rank by total latency: the highest-cost tools surface first.
 		rows.sort((a, b) => b.latencyMs.total - a.latencyMs.total);
 		const limit = typeof args.limit === "number" && args.limit > 0 ? args.limit : 20;
+		// `sessionTotalMs` sums ONLY timed (latency-carrying) calls — the
+		// same population as the per-tool `total`. Untimed pre-tap events
+		// appear in `events`, not here.
 		return { tools: rows.slice(0, limit), sessionTotalMs: rows.reduce((a, r) => a + r.latencyMs.total, 0) };
 	},
 	"policy.authorize": async (args, options, host, _actor) => {

@@ -460,11 +460,16 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		host.events.append({ kind: "tool.completed", tool: "eval", ok: true, latencyMs: 15000, outputBytes: 100 });
 		host.events.append({ kind: "tool.completed", tool: "eval", ok: false, latencyMs: 56000, outputBytes: 0 });
 		host.events.append({ kind: "tool.completed", tool: "glob", ok: true, latencyMs: 25000, outputBytes: 800 });
+		// Untimed event (pre-tap): counts in `events` but NOT in `calls` or
+		// the latency population (profiler-drive finding #3 — the old total
+		// conflated populations and reported 586 calls / 20ms total).
+		host.events.append({ kind: "tool.completed", tool: "read", ok: true });
 
 		const profile = (await call("perf.profile", {})) as {
 			tools: {
 				tool: string;
 				calls: number;
+				events: number;
 				ok: number;
 				latencyMs: { p50: number; max: number; total: number };
 				outputBytes: { total: number };
@@ -476,7 +481,12 @@ describe("kernel bridge memory + actors + capabilities", () => {
 		expect(evalRow.calls).toBe(2);
 		expect(evalRow.ok).toBe(1); // one failed call counted, not dropped
 		expect(evalRow.latencyMs.max).toBe(56000);
-		expect(profile.tools[2]!.outputBytes.total).toBe(52000); // read: 50k + 2k
+		// read: 2 timed calls (12s total) + 1 untimed event.
+		const readRow = profile.tools[2]!;
+		expect(readRow.calls).toBe(2);
+		expect(readRow.events).toBe(3);
+		expect(readRow.latencyMs.total).toBe(12000);
+		expect(readRow.outputBytes.total).toBe(52000); // 50k + 2k
 	});
 
 	test("policy.authorize enforces default-deny + granted capabilities", async () => {
