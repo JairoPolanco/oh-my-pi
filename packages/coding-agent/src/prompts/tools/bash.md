@@ -8,6 +8,12 @@ Use ONLY for one binary or a short pipeline that computes a fact (`wc -l`, `sort
 - `pty: true` only for terminal interaction (`sudo`, `ssh`).
 - Order-dependent commands use `&&` in one call; independent calls may run concurrently.
 - Internal URIs (`skill://`, `agent://`, …) auto-resolve to paths.
+- SECURITY MODEL (round-10 re-audit P0-2): bash is FULL HOST TRUST. The
+  kernel effect gate authorizes that you MAY run a process in this workspace
+  (process.exec) — it does not and cannot statically bound what the command
+  touches (reads, network, files outside the workspace). The OS user is the
+  real boundary. Do not use bash to read files the read tool would deny;
+  the gate is a capability layer over the TOOL surface, not a sandbox.
 {{#if hasShellBuiltins}}- aux utils available: mkdir, wc, sort, comm, diff, uniq, base64, cmp, md5sum, sha{1,224,256,384,512}sum, b2sum, basename, dirname, readlink, realpath, touch, stat, date, mktemp, seq, yes, printenv, truncate, tac, nproc, uname, whoami, hostname, which, ps, pgrep, pkill, pidwait, top, cut, tee, tr, paste, sed, xargs, jq, rm, mv, ln, ts, sponge, ifne, isutf8, combine{{#unless isWindows}}, errno{{/unless}}{{/if}}
 {{#if asyncEnabled}}- `async: true` defers a finite command's result; it does not extend `timeout`.{{/if}}
 </instruction>

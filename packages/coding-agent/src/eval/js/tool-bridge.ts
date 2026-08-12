@@ -130,6 +130,38 @@ export async function callSessionTool(name: string, args: unknown, options: Tool
 	const tool = getTool(options.session, name);
 	const normalizedArgs = normalizeArgs(args);
 	const toolCallId = `js-${name}-${crypto.randomUUID()}`;
+	// Round-10 re-audit P0-1: eval's tool helpers previously called
+	// tool.execute() DIRECTLY, never traversing #beforeToolCall — the only
+	// place authorizeToolEffect runs. So `eval tool.read("/etc/hosts")`
+	// bypassed the effect gate while `read /etc/hosts` was denied: the
+	// supposedly-privileged surface was LESS gated than the plain one. Gate
+	// the tool surface from eval exactly like direct calls: when the kernel
+	// effect gate is on, the effect must authorize before execute. Raw JS
+	// (Bun.file, fetch, Bun.spawn) remains full host trust — that is
+	// arbitrary code, and the OS is the boundary (documented in the prelude).
+	try {
+		const { kernelEffectGateEnabled, authorizeToolEffect, kernelHostFor } = await import("../kernel-bridge");
+		if (kernelEffectGateEnabled()) {
+			const host = await kernelHostFor(options.session);
+			const gate = await authorizeToolEffect({
+				host,
+				actor: options.session.getAgentId?.() ?? host.mainPrincipal,
+				tool: name,
+				args: normalizedArgs as Record<string, unknown>,
+				workspaceRoot: options.session.cwd,
+			});
+			if (gate.blocked) {
+				throw new ToolError(
+					`eval tool.${name} denied by the kernel effect gate (${gate.reason ?? "no capability"})`,
+				);
+			}
+		}
+	} catch (error) {
+		if (error instanceof ToolError) throw error;
+		// Fail closed (paste-4 P0 #3): a gate that cannot determine
+		// authorization must deny, never proceed.
+		throw new ToolError(`eval tool.${name} denied: kernel effect gate could not authorize (${String(error)})`);
+	}
 	try {
 		const result = await tool.execute(toolCallId, normalizedArgs, options.signal);
 		const textBlocks = result.content.filter(

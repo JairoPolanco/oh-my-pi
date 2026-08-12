@@ -229,6 +229,36 @@ describe("authorizeToolEffect (EffectBroker gate)", () => {
 		});
 		expect(noRoot.blocked).toBe(true);
 	});
+
+	test("internal-URL reads pass the gate under their dedicated capabilities (round-10 re-audit)", async () => {
+		// Round-3 regression: read skill://… mapped to fs.read:internal:…
+		// which no grant covered, so the sanctioned surface (every prompt:
+		// "MUST read skill://<name>") was DENIED while the bootstrap held
+		// skill.read:skills unused. Now the gate authorizes skill:// with
+		// skill.read — the capability the harness actually grants.
+		host = new KernelHost(testDir, { mainPrincipal: "Main", bootstrapMain: true });
+		await host.warm();
+		const skillGate = await authorizeToolEffect({
+			host,
+			actor: "Main",
+			tool: "read",
+			args: { path: "skill://repo-truth" },
+			workspaceRoot: testDir,
+		});
+		expect(skillGate.blocked).toBe(false);
+
+		// A fs.read-only principal is still denied skill:// (least privilege).
+		host.capabilities.grant("reader", { id: "fs.read", scope: "repo/**", effect: "read" });
+		const denied = await authorizeToolEffect({
+			host,
+			actor: "reader",
+			tool: "read",
+			args: { path: "skill://repo-truth" },
+			workspaceRoot: testDir,
+		});
+		expect(denied.blocked).toBe(true);
+		expect(denied.reason).toContain("skill.read");
+	});
 });
 
 describe("kernelEffectGateEnabled (single gate definition)", () => {

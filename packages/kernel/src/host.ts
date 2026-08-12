@@ -182,6 +182,14 @@ export class KernelHost implements Kernel {
 				{ id: "skill.write", scope: "propose", effect: "write" },
 				{ id: "skill.write", scope: "promote", effect: "write" },
 				{ id: "skill.read", scope: "skills", effect: "read" },
+				// Harness-internal URL reads (round-10): rule://, local://,
+				// mcp://, history://, agent://, issue://, pr://, vault://,
+				// omp://, security://, xd:// all authorize through ONE
+				// internal.read:harness capability — the read tool's
+				// sanctioned surface for harness-internal resources. The
+				// state surfaces (skill/memory/artifact) keep their own
+				// dedicated caps above/below.
+				{ id: "internal.read", scope: "harness", effect: "read" },
 				{ id: "session.state", scope: "session", effect: "write" },
 				{ id: "goal.read", scope: "goal", effect: "read" },
 				{ id: "goal.write", scope: "goal", effect: "write" },

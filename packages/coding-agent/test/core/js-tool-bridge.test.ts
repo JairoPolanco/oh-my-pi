@@ -145,4 +145,29 @@ describe("callSessionTool", () => {
 
 		await expect(callSessionTool("missing", {}, { session })).rejects.toThrow("Unknown tool from js runtime");
 	});
+
+	it("gates tool effects when the kernel effect gate is on (round-10 re-audit P0-1)", async () => {
+		// eval's tool.* helpers used to call execute() directly, bypassing
+		// #beforeToolCall — the only place authorizeToolEffect runs. Now the
+		// tool surface from eval authorizes exactly like direct calls: with
+		// OMP_KERNEL_EFFECT_GATE=1 and a principal lacking the covering
+		// capability, the call is denied BEFORE execute.
+		const had = Bun.env.OMP_KERNEL_EFFECT_GATE;
+		const execute = vi.fn().mockResolvedValue({ content: [{ type: "text", text: "hello" }] });
+		const session = createSession([createTool("read", execute)]);
+		(session as { getAgentId?: unknown }).getAgentId = () => "minimal-principal";
+
+		try {
+			Bun.env.OMP_KERNEL_EFFECT_GATE = "1";
+			// Minimal principal has no capabilities → the read of an outside
+			// path must be denied before execute is called.
+			await expect(callSessionTool("read", { path: "/etc/hosts" }, { session })).rejects.toThrow(
+				/denied by the kernel effect gate/,
+			);
+			expect(execute).not.toHaveBeenCalled();
+		} finally {
+			if (had === undefined) delete Bun.env.OMP_KERNEL_EFFECT_GATE;
+			else Bun.env.OMP_KERNEL_EFFECT_GATE = had;
+		}
+	});
 });

@@ -19,11 +19,15 @@ output(*ids, format?="raw", query?=None, offset?=None, limit?=None) → str | di
 tool.<name>(args) → unknown
     Invoke any session tool; `args` = its parameter object.
 {{#if js}}readText(path, { offset?, limit? }?) → string
-    Read a file and return its TEXT (plain string). Same capability gate as
-    the read tool, but no envelope to unwrap.
+    Read a file and return its TEXT (plain string). Tool effects from eval
+    authorize through the same effect-broker gate as direct calls — a read
+    you could not do directly is denied here too. Raw JS (Bun.file, fetch,
+    node:fs) is arbitrary code: eval is FULL HOST TRUST, and the OS user is
+    the real boundary (process.exec ⇒ host authority). The gate is a
+    capability layer over the tool surface, not a sandbox.
 bashOut(command, { cwd? }?) → string
-    Run a shell command and return its stdout as a plain string. Same gate as
-    bash.
+    Run a shell command and return its stdout as a plain string. Same tool-
+    surface gate as bash; command internals are not statically bounded.
 globFiles(pattern, { limit?, gitignore?, hidden? }?) → string[]
     Glob and return the matched FILE PATHS as a string array. Same gate as glob.
     Prefer these three over `tool.read`/`tool.bash`/`tool.glob` for simple

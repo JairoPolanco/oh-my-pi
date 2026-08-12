@@ -79,23 +79,52 @@ function canonicalFileResource(raw: string, root: string | undefined): string {
 
 /**
  * Non-file targets the read/grep/glob family can address (round-3 audit P0,
- * paste-18): URLs (reader-mode fetch), internal URLs (artifact://, skill://,
- * mcp://, memory://, …) and ssh:// hosts. These must NEVER be canonicalized
- * as repo file paths — `read path="https://example.com/secret"` was
- * authorized as `repo/https:/example.com/secret`, a truthful-looking but
- * wrong resource that matched the fs.read repo/** grant. Each scheme is
- * classified as its own resource so a principal with only fs.read repo/**
- * is correctly DENIED a network/internal fetch, and the deny message names
- * the real target.
+ * paste-18, round-10 re-audit): URLs (reader-mode fetch), internal URLs
+ * (skill://, memory://, artifact://, mcp://, rule://, local://, …) and ssh
+ * hosts. These must NEVER be canonicalized as repo file paths — and each
+ * scheme maps to its DEDICATED capability, so the capability the harness
+ * actually grants (skill.read:skills, memory.read:facts, artifact.read:
+ * artifacts, network:*) is the one the read tool emits. Round-10 re-audit:
+ * the round-3 fix classified skill:// as fs.read:internal:… which nothing
+ * granted — the read tool's sanctioned surface (every prompt says "MUST
+ * read skill://<name>") was denied while bash/eval bypassed the gate.
+ * Returns a descriptor the caller turns into an operation.
  */
-function classifyNonFileTarget(raw: string): string | null {
-	// Known network protocols → network resource (fetch/browser reads).
-	if (/^(https?|ftp|ws|wss|ssh):\/\//.test(raw)) return `network:${raw}`;
-	// Everything else with a scheme (artifact://, skill://, rule://,
-	// memory://, mcp://, …) is an INTERNAL URL, not a network fetch and
-	// never a repo file path.
-	if (raw.includes("://")) return `internal:${raw}`;
+function classifyNonFileTarget(
+	raw: string,
+): { kind: "network"; host: string } | { kind: "internal"; scheme: string } | null {
+	// Known network protocols → network capability (fetch/browser reads use
+	// the same authority).
+	if (/^(https?|ftp|ws|wss|ssh):\/\//.test(raw)) {
+		try {
+			return { kind: "network", host: new URL(raw).hostname || raw };
+		} catch {
+			return { kind: "network", host: raw };
+		}
+	}
+	// Internal URL schemes → dedicated capabilities. skill://, memory:// and
+	// artifact:// map to the exact caps the bootstrap grants; everything else
+	// (rule, local, mcp, history, agent, issue, pr, vault, omp, security,
+	// xd, …) maps to internal.read:harness — the single harness-internal
+	// read capability.
+	const match = /^([a-zA-Z][a-zA-Z0-9+.-]*):\/\//.exec(raw);
+	if (match) return { kind: "internal", scheme: match[1]!.toLowerCase() };
 	return null;
+}
+
+/** Capability operation for one non-file target (round-10: dedicated caps). */
+function nonFileOperation(target: { kind: "network"; host: string } | { kind: "internal"; scheme: string }): Operation {
+	if (target.kind === "network") return op("network", "network", target.host);
+	switch (target.scheme) {
+		case "skill":
+			return op("skill.read", "read", "skills");
+		case "memory":
+			return op("memory.read", "read", "facts");
+		case "artifact":
+			return op("artifact.read", "read", "artifacts");
+		default:
+			return op("internal.read", "read", "harness");
+	}
 }
 
 /**
@@ -107,20 +136,24 @@ function classifyNonFileTarget(raw: string): string | null {
  * top-level entries and canonicalize each independently, so every touched
  * resource must be covered by the grant. Entries with a URL/scheme prefix
  * are classified via {@link classifyNonFileTarget}, never as repo paths.
+ * Returns OPERATIONS (round-10): each non-file target becomes its dedicated
+ * capability op (network, skill.read, memory.read, artifact.read,
+ * internal.read), files stay fs.read.
  */
-function canonicalFileResources(raw: string, root: string | undefined): string[] {
+function fileResourceOps(raw: string, root: string | undefined): Operation[] {
 	if (!raw.includes(";")) {
 		const nonFile = classifyNonFileTarget(raw.trim());
-		return [nonFile ?? canonicalFileResource(raw.trim(), root)];
+		return nonFile ? [nonFileOperation(nonFile)] : [op("fs.read", "read", canonicalFileResource(raw.trim(), root))];
 	}
-	const resources: string[] = [];
+	const resources: Operation[] = [];
 	for (const entry of raw.split(";")) {
 		const trimmed = entry.trim();
 		if (trimmed.length === 0) continue;
 		const nonFile = classifyNonFileTarget(trimmed);
-		resources.push(nonFile ?? canonicalFileResource(trimmed, root));
+		resources.push(nonFile ? nonFileOperation(nonFile) : op("fs.read", "read", canonicalFileResource(trimmed, root)));
 	}
-	return resources.length > 0 ? resources : [canonicalFileResource(raw, root)];
+	if (resources.length === 0) resources.push(op("fs.read", "read", canonicalFileResource(raw, root)));
+	return resources;
 }
 
 /** Canonicalize a process resource: the workspace context the command runs in. */
@@ -297,12 +330,14 @@ export function mapToolEffectToOperation(effect: ToolEffect, root?: string): Ope
 		case "inspect_image":
 		case "ast_grep": {
 			// Multi-path + non-file classification (round-3 audit P0,
-			// paste-18): each semicolon-delimited entry is its own resource,
-			// and URL/internal/ssh targets are classified by scheme — a read
-			// grant must never authorize a network fetch, and the unsplit
-			// string must never mask an outside path.
+			// paste-18; round-10 re-audit): each semicolon-delimited entry is
+			// its own operation, and URL/internal/ssh targets map to their
+			// DEDICATED capabilities — a read grant must never authorize a
+			// network fetch, skill:// must authorize with skill.read (the cap
+			// the bootstrap actually grants), and the unsplit string must
+			// never mask an outside path.
 			const raw = firstString(args) ?? "";
-			return canonicalFileResources(raw, root).map(resource => op("fs.read", "read", resource));
+			return fileResourceOps(raw, root);
 		}
 		case "lsp": {
 			// LSP maps BY ACTION (paste-8 P0 #6): the tool itself classifies

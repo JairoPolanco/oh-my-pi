@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Internal-URL reads map to their DEDICATED capabilities (round-10 re-audit P1): `skill://` → `skill.read:skills`, `memory://` → `memory.read:facts`, `artifact://` → `artifact.read:artifacts`, other internal schemes (`rule://`, `local://`, `mcp://`, `history://`, …) → `internal.read:harness`, URLs → `network:<host>`. Round-3's scheme classification had mapped everything to `fs.read:internal:…` which no capability granted — the read tool's sanctioned surface (every prompt mandates `read skill://<name>`) was denied while the bootstrap held the dedicated caps unused.
+- `internal.read:harness` capability granted in the main bootstrap for the harness-internal read surface.
 - `contract.verify` no longer trusts caller-supplied evidence refs: every evidence id is resolved through the artifact store, its content hash verified, and kind taken from the stored record — forged `{id, kind}` pairs fail verification instead of satisfying `requiredEvidence` (recursive audit P0).
 - Pattern checks fail closed when neither `pattern` nor `regex` is present, and accept the model-facing `pattern` field (a missing field previously produced `RegExp(undefined)` = `/(?:)/` matching everything).
 - Read/grep/glob effect mapping authorizes EACH semicolon-delimited path entry instead of the unsplit string (a `src; /etc/passwd` grep previously canonicalized as one in-repo resource), and classifies URL/internal/ssh targets by scheme — a network fetch can no longer pass under an `fs.read: repo/**` grant.

@@ -495,8 +495,11 @@ if "__omp_prelude_loaded__" not in globals():
         """Read a file through the GATED read tool and return its text.
 
         Prefer over the plain `read()` helper for capability-governed work:
-        routes through the same beforeToolCall/effect-broker gate as the read
-        tool, and returns a plain string instead of a result envelope.
+        tool effects from eval authorize through the same effect-broker gate
+        as direct calls (round-10 re-audit P0-1). Raw Python (open(),
+        subprocess, socket, os.*) is arbitrary code and CANNOT be statically
+        bounded — eval is full host trust, and the OS user is the real
+        boundary (process.exec ⇒ host authority).
         """
         args = {"path": path}
         if offset is not None:

@@ -77,10 +77,16 @@ if (!globalThis.__omp_js_prelude_loaded__) {
 
 	// RLM ergonomics (dogfooding, rlm-model-calls-002): `tool.<name>()`
 	// returns the RAW tool-result envelope, which models waste calls
-	// reverse-engineering. These helpers route through the SAME gated tool
-	// path (the session's beforeToolCall/effect-broker applies) but unwrap to
-	// plain, documented values. Every file-system/process effect from eval
-	// goes through the capability gate — never a bypass.
+	// reverse-engineering. These helpers unwrap to plain, documented values.
+	// TOOL EFFECTS are gated exactly like direct calls (round-10 re-audit
+	// P0-1): when the kernel effect gate is on, eval's tool.* helpers
+	// authorize through the same effect broker as the plain tools — a call a
+	// principal could not make directly is denied here too. But RAW
+	// JavaScript (Bun.file, fetch, Bun.spawn, node:fs, …) is arbitrary code
+	// and CANNOT be statically bounded: eval is full host trust. The kernel
+	// gate is a capability layer over the tool surface, NOT a sandbox — the
+	// OS user is the real boundary. A principal holding process.exec (which
+	// eval requires) has the host.
 	const resultText = res => {
 		if (res == null) return "";
 		if (typeof res === "string") return res;

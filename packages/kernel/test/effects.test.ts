@@ -52,19 +52,31 @@ describe("mapToolEffectToOperation", () => {
 		]);
 	});
 
-	test("URL/internal/ssh read targets are classified by scheme, never repo paths (round-3 P0)", () => {
-		// `read path="https://example.com/secret"` was authorized as
-		// `repo/https:/example.com/secret` (fs.read repo/** grant). Network
-		// and internal fetches are their own resources — a principal with
-		// only fs.read repo/** is correctly denied.
+	test("URL/internal/ssh read targets map to their DEDICATED capabilities (round-3 P0, round-10 re-audit)", () => {
+		// Round-3 classified skill:// as fs.read:internal:… which nothing
+		// granted — the read tool's sanctioned surface (every prompt: "MUST
+		// read skill://<name>") was denied. Now skill:// → skill.read:skills
+		// (the cap the bootstrap grants), memory:// → memory.read:facts,
+		// artifact:// → artifact.read:artifacts, other internal schemes →
+		// internal.read:harness, and URLs → network:<host>. A principal with
+		// ONLY fs.read repo/** is still correctly denied all of these.
 		expect(mapToolEffectToOperation({ tool: "read", args: { path: "https://example.com/secret" } }, "/repo")).toEqual(
-			[{ id: "fs.read", effect: "read", resource: "network:https://example.com/secret" }],
+			[{ id: "network", effect: "network", resource: "example.com" }],
 		);
 		expect(mapToolEffectToOperation({ tool: "read", args: { path: "mcp://server/resource" } }, "/repo")).toEqual([
-			{ id: "fs.read", effect: "read", resource: "internal:mcp://server/resource" },
+			{ id: "internal.read", effect: "read", resource: "harness" },
 		]);
 		expect(mapToolEffectToOperation({ tool: "grep", args: { path: "artifact://abc123" } }, "/repo")).toEqual([
-			{ id: "fs.read", effect: "read", resource: "internal:artifact://abc123" },
+			{ id: "artifact.read", effect: "read", resource: "artifacts" },
+		]);
+		expect(mapToolEffectToOperation({ tool: "read", args: { path: "skill://repo-truth" } }, "/repo")).toEqual([
+			{ id: "skill.read", effect: "read", resource: "skills" },
+		]);
+		expect(mapToolEffectToOperation({ tool: "read", args: { path: "memory://m1" } }, "/repo")).toEqual([
+			{ id: "memory.read", effect: "read", resource: "facts" },
+		]);
+		expect(mapToolEffectToOperation({ tool: "read", args: { path: "rule://r1" } }, "/repo")).toEqual([
+			{ id: "internal.read", effect: "read", resource: "harness" },
 		]);
 	});
 
@@ -266,6 +278,32 @@ describe("EffectBroker", () => {
 		expect(broker.allows("agent", { tool: "bash", args: { command: "repo/build.sh", cwd: "/repo/sub" } })).toBe(true);
 		// A command outside the scope is denied.
 		expect(broker.allows("agent", { tool: "bash", args: { command: "x", cwd: "/etc" } })).toBe(false);
+	});
+
+	test("internal-URL reads authorize with their DEDICATED capabilities (round-10 re-audit)", () => {
+		// Round-3 regression: skill:// mapped to fs.read:internal:… which no
+		// grant covered — the read tool's sanctioned surface was denied while
+		// the bootstrap held skill.read:skills unused. Each scheme now
+		// authorizes with the capability the harness actually grants.
+		const registry = new CapabilityRegistry();
+		registry.grant("agent", { id: "skill.read", scope: "skills", effect: "read" });
+		registry.grant("agent", { id: "artifact.read", scope: "artifacts", effect: "read" });
+		registry.grant("agent", { id: "internal.read", scope: "harness", effect: "read" });
+		registry.grant("agent", { id: "network", scope: "*", effect: "network" });
+		const broker = new EffectBroker(new PolicyEngine(registry), undefined, { workspaceRoot: "/repo" });
+		// A fs.read-only principal is still denied every non-file target.
+		expect(broker.allows("agent", { tool: "read", args: { path: "https://example.com/secret" } })).toBe(true);
+		expect(broker.allows("agent", { tool: "read", args: { path: "skill://repo-truth" } })).toBe(true);
+		expect(broker.allows("agent", { tool: "read", args: { path: "artifact://abc" } })).toBe(true);
+		expect(broker.allows("agent", { tool: "read", args: { path: "rule://r1" } })).toBe(true);
+
+		// And a principal with ONLY fs.read is denied them (least privilege):
+		const readOnly = new CapabilityRegistry();
+		readOnly.grant("reader", { id: "fs.read", scope: "repo/**", effect: "read" });
+		const readOnlyBroker = new EffectBroker(new PolicyEngine(readOnly), undefined, { workspaceRoot: "/repo" });
+		expect(readOnlyBroker.allows("reader", { tool: "read", args: { path: "skill://x" } })).toBe(false);
+		expect(readOnlyBroker.allows("reader", { tool: "read", args: { path: "https://x.com" } })).toBe(false);
+		expect(readOnlyBroker.allows("reader", { tool: "read", args: { path: "repo/src/a.ts" } })).toBe(true);
 	});
 
 	test("bash write-redirection OUTSIDE the workspace is denied (harness-value-001 finding)", () => {
